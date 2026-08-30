@@ -1,0 +1,218 @@
+version: scoring.v1
+score_scale:
+  minimum: 0
+  maximum: 100
+
+models:
+  market_pulse:
+    missing_factor_policy: reject
+    weights:
+      transaction: 0.15
+      unique_insiders: 0.20
+      dollar: 0.20
+      volume: 0.10
+      company_breadth: 0.15
+      conviction_weighted: 0.20
+
+  company_insider:
+    missing_factor_policy: reject
+    weights:
+      conviction: 0.45
+      cluster: 0.25
+      opportunistic: 0.20
+      net_buying_absence_sales: 0.10
+
+  divergence:
+    missing_factor_policy: reject
+    weights:
+      price_weakness: 0.35
+      insider_activity_percentile: 0.35
+      acceleration_cluster: 0.20
+      absence_relevant_sales: 0.10
+
+  turn:
+    missing_factor_policy: reject
+    weights:
+      base_structure: 0.35
+      ordinary_rs_turn: 0.25
+      mansfield_market: 0.15
+      mansfield_sector: 0.10
+      volume_accumulation: 0.10
+      cost_basis_reclaim: 0.05
+
+  total:
+    missing_factor_policy:
+      fundamental: exclude_and_renormalize_remaining_weights
+      all_other_factors: reject
+    weights:
+      divergence: 0.25
+      conviction: 0.15
+      cluster: 0.10
+      opportunistic: 0.10
+      base: 0.10
+      ordinary_rs: 0.10
+      mansfield_rs: 0.10
+      volume: 0.05
+      fundamental: 0.05
+
+state_model:
+  version: state.v1
+  ordered_states:
+    - FALLING
+    - INSIDER_ACCUMULATION
+    - BASE_FORMING
+    - EARLY_TURN
+    - CONFIRMED_TURN
+
+  FALLING:
+    all:
+      - metric: return_3m
+        operator: lt
+        value: 0
+      - metric: close
+        operator: lt_metric
+        value: ma50
+
+  INSIDER_ACCUMULATION:
+    all:
+      - metric: drawdown_from_52_week_high
+        operator: lte
+        value: -0.20
+      - metric: company_insider_score
+        operator: gte
+        value: 65
+      - metric: qualified_buy_age_days
+        operator: lte
+        value: 30
+
+  BASE_FORMING:
+    all:
+      - condition: prior_accumulation
+        equals: true
+      - condition: no_new_52_week_low
+        window_sessions: 20
+        equals: true
+    evidence:
+      minimum_matches: 2
+      of:
+        - volatility_contraction
+        - volume_dryup
+        - ma20_flattening
+
+  EARLY_TURN:
+    requires_state: BASE_FORMING
+    all:
+      - metric: turn_score
+        operator: gte
+        value: 60
+      - metric: ordinary_rs_3m
+        trend: improving
+        window_weeks: 4
+      - metric: mansfield_market
+        statistic: slope
+        window_weeks: 4
+        operator: gt
+        value: 0
+
+  CONFIRMED_TURN:
+    requires_state: EARLY_TURN
+    all:
+      - metric: close_above_ma50
+        minimum_matching_sessions: 5
+        window_sessions: 10
+    any:
+      - metric: mansfield_market
+        operator: gte
+        value: 0
+      - condition: cost_basis_reclaim
+        equals: true
+
+  downgrade:
+    consecutive_failed_evaluations: 2
+    immediate_reset:
+      condition: new_52_week_low
+      target_state: FALLING
+
+alerts:
+  MAJOR_INSIDER_BUY:
+    any:
+      - all:
+          - metric: conviction_score
+            operator: gte
+            value: 80
+          - metric: transaction_value_usd
+            operator: gte
+            value: 250000
+      - metric: transaction_value_usd
+        operator: gte
+        value: 1000000
+      - any_flag:
+          - strong_cluster
+          - first_buy
+          - largest_buy
+
+  STEALTH_ACCUMULATION:
+    all:
+      - metric: company_insider_score
+        operator: gte
+        value: 70
+      - metric: divergence_score
+        operator: gte
+        value: 75
+      - metric: turn_score
+        operator: gte
+        value: 45
+      - condition: no_new_52_week_low
+        window_sessions: 20
+        equals: true
+      - metric: ordinary_rs_3m
+        statistic: slope
+        operator: gt
+        value: 0
+      - metric: mansfield_market
+        statistic: slope
+        operator: gt
+        value: 0
+
+  TURNING:
+    all:
+      - transition_to_any:
+          - EARLY_TURN
+          - CONFIRMED_TURN
+      - metric: total_score
+        operator: gte
+        value: 75
+      - metric: company_insider_score
+        operator: gte
+        value: 65
+      - metric: divergence_score
+        operator: gte
+        value: 65
+
+  delivery:
+    cooldown_days: 14
+    cooldown_scope:
+      - issuer_cik
+      - alert_type
+    override_if_any:
+      - state_changed
+      - severity_changed
+      - important_flag_changed
+      - metric: absolute_score_delta
+        operator: gte
+        value: 7
+
+providers:
+  sec:
+    max_internal_requests_per_second: 6
+
+quality_gates:
+  parse_success_rate:
+    operator: gte
+    value: 0.995
+  market_data_coverage_rate:
+    operator: gte
+    value: 0.90
+  core_branch_coverage_rate:
+    operator: gte
+    value: 0.85

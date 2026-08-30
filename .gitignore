@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.venv/
+venv/
+env/
+dist/
+build/
+
+# Tool caches and reports
+.pnpm-store/
+.pytest_cache/
+.pytest-*/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Local data and generated artifacts
+work/
+data/raw/
+data/cache/
+data/staging/
+data/warehouse/
+*.duckdb
+*.duckdb.wal
+*.parquet
+*.arrow
+*.ipc

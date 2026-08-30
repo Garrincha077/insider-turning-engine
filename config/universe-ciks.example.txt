@@ -1,0 +1,4 @@
+# Copy this file to config/universe-ciks.txt and replace the examples with
+# the fixed SEC issuer universe for the deployment. One zero-padded CIK per
+# line; comments and blank lines are ignored. The workflow fails closed when
+# the configured file is absent, empty, or invalid.

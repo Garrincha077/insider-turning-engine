@@ -1,0 +1,501 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://insider-turning.local/schemas/canonical-transaction.schema.json",
+  "title": "Canonical insider transaction",
+  "description": "One point-in-time canonical transaction revision with immutable source provenance.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "runId",
+    "ingestedAt",
+    "transactionId",
+    "revisionId",
+    "issuer",
+    "reportingOwner",
+    "relationship",
+    "security",
+    "transaction",
+    "source",
+    "timestamps",
+    "lifecycle",
+    "quality"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "runId": {
+      "type": "string",
+      "pattern": "^run_[A-Za-z0-9_-]{16,64}$"
+    },
+    "ingestedAt": {
+      "$ref": "#/$defs/instant"
+    },
+    "transactionId": {
+      "type": "string",
+      "description": "txn_ plus lowercase SHA-256 of accessionNumber|ownerCIK|tableType|rowSequence after canonical normalization.",
+      "pattern": "^txn_[a-f0-9]{64}$"
+    },
+    "revisionId": {
+      "type": "string",
+      "pattern": "^txr_[A-Za-z0-9_-]{16,64}$"
+    },
+    "issuer": {
+      "$ref": "#/$defs/issuer"
+    },
+    "reportingOwner": {
+      "$ref": "#/$defs/reportingOwner"
+    },
+    "relationship": {
+      "$ref": "#/$defs/relationship"
+    },
+    "security": {
+      "$ref": "#/$defs/security"
+    },
+    "transaction": {
+      "$ref": "#/$defs/transaction"
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "timestamps": {
+      "$ref": "#/$defs/timestamps"
+    },
+    "lifecycle": {
+      "$ref": "#/$defs/lifecycle"
+    },
+    "quality": {
+      "$ref": "#/$defs/quality"
+    }
+  },
+  "$defs": {
+    "decimalNonNegative": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+    },
+    "instant": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "issuer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cik",
+        "name",
+        "ticker"
+      ],
+      "properties": {
+        "cik": {
+          "type": "string",
+          "pattern": "^[0-9]{10}$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "ticker": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[A-Z0-9][A-Z0-9.\\-]{0,14}$"
+        }
+      }
+    },
+    "reportingOwner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ownerId",
+        "cik",
+        "name"
+      ],
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 100
+        },
+        "cik": {
+          "type": "string",
+          "pattern": "^[0-9]{10}$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        }
+      }
+    },
+    "relationship": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "isDirector",
+        "isOfficer",
+        "isTenPercentOwner",
+        "isOther",
+        "officerTitle"
+      ],
+      "properties": {
+        "isDirector": {
+          "type": "boolean"
+        },
+        "isOfficer": {
+          "type": "boolean"
+        },
+        "isTenPercentOwner": {
+          "type": "boolean"
+        },
+        "isOther": {
+          "type": "boolean"
+        },
+        "officerTitle": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 200
+        }
+      }
+    },
+    "security": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "tableType",
+        "underlyingTitle"
+      ],
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "tableType": {
+          "enum": [
+            "NON_DERIVATIVE",
+            "DERIVATIVE"
+          ]
+        },
+        "underlyingTitle": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 300
+        }
+      }
+    },
+    "transaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "transactionDate",
+        "code",
+        "acquiredDisposed",
+        "shares",
+        "pricePerShare",
+        "value",
+        "valueDerivation",
+        "economicClassification",
+        "rule10b51",
+        "currency",
+        "postTransactionShares",
+        "ownershipNature",
+        "indirectOwnershipNature"
+      ],
+      "properties": {
+        "transactionDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Z]$"
+        },
+        "acquiredDisposed": {
+          "enum": [
+            "A",
+            "D"
+          ]
+        },
+        "shares": {
+          "$ref": "#/$defs/decimalNonNegative"
+        },
+        "pricePerShare": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/decimalNonNegative"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "value": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/decimalNonNegative"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "valueDerivation": {
+          "enum": [
+            "SOURCE",
+            "SHARES_TIMES_PRICE",
+            "UNAVAILABLE"
+          ]
+        },
+        "economicClassification": {
+          "description": "Normalized economic meaning, independent of the provider's raw transaction code.",
+          "enum": [
+            "OPEN_MARKET_PURCHASE",
+            "OPEN_MARKET_SALE",
+            "OPTION_EXERCISE",
+            "GRANT_AWARD",
+            "GIFT",
+            "TAX_WITHHOLDING",
+            "CONVERSION",
+            "OTHER_ACQUISITION",
+            "OTHER_DISPOSITION",
+            "UNKNOWN"
+          ]
+        },
+        "rule10b51": {
+          "description": "Tri-state Rule 10b5-1 plan indicator; unknown is distinct from false.",
+          "enum": [
+            "true",
+            "false",
+            "unknown"
+          ]
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        },
+        "postTransactionShares": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/decimalNonNegative"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ownershipNature": {
+          "enum": [
+            "D",
+            "I"
+          ]
+        },
+        "indirectOwnershipNature": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 500
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "providerRecordId",
+        "accessionNumber",
+        "formType",
+        "rowSequence",
+        "sourceRowKey",
+        "contentHash",
+        "sourceUrl"
+      ],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "providerRecordId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "accessionNumber": {
+          "type": "string",
+          "pattern": "^[0-9]{10}-[0-9]{2}-[0-9]{6}$"
+        },
+        "formType": {
+          "enum": [
+            "3",
+            "3/A",
+            "4",
+            "4/A",
+            "5",
+            "5/A"
+          ]
+        },
+        "rowSequence": {
+          "description": "One-based row position within the owner and ownership table in the authoritative filing.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "sourceRowKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "contentHash": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "sourceUrl": {
+          "type": "string",
+          "format": "uri",
+          "maxLength": 2000
+        }
+      }
+    },
+    "timestamps": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "acceptedAt",
+        "observedAt",
+        "knowledgeAt",
+        "recordedAt"
+      ],
+      "properties": {
+        "acceptedAt": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/instant"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "observedAt": {
+          "$ref": "#/$defs/instant"
+        },
+        "knowledgeAt": {
+          "$ref": "#/$defs/instant"
+        },
+        "recordedAt": {
+          "$ref": "#/$defs/instant"
+        }
+      }
+    },
+    "lifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "revision",
+        "status",
+        "isAmendment",
+        "supersedesRevisionId",
+        "validFrom",
+        "validTo"
+      ],
+      "properties": {
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "status": {
+          "enum": [
+            "ACTIVE",
+            "SUPERSEDED",
+            "VOID"
+          ]
+        },
+        "isAmendment": {
+          "type": "boolean"
+        },
+        "supersedesRevisionId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^txr_[A-Za-z0-9_-]{16,64}$"
+        },
+        "validFrom": {
+          "$ref": "#/$defs/instant"
+        },
+        "validTo": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/instant"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "flags"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "PASS",
+            "WARN",
+            "QUARANTINED"
+          ]
+        },
+        "flags": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "code",
+              "severity",
+              "message",
+              "path"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+              },
+              "severity": {
+                "enum": [
+                  "INFO",
+                  "WARNING",
+                  "ERROR"
+                ]
+              },
+              "message": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "path": {
+                "type": "string",
+                "maxLength": 300
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,40 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background); --color-foreground: var(--foreground);
+  --color-card: var(--card); --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover); --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary); --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary); --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted); --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent); --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive); --color-border: var(--border);
+  --color-input: var(--input); --color-ring: var(--ring);
+  --font-sans: var(--font-geist-sans); --font-mono: var(--font-geist-mono);
+  --radius-sm: calc(var(--radius) * .65); --radius-md: calc(var(--radius) * .82);
+  --radius-lg: var(--radius); --radius-xl: calc(var(--radius) * 1.25);
+}
+
+:root {
+  color-scheme: dark;
+  --background: oklch(.13 .018 252); --foreground: oklch(.94 .014 220);
+  --card: oklch(.175 .022 250); --card-foreground: oklch(.94 .014 220);
+  --popover: oklch(.175 .022 250); --popover-foreground: oklch(.94 .014 220);
+  --primary: oklch(.79 .145 172); --primary-foreground: oklch(.14 .025 240);
+  --secondary: oklch(.23 .025 248); --secondary-foreground: oklch(.91 .018 220);
+  --muted: oklch(.22 .022 248); --muted-foreground: oklch(.66 .025 231);
+  --accent: oklch(.22 .032 223); --accent-foreground: oklch(.93 .015 220);
+  --destructive: oklch(.66 .19 25); --border: oklch(.29 .026 247);
+  --input: oklch(.29 .026 247); --ring: oklch(.72 .13 175);
+  --radius: .65rem; --pulse: oklch(.8 .16 172);
+}
+
+* { border-color: var(--border); }
+html { background: var(--background); font-family: var(--font-geist-sans), Arial, sans-serif; }
+body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 78% -10%, oklch(.32 .075 213 / .22), transparent 30rem), linear-gradient(oklch(.145 .018 250 / .86), oklch(.13 .018 252)); color: var(--foreground); }
+::selection { background: oklch(.65 .14 175 / .35); }
+button, a { outline-color: var(--ring); }

@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - run: uv run ruff check src tests
+      - run: uv run mypy src
+      - run: uv run pytest
+      - name: Enforce 85% branch coverage on core decision modules
+        run: >-
+          uv run pytest
+          tests/test_scoring_state.py
+          tests/test_amendments.py
+          tests/test_opportunistic_divergence.py
+          tests/test_backtest_engine.py
+          --cov=insider_turning_engine.scoring
+          --cov=insider_turning_engine.normalization.amendments
+          --cov=insider_turning_engine.features.cluster
+          --cov=insider_turning_engine.features.opportunistic
+          --cov=insider_turning_engine.backtest.models
+          --cov-branch
+          --cov-report=term-missing
+          --cov-fail-under=85
+
+  dashboard:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e

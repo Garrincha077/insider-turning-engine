@@ -1,0 +1,107 @@
+name: Deploy dashboard
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Resolve GitHub Pages base path
+        shell: bash
+        run: |
+          repository_name="${GITHUB_REPOSITORY#*/}"
+          if [[ "$repository_name" == "${GITHUB_REPOSITORY_OWNER}.github.io" ]]; then
+            echo "PAGES_BASE_PATH=" >> "$GITHUB_ENV"
+          else
+            echo "PAGES_BASE_PATH=$repository_name" >> "$GITHUB_ENV"
+          fi
+      - run: npm ci
+        working-directory: app
+      - run: npm run build
+        working-directory: app
+      - name: Validate atomic dashboard snapshot
+        shell: bash
+        run: |
+          test -s app/dist/index.html
+          test -s app/dist/data/dashboard.json
+          test -s app/dist/data/manifest.json
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          root = Path("app/dist/data").resolve()
+          manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+          required = {"manifestId", "runId", "versions", "watermarks", "quality", "files", "artifacts"}
+          if not required <= set(manifest) or not isinstance(manifest.get("files"), list) or not manifest["files"]:
+              raise SystemExit("manifest is incomplete")
+          if manifest.get("status") not in {"SUCCEEDED", "DEGRADED"}:
+              raise SystemExit("manifest is not publishable")
+          if manifest.get("scoreVersion") != "scoring.v1":
+              raise SystemExit("manifest score version is not frozen")
+          if manifest.get("versions") != {
+              "scoring": "scoring.v1",
+              "stateModel": "state.v1",
+              "canonicalSchema": "1.0.0",
+              "signalSchema": "1.0.0",
+          }:
+              raise SystemExit("manifest versions do not match frozen contracts")
+          quality = manifest.get("quality", {})
+          if quality.get("disposition") not in {"PASS", "DEGRADED"}:
+              raise SystemExit("quality gate blocked publication")
+          if (manifest.get("status") == "SUCCEEDED") != (quality.get("disposition") == "PASS"):
+              raise SystemExit("manifest status and quality disposition disagree")
+          semantic = {key: value for key, value in manifest.items() if key != "manifestId"}
+          expected_manifest_id = "mft_" + hashlib.sha256(
+              (json.dumps(semantic, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+          ).hexdigest()[:32]
+          if manifest.get("manifestId") != expected_manifest_id:
+              raise SystemExit("manifest semantic id mismatch")
+          for record in manifest.get("files", []):
+              target = (root / str(record.get("path", ""))).resolve()
+              if root not in target.parents or not target.is_file():
+                  raise SystemExit("manifest references a missing artifact")
+              if target.suffix == ".json":
+                  json.loads(target.read_text(encoding="utf-8"))
+              digest = hashlib.sha256(target.read_bytes()).hexdigest()
+              if digest != record.get("sha256"):
+                  raise SystemExit("manifest artifact hash mismatch")
+          file_hashes = {str(record.get("path")): str(record.get("sha256")) for record in manifest.get("files", [])}
+          for artifact in manifest.get("artifacts", []):
+              uri = str(artifact.get("uri", ""))
+              if file_hashes.get(uri) is None or artifact.get("contentHash") != f"sha256:{file_hashes[uri]}":
+                  raise SystemExit("manifest artifact content hash mismatch")
+          PY
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: app/dist
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy validated artifact
+        id: deployment
+        uses: actions/deploy-pages@v4

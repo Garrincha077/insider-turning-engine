@@ -1,0 +1,668 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://insider-turning.local/schemas/signal-snapshot.schema.json",
+  "title": "Issuer signal snapshot",
+  "description": "Immutable point-in-time score, state, evidence, alerts, and lineage for one issuer.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "snapshotId",
+    "issuer",
+    "asOf",
+    "generatedAt",
+    "versions",
+    "scores",
+    "state",
+    "alerts",
+    "qualityFlags",
+    "provenance"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "snapshotId": {
+      "type": "string",
+      "pattern": "^sig_[A-Za-z0-9_-]{16,64}$"
+    },
+    "issuer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cik",
+        "name",
+        "ticker",
+        "sector"
+      ],
+      "properties": {
+        "cik": {
+          "type": "string",
+          "pattern": "^[0-9]{10}$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "ticker": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[A-Z0-9][A-Z0-9.\\-]{0,14}$"
+        },
+        "sector": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 200
+        }
+      }
+    },
+    "asOf": {
+      "$ref": "#/$defs/instant"
+    },
+    "generatedAt": {
+      "$ref": "#/$defs/instant"
+    },
+    "versions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scoring",
+        "stateModel"
+      ],
+      "properties": {
+        "scoring": {
+          "const": "scoring.v1"
+        },
+        "stateModel": {
+          "const": "state.v1"
+        }
+      }
+    },
+    "scores": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "marketPulse",
+        "companyInsider",
+        "divergence",
+        "turn",
+        "total"
+      ],
+      "properties": {
+        "marketPulse": {
+          "$ref": "#/$defs/marketPulseScore"
+        },
+        "companyInsider": {
+          "$ref": "#/$defs/companyInsiderScore"
+        },
+        "divergence": {
+          "$ref": "#/$defs/divergenceScore"
+        },
+        "turn": {
+          "$ref": "#/$defs/turnScore"
+        },
+        "total": {
+          "$ref": "#/$defs/totalScore"
+        }
+      }
+    },
+    "state": {
+      "$ref": "#/$defs/state"
+    },
+    "alerts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/alert"
+      }
+    },
+    "qualityFlags": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+      }
+    },
+    "provenance": {
+      "$ref": "#/$defs/provenance"
+    }
+  },
+  "$defs": {
+    "instant": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "scoreOrNull": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 100
+    },
+    "stateName": {
+      "enum": [
+        "FALLING",
+        "INSIDER_ACCUMULATION",
+        "BASE_FORMING",
+        "EARLY_TURN",
+        "CONFIRMED_TURN"
+      ]
+    },
+    "marketPulseScore": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "score",
+        "components"
+      ],
+      "properties": {
+        "score": {
+          "$ref": "#/$defs/score"
+        },
+        "components": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "transaction",
+            "uniqueInsiders",
+            "dollar",
+            "volume",
+            "companyBreadth",
+            "convictionWeighted"
+          ],
+          "properties": {
+            "transaction": {
+              "$ref": "#/$defs/score"
+            },
+            "uniqueInsiders": {
+              "$ref": "#/$defs/score"
+            },
+            "dollar": {
+              "$ref": "#/$defs/score"
+            },
+            "volume": {
+              "$ref": "#/$defs/score"
+            },
+            "companyBreadth": {
+              "$ref": "#/$defs/score"
+            },
+            "convictionWeighted": {
+              "$ref": "#/$defs/score"
+            }
+          }
+        }
+      }
+    },
+    "companyInsiderScore": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "score",
+        "components"
+      ],
+      "properties": {
+        "score": {
+          "$ref": "#/$defs/score"
+        },
+        "components": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "conviction",
+            "cluster",
+            "opportunistic",
+            "netBuyingAbsenceSales"
+          ],
+          "properties": {
+            "conviction": {
+              "$ref": "#/$defs/score"
+            },
+            "cluster": {
+              "$ref": "#/$defs/score"
+            },
+            "opportunistic": {
+              "$ref": "#/$defs/score"
+            },
+            "netBuyingAbsenceSales": {
+              "$ref": "#/$defs/score"
+            }
+          }
+        }
+      }
+    },
+    "divergenceScore": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "score",
+        "components"
+      ],
+      "properties": {
+        "score": {
+          "$ref": "#/$defs/score"
+        },
+        "components": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "priceWeakness",
+            "insiderActivityPercentile",
+            "accelerationCluster",
+            "absenceRelevantSales"
+          ],
+          "properties": {
+            "priceWeakness": {
+              "$ref": "#/$defs/score"
+            },
+            "insiderActivityPercentile": {
+              "$ref": "#/$defs/score"
+            },
+            "accelerationCluster": {
+              "$ref": "#/$defs/score"
+            },
+            "absenceRelevantSales": {
+              "$ref": "#/$defs/score"
+            }
+          }
+        }
+      }
+    },
+    "turnScore": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "score",
+        "components"
+      ],
+      "properties": {
+        "score": {
+          "$ref": "#/$defs/score"
+        },
+        "components": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "baseStructure",
+            "ordinaryRsTurn",
+            "mansfieldMarket",
+            "mansfieldSector",
+            "volumeAccumulation",
+            "costBasisReclaim"
+          ],
+          "properties": {
+            "baseStructure": {
+              "$ref": "#/$defs/score"
+            },
+            "ordinaryRsTurn": {
+              "$ref": "#/$defs/score"
+            },
+            "mansfieldMarket": {
+              "$ref": "#/$defs/score"
+            },
+            "mansfieldSector": {
+              "$ref": "#/$defs/score"
+            },
+            "volumeAccumulation": {
+              "$ref": "#/$defs/score"
+            },
+            "costBasisReclaim": {
+              "$ref": "#/$defs/score"
+            }
+          }
+        }
+      }
+    },
+    "totalScore": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "score",
+        "components",
+        "excludedFactors"
+      ],
+      "properties": {
+        "score": {
+          "$ref": "#/$defs/score"
+        },
+        "components": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "divergence",
+            "conviction",
+            "cluster",
+            "opportunistic",
+            "base",
+            "ordinaryRs",
+            "mansfieldRs",
+            "volume",
+            "fundamental"
+          ],
+          "properties": {
+            "divergence": {
+              "$ref": "#/$defs/score"
+            },
+            "conviction": {
+              "$ref": "#/$defs/score"
+            },
+            "cluster": {
+              "$ref": "#/$defs/score"
+            },
+            "opportunistic": {
+              "$ref": "#/$defs/score"
+            },
+            "base": {
+              "$ref": "#/$defs/score"
+            },
+            "ordinaryRs": {
+              "$ref": "#/$defs/score"
+            },
+            "mansfieldRs": {
+              "$ref": "#/$defs/score"
+            },
+            "volume": {
+              "$ref": "#/$defs/score"
+            },
+            "fundamental": {
+              "$ref": "#/$defs/scoreOrNull"
+            }
+          }
+        },
+        "excludedFactors": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "const": "fundamental"
+          },
+          "maxItems": 1
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "components": {
+                "type": "object",
+                "properties": {
+                  "fundamental": {
+                    "type": "null"
+                  }
+                },
+                "required": [
+                  "fundamental"
+                ]
+              }
+            }
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "excludedFactors": {
+                "type": "array",
+                "contains": {
+                  "const": "fundamental"
+                },
+                "minContains": 1
+              }
+            }
+          },
+          "else": {
+            "type": "object",
+            "properties": {
+              "excludedFactors": {
+                "type": "array",
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "current",
+        "previous",
+        "changed",
+        "enteredAt",
+        "evaluationSequence",
+        "criteria"
+      ],
+      "properties": {
+        "current": {
+          "$ref": "#/$defs/stateName"
+        },
+        "previous": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/stateName"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "changed": {
+          "type": "boolean"
+        },
+        "enteredAt": {
+          "$ref": "#/$defs/instant"
+        },
+        "evaluationSequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "criteria": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "return3m",
+            "closeBelowMa50",
+            "drawdownFrom52WeekHigh",
+            "insiderScore",
+            "qualifiedBuyAgeDays",
+            "priorAccumulation",
+            "noNew52WeekLow20Sessions",
+            "volatilityContraction",
+            "volumeDryUp",
+            "ma20Flattening",
+            "ordinaryRsImprovingFourWeeks",
+            "mansfieldMarketFourWeekSlope",
+            "closeAboveMa50DaysLast10",
+            "mansfieldMarket",
+            "costBasisReclaim",
+            "consecutiveFailures",
+            "new52WeekLow"
+          ],
+          "properties": {
+            "return3m": {
+              "type": "number"
+            },
+            "closeBelowMa50": {
+              "type": "boolean"
+            },
+            "drawdownFrom52WeekHigh": {
+              "type": "number",
+              "maximum": 0
+            },
+            "insiderScore": {
+              "$ref": "#/$defs/score"
+            },
+            "qualifiedBuyAgeDays": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "priorAccumulation": {
+              "type": "boolean"
+            },
+            "noNew52WeekLow20Sessions": {
+              "type": "boolean"
+            },
+            "volatilityContraction": {
+              "type": "boolean"
+            },
+            "volumeDryUp": {
+              "type": "boolean"
+            },
+            "ma20Flattening": {
+              "type": "boolean"
+            },
+            "ordinaryRsImprovingFourWeeks": {
+              "type": "boolean"
+            },
+            "mansfieldMarketFourWeekSlope": {
+              "type": "number"
+            },
+            "closeAboveMa50DaysLast10": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10
+            },
+            "mansfieldMarket": {
+              "type": "number"
+            },
+            "costBasisReclaim": {
+              "type": "boolean"
+            },
+            "consecutiveFailures": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "new52WeekLow": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "alert": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidateId",
+        "type",
+        "severity",
+        "important",
+        "score",
+        "status",
+        "reasons"
+      ],
+      "properties": {
+        "candidateId": {
+          "type": "string",
+          "pattern": "^alt_[A-Za-z0-9_-]{16,64}$"
+        },
+        "type": {
+          "enum": [
+            "MAJOR_INSIDER_BUY",
+            "STEALTH_ACCUMULATION",
+            "TURNING"
+          ]
+        },
+        "severity": {
+          "enum": [
+            "INFO",
+            "WATCH",
+            "HIGH",
+            "CRITICAL"
+          ]
+        },
+        "important": {
+          "type": "boolean"
+        },
+        "score": {
+          "$ref": "#/$defs/score"
+        },
+        "status": {
+          "enum": [
+            "CANDIDATE",
+            "EMITTED",
+            "SUPPRESSED"
+          ]
+        },
+        "reasons": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+          }
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runId",
+        "transactionRevisionIds",
+        "secAcceptedThrough",
+        "marketSessionThrough",
+        "fundamentalsAvailableThrough",
+        "inputHash"
+      ],
+      "properties": {
+        "runId": {
+          "type": "string",
+          "pattern": "^run_[A-Za-z0-9_-]{16,64}$"
+        },
+        "transactionRevisionIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^txr_[A-Za-z0-9_-]{16,64}$"
+          }
+        },
+        "secAcceptedThrough": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/instant"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "marketSessionThrough": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date"
+        },
+        "fundamentalsAvailableThrough": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/instant"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "inputHash": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,581 @@
+name: Daily research pipeline
+
+on:
+  # The SEC filing cutoff is deliberately after the US market close.  GitHub
+  # cron uses UTC and the range 2-6 is Tuesday through Saturday.
+  schedule:
+    - cron: "30 2 * * 2-6"
+    - cron: "0 3 1 1,4,7,10 *"
+  workflow_dispatch:
+    inputs:
+      fixture_only:
+        description: Run the offline fixture smoke test only
+        required: false
+        default: false
+        type: boolean
+      run_sec_backfill:
+        description: Run a quarterly SEC bulk backfill now
+        required: false
+        default: false
+        type: boolean
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-research-pipeline
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: "3.12"
+  UV_FROZEN: "1"
+  SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT }}
+
+jobs:
+  fixture-dry-run:
+    name: Fixture-only dry run
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.fixture_only == true }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Run offline fixture validation (no network or alerts)
+        run: uv run insider-turning daily --fixture-only
+
+  quarterly-sec-backfill:
+    name: Quarterly SEC backfill
+    if: >-
+      ${{
+        (github.event_name == 'schedule' && github.event.schedule == '0 3 1 1,4,7,10 *') ||
+        (github.event_name == 'workflow_dispatch' && inputs.run_sec_backfill == true)
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Determine completed SEC quarter
+        id: quarter
+        shell: bash
+        run: |
+          set -euo pipefail
+          month="$(date -u +%m)"
+          year="$(date -u +%Y)"
+          quarter=$(( (10#$month - 1) / 3 ))
+          # On the first day of a quarter, backfill the quarter that just ended.
+          if (( quarter == 0 )); then
+            year=$((year - 1)); quarter=4
+          fi
+          echo "year=$year" >> "$GITHUB_OUTPUT"
+          echo "quarter=$quarter" >> "$GITHUB_OUTPUT"
+      - name: Stage official SEC bulk archive
+        env:
+          SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT }}
+        run: >-
+          uv run insider-turning backfill-sec
+          --year ${{ steps.quarter.outputs.year }}
+          --quarter ${{ steps.quarter.outputs.quarter }}
+          --cache-dir data/cache/sec
+          --staging-dir data/staging/sec
+          --execute
+      - name: Validate normalized SEC Parquet staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          partition="data/staging/sec/year=${{ steps.quarter.outputs.year }}/quarter=${{ steps.quarter.outputs.quarter }}"
+          test -s "$partition/manifest.json"
+          mapfile -t parquet_files < <(find "$partition" -maxdepth 1 -type f -name '*.parquet' -print)
+          ((${#parquet_files[@]} > 0)) || {
+            echo "normalized SEC staging has no Parquet tables"
+            exit 1
+          }
+          for parquet in "${parquet_files[@]}"; do
+            test -s "$parquet"
+          done
+      - name: Publish idempotent versioned SEC Release artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ steps.quarter.outputs.year }}-q${{ steps.quarter.outputs.quarter }}"
+          release_tag="sec-${version}"
+          archive="insider-turning-sec-${version}.tar.gz"
+          tar -czf "$archive" -C data/staging/sec "year=${{ steps.quarter.outputs.year }}/quarter=${{ steps.quarter.outputs.quarter }}"
+          if gh release view "$release_tag" >/dev/null 2>&1; then
+            gh release upload "$release_tag" "$archive" --clobber
+          else
+            gh release create "$release_tag" "$archive" \
+              --title "SEC normalized dataset ${version}" \
+              --notes "Versioned normalized SEC Parquet staging for ${version}."
+          fi
+
+  daily:
+    name: Ingest, score, gate, and persist state
+    if: >-
+      ${{
+        github.event_name != 'workflow_dispatch' || inputs.fixture_only != true
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    outputs:
+      publishable: ${{ steps.quality.outputs.publishable }}
+      alerts_allowed: ${{ steps.quality.outputs.alerts_allowed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Create run workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf run
+          mkdir -p run/{staging,warehouse,public/data,alerts,state,components}
+          echo "run_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}" > run/run-id
+      - name: Restore SEC cursor from orphan state branch
+        id: state-restore
+        shell: bash
+        run: |
+          set -euo pipefail
+          allowed_re='^(watermarks\.json|sec\.cursor|prior-scores\.json|prior-states\.json|alert-outbox\.jsonl|alert-history\.jsonl|alerts\.sqlite)$'
+          expected_sha="$(git ls-remote origin refs/heads/state | awk 'NR==1 {print $1}')"
+          rm -rf state-previous
+          mkdir state-previous
+          if [[ -n "$expected_sha" ]]; then
+            git fetch --no-tags origin "refs/heads/state:refs/remotes/origin/state"
+            forbidden="$(git ls-tree -r --name-only refs/remotes/origin/state | grep -Ev "$allowed_re" || true)"
+            test -z "$forbidden" || {
+              echo "state branch contains forbidden paths: $forbidden"
+              exit 1
+            }
+            git archive refs/remotes/origin/state | tar -x -C state-previous
+            if [[ -f state-previous/sec.cursor ]]; then
+              cp state-previous/sec.cursor run/state/sec.cursor
+            fi
+            if [[ -f state-previous/alerts.sqlite ]]; then
+              cp state-previous/alerts.sqlite run/state/alerts.sqlite
+            fi
+          fi
+          echo "STATE_BASE_SHA=$expected_sha" >> "$GITHUB_ENV"
+      - name: SEC incremental stage
+        id: sec
+        shell: bash
+        env:
+          SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT }}
+        run: |
+          set -euo pipefail
+          cik_file="${SEC_CIK_FILE:-config/universe-ciks.txt}"
+          # Prefer the live SEC adapter.  A missing or invalid configured
+          # universe is a degraded source, never an invented universe.
+          if [[ -s "$cik_file" ]] && awk '
+            BEGIN { valid=1; count=0 }
+            {
+              line=$0
+              sub(/^[[:space:]]+/, "", line)
+              sub(/[[:space:]]+$/, "", line)
+              if (line == "" || line ~ /^#/) next
+              if (line !~ /^[0-9]{1,10}$/) valid=0
+              else count++
+            }
+            END { exit !(valid && count > 0) }
+          ' "$cik_file"; then
+            uv run insider-turning update-sec \
+              --cik-file "$cik_file" \
+              --cursor-file run/state/sec.cursor \
+              --output run/staging/sec-incremental.json \
+              --execute
+          # Keep a deployment-provided XML as a deterministic local fallback.
+          # It is useful for replay, but is never synthesized when absent.
+          elif [[ -f data/incoming/sec.xml && -f data/incoming/sec.json ]]; then
+            uv run insider-turning update-sec \
+              --xml data/incoming/sec.xml \
+              --accession "$(jq -r .accession data/incoming/sec.json)" \
+              --source-url "$(jq -r .sourceUrl data/incoming/sec.json)" \
+              --output run/staging/sec-incremental.json
+          else
+            echo "SEC CIK universe is unavailable; marking run degraded" | tee run/staging/sec-warning.txt
+          fi
+      - name: Market daily stage
+        id: market
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f data/incoming/market.csv ]]; then
+            uv run insider-turning update-market \
+              --csv-path data/incoming/market.csv \
+              --output run/warehouse/market.parquet \
+              --as-of "$(date -u +%F)"
+          else
+            echo "market input is unavailable; marking run degraded" | tee run/staging/market-warning.txt
+          fi
+      - name: Build bounded features
+        id: features
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f run/warehouse/market.parquet ]]; then
+            uv run insider-turning build-features \
+              --market run/warehouse/market.parquet \
+              --output run/warehouse/price-features.parquet \
+              --as-of "$(date -u +%F)"
+          else
+            echo "feature stage skipped because market stage was degraded"
+          fi
+      - name: Score each ticker independently
+        id: signals
+        shell: bash
+        run: |
+          set -uo pipefail
+          ticker_file="${TICKER_UNIVERSE_FILE:-config/universe.txt}"
+          failures=0
+          if [[ -f "$ticker_file" ]]; then
+            while IFS= read -r ticker; do
+              [[ -z "$ticker" || "$ticker" == \#* ]] && continue
+              component="run/components/${ticker}.json"
+              output="run/warehouse/scores-${ticker}.json"
+              if [[ ! -f "$component" ]]; then
+                echo "ticker $ticker has no component input; continuing" | tee -a run/staging/ticker-warnings.txt
+                failures=$((failures + 1))
+                continue
+              fi
+              if ! uv run insider-turning build-signals --components "$component" --output "$output"; then
+                echo "ticker $ticker failed scoring; continuing" | tee -a run/staging/ticker-warnings.txt
+                failures=$((failures + 1))
+              fi
+            done < "$ticker_file"
+          else
+            echo "ticker universe is unavailable; no signal snapshot can be publishable" | tee run/staging/ticker-warnings.txt
+          fi
+          echo "failed_tickers=$failures" >> "$GITHUB_OUTPUT"
+      - name: Export a candidate dashboard snapshot
+        id: export
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The scoring adapter writes this immutable, point-in-time input.
+          # Never fall back to a previous dashboard when it is absent.
+          if [[ -f run/warehouse/dashboard-input.json ]]; then
+            uv run insider-turning export-dashboard \
+              --source run/warehouse/dashboard-input.json \
+              --output run/public/data
+          else
+            echo "dashboard input is unavailable; publication is blocked" | tee run/staging/dashboard-warning.txt
+          fi
+      - name: Validate manifest, snapshots, hashes, and quality gates
+        id: quality
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+
+          root = Path("run/public/data")
+          manifest_path = root / "manifest.json"
+          publishable = False
+          alerts_allowed = False
+          reasons = []
+          try:
+              manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+              required = {"manifestId", "runId", "versions", "watermarks", "quality", "files", "artifacts"}
+              missing = required - set(manifest)
+              if missing:
+                  reasons.append("MANIFEST_REQUIRED_FIELD_MISSING")
+              if not isinstance(manifest.get("files"), list) or not manifest["files"]:
+                  reasons.append("MANIFEST_HAS_NO_FILES")
+              if manifest.get("status") not in {"SUCCEEDED", "DEGRADED"}:
+                  reasons.append("INVALID_MANIFEST_STATUS")
+              if manifest.get("scoreVersion") != "scoring.v1":
+                  reasons.append("INVALID_SCORE_VERSION")
+              expected_versions = {
+                  "scoring": "scoring.v1",
+                  "stateModel": "state.v1",
+                  "canonicalSchema": "1.0.0",
+                  "signalSchema": "1.0.0",
+              }
+              if manifest.get("versions") != expected_versions:
+                  reasons.append("INVALID_MANIFEST_VERSIONS")
+              quality = manifest.get("quality", {})
+              disposition = quality.get("disposition")
+              if disposition == "BLOCKED":
+                  reasons.append("QUALITY_GATE_BLOCKED")
+              elif disposition not in {"PASS", "DEGRADED"}:
+                  reasons.append("QUALITY_GATE_MISSING")
+              if (manifest.get("status") == "SUCCEEDED") != (disposition == "PASS"):
+                  reasons.append("QUALITY_STATUS_MISMATCH")
+              semantic = {key: value for key, value in manifest.items() if key != "manifestId"}
+              expected_manifest_id = "mft_" + hashlib.sha256(
+                  (json.dumps(semantic, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+              ).hexdigest()[:32]
+              if manifest.get("manifestId") != expected_manifest_id:
+                  reasons.append("MANIFEST_ID_MISMATCH")
+              for record in manifest.get("files", []):
+                  rel = str(record.get("path", ""))
+                  target = (root / rel).resolve()
+                  if root.resolve() not in target.parents or not target.is_file():
+                      reasons.append("MISSING_SNAPSHOT_ARTIFACT")
+                      continue
+                  if target.suffix == ".json":
+                      json.loads(target.read_text(encoding="utf-8"))
+                  digest = hashlib.sha256(target.read_bytes()).hexdigest()
+                  if digest != record.get("sha256"):
+                      reasons.append("SNAPSHOT_HASH_MISMATCH")
+              file_hashes = {
+                  str(record.get("path")): str(record.get("sha256"))
+                  for record in manifest.get("files", [])
+              }
+              for artifact in manifest.get("artifacts", []):
+                  uri = str(artifact.get("uri", ""))
+                  if file_hashes.get(uri) is None or artifact.get("contentHash") != f"sha256:{file_hashes[uri]}":
+                      reasons.append("ARTIFACT_HASH_MISMATCH")
+              publishable = not reasons
+              alerts_allowed = publishable and disposition == "PASS"
+          except (OSError, ValueError, TypeError, json.JSONDecodeError):
+              reasons.append("INVALID_SNAPSHOT")
+          Path("run/staging/quality.json").write_text(
+              json.dumps({"publishable": publishable, "alertsAllowed": alerts_allowed, "issues": reasons}, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"publishable={'true' if publishable else 'false'}\n")
+              output.write(f"alerts_allowed={'true' if alerts_allowed else 'false'}\n")
+          if reasons:
+              print("quality gate blocked publication:", ", ".join(sorted(set(reasons))))
+          PY
+      - name: Quality-gated, idempotent alert delivery
+        if: ${{ steps.quality.outputs.alerts_allowed == 'true' }}
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f run/alerts/candidates.json ]]; then
+            if [[ -z "${TELEGRAM_BOT_TOKEN:-}" || -z "${TELEGRAM_CHAT_ID:-}" ]]; then
+              echo "Telegram credentials are not configured; retaining candidates in the outbox"
+              uv run insider-turning send-alerts \
+              --candidates run/alerts/candidates.json \
+              --outbox run/state/alerts.sqlite
+            else
+              uv run insider-turning send-alerts \
+                --candidates run/alerts/candidates.json \
+                --outbox run/state/alerts.sqlite --execute
+            fi
+          else
+            echo "No alert candidate file; retaining an empty auditable outbox"
+          fi
+      - name: Prepare and atomically update the orphan state branch
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          allowed=(watermarks.json sec.cursor prior-scores.json prior-states.json alert-outbox.jsonl alert-history.jsonl alerts.sqlite)
+          expected_sha="${STATE_BASE_SHA:-}"
+          rm -rf state-previous state-next
+          mkdir state-previous state-next
+          if [[ -n "$expected_sha" ]]; then
+            git fetch --no-tags origin "refs/heads/state:refs/remotes/origin/state"
+            git archive refs/remotes/origin/state | tar -x -C state-previous
+          fi
+          # Copy only durable operational state.  In particular, raw filings,
+          # provider caches, parquet, and generated dashboards never enter this branch.
+          # Watermarks advance only after a PASS-quality snapshot.  A
+          # degraded/experimental or blocked run must replay its inputs on
+          # the next invocation instead of silently moving the checkpoint.
+          publishable_quality="$(jq -r '.quality.disposition // ""' run/public/data/manifest.json 2>/dev/null || true)"
+          if [[ "$publishable_quality" == "PASS" ]]; then
+            jq '.watermarks // {}' run/public/data/manifest.json > run/state/watermarks.json
+          else
+            cp state-previous/watermarks.json run/state/watermarks.json 2>/dev/null || echo '{}' > run/state/watermarks.json
+          fi
+          for file in "${allowed[@]}"; do
+            [[ "$file" == "watermarks.json" ]] && continue
+            if [[ -f "run/state/$file" ]]; then
+              cp "run/state/$file" "state-next/$file"
+            elif [[ -f "state-previous/$file" ]]; then
+              cp "state-previous/$file" "state-next/$file"
+            else
+              case "$file" in
+                sec.cursor|alerts.sqlite) : ;;
+                *.json) echo '{}' > "state-next/$file" ;;
+                *) : > "state-next/$file" ;;
+              esac
+            fi
+          done
+          cp run/state/watermarks.json state-next/watermarks.json
+          if [[ -f state-next/alerts.sqlite ]] && (( $(stat -c '%s' state-next/alerts.sqlite) > 10485760 )); then
+            echo "alert outbox exceeds the 10 MiB operational-state limit"
+            exit 1
+          fi
+          git -C state-next init >/dev/null
+          git -C state-next checkout --orphan state >/dev/null
+          git -C state-next config user.name "github-actions[bot]"
+          git -C state-next config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C state-next remote add origin "$(git remote get-url origin)"
+          git -C state-next add -A
+          forbidden="$(git -C state-next ls-files | grep -Ev '^(watermarks\.json|sec\.cursor|prior-scores\.json|prior-states\.json|alert-outbox\.jsonl|alert-history\.jsonl|alerts\.sqlite)$' || true)"
+          test -z "$forbidden" || { echo "state branch contains forbidden paths: $forbidden"; exit 1; }
+          git -C state-next commit -m "Persist operational state for run ${GITHUB_RUN_ID}" >/dev/null
+          # Re-read immediately before replacement.  A concurrent writer must
+          # make this run fail closed rather than overwrite another checkpoint.
+          current_sha="$(git ls-remote origin refs/heads/state | awk 'NR==1 {print $1}')"
+          test "$current_sha" = "$expected_sha" || { echo "state branch changed during run"; exit 1; }
+          lease="${expected_sha:-0000000000000000000000000000000000000000}"
+          git -C state-next push --force-with-lease="refs/heads/state:$lease" origin HEAD:refs/heads/state
+      - name: Retain run audit bundle
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-run-${{ github.run_id }}
+          path: run/staging
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Retain validated dashboard bundle
+        if: ${{ steps.quality.outputs.publishable == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-${{ github.run_id }}
+          path: run/public/data
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-pages:
+    name: Publish validated Pages snapshot
+    needs: daily
+    if: ${{ needs.daily.result == 'success' && needs.daily.outputs.publishable == 'true' }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dashboard-${{ github.run_id }}
+          path: app/public/data
+      - name: Validate new manifest and every referenced snapshot before upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          root = Path("app/public/data").resolve()
+          manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+          required = {"manifestId", "runId", "versions", "watermarks", "quality", "files", "artifacts"}
+          if not required <= set(manifest) or not isinstance(manifest.get("files"), list) or not manifest["files"]:
+              raise SystemExit("manifest is incomplete")
+          if manifest.get("status") not in {"SUCCEEDED", "DEGRADED"}:
+              raise SystemExit("invalid manifest status")
+          for record in manifest.get("files", []):
+              target = (root / str(record["path"])).resolve()
+              if root not in target.parents or not target.is_file():
+                  raise SystemExit("manifest references a missing snapshot")
+              if target.suffix == ".json":
+                  json.loads(target.read_text(encoding="utf-8"))
+              if hashlib.sha256(target.read_bytes()).hexdigest() != record["sha256"]:
+                  raise SystemExit("manifest snapshot hash mismatch")
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Resolve GitHub Pages base path
+        shell: bash
+        run: |
+          repository_name="${GITHUB_REPOSITORY#*/}"
+          if [[ "$repository_name" == "${GITHUB_REPOSITORY_OWNER}.github.io" ]]; then
+            echo "PAGES_BASE_PATH=" >> "$GITHUB_ENV"
+          else
+            echo "PAGES_BASE_PATH=$repository_name" >> "$GITHUB_ENV"
+          fi
+      - run: npm ci
+        working-directory: app
+      - run: npm run build
+        working-directory: app
+      - name: Validate built dashboard before Pages upload
+        shell: bash
+        run: test -s app/dist/index.html && test -s app/dist/data/manifest.json
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: app/dist
+      - name: Deploy validated artifact
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  release:
+    name: Publish versioned dashboard artifact
+    needs: daily
+    if: >-
+      ${{
+        startsWith(github.ref, 'refs/tags/v') &&
+        needs.daily.result == 'success' &&
+        needs.daily.outputs.publishable == 'true'
+      }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dashboard-${{ github.run_id }}
+          path: dashboard
+      - name: Build versioned release archive
+        shell: bash
+        run: tar -czf "insider-turning-${GITHUB_REF_NAME}.tar.gz" -C dashboard .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: insider-turning-${{ github.ref_name }}
+          path: insider-turning-${{ github.ref_name }}.tar.gz
+          if-no-files-found: error
+          retention-days: 90
+      - name: Attach archive to the versioned GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="insider-turning-${GITHUB_REF_NAME}.tar.gz"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$archive" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$archive" --generate-notes
+          fi

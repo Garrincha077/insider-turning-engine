@@ -1,0 +1,32 @@
+version: "1.0.0"
+default_etf: UNKNOWN
+historical_caveat: >-
+  SIC is an issuer-level primary classification and does not represent a
+  historical GICS membership. This deterministic proxy is versioned for
+  reproducible analysis; historical sector changes require valid-time
+  reference data.
+# Rules are evaluated in order. Specific ranges precede broad ranges where
+# SIC industries could otherwise map to more than one sector proxy.
+rules:
+  - etf: XLE
+    sic_ranges: [[1000, 1399], [2900, 2999]]
+  - etf: XLK
+    sic_ranges: [[3570, 3579], [3670, 3679], [7370, 7379]]
+  - etf: XLV
+    sic_ranges: [[2830, 2839], [3840, 3851], [8000, 8099]]
+  - etf: XLRE
+    sic_ranges: [[6500, 6599]]
+  - etf: XLU
+    sic_ranges: [[4900, 4999]]
+  - etf: XLC
+    sic_ranges: [[4800, 4899]]
+  - etf: XLB
+    sic_ranges: [[2800, 2899], [3200, 3299], [3300, 3399]]
+  - etf: XLP
+    sic_ranges: [[2000, 2199], [5140, 5199], [5411, 5411], [5420, 5429], [5431, 5431], [5451, 5451], [5461, 5461], [5499, 5499]]
+  - etf: XLY
+    sic_ranges: [[5000, 5099], [5200, 5399], [5500, 5599], [5700, 5799], [5800, 5899], [5900, 5999]]
+  - etf: XLI
+    sic_ranges: [[3500, 3569], [3580, 3669], [3700, 3999]]
+  - etf: XLF
+    sic_ranges: [[6000, 6499], [6600, 6799]]
