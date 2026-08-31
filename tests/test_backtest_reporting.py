@@ -9,6 +9,7 @@ from insider_turning_engine.backtest import (
     BacktestEvent,
     BacktestPeriod,
     BacktestSignal,
+    EvaluationStage,
     EventGroup,
     ForwardReturn,
     PeriodResults,
@@ -16,14 +17,19 @@ from insider_turning_engine.backtest import (
     ValidationEvidence,
     bootstrap_median_ci,
     build_backtest_report,
-    evaluate_formal_gate,
     summarize_events,
 )
+from insider_turning_engine.backtest import evaluate_formal_gate as _evaluate_formal_gate
 from insider_turning_engine.backtest.reporting import BenchmarkComparison
 from insider_turning_engine.scoring import ScoreEngine
 
 _LOCKED_SCORING = ScoreEngine()
 _FROZEN_AT = _LOCKED_SCORING.score_frozen_at
+
+
+def evaluate_formal_gate(*args, **kwargs):
+    kwargs.setdefault("evaluation_stage", EvaluationStage.DEV_VALIDATION)
+    return _evaluate_formal_gate(*args, **kwargs)
 
 _EVIDENCE = ValidationEvidence(
     parse_success_rate=0.995,
@@ -50,6 +56,8 @@ def _events(values: list[float], *, name: str = "group") -> tuple[BacktestEvent,
             sector="Technology",
             score_config_hash=_LOCKED_SCORING.score_config_hash,
             score_lineage=_LOCKED_SCORING.score_lineage,
+            methodology_hash=_LOCKED_SCORING.methodology_hash,
+            methodology_status=_LOCKED_SCORING.methodology_status,
             frozen_at=_FROZEN_AT,
         )
         rows.append(
@@ -220,7 +228,7 @@ def test_failed_validation_evidence_is_fail_closed() -> None:
     assert "benchmark freshness" in assessment.reason
 
 
-def test_incomplete_scoring_methodology_cannot_pass_oos_gate() -> None:
+def test_caller_methodology_boolean_cannot_override_lock_derived_state() -> None:
     full = _comparison("full_engine", [0.20] * 220)
     simple = _comparison("simple_ps", [0.01] * 220)
 
@@ -232,8 +240,7 @@ def test_incomplete_scoring_methodology_cannot_pass_oos_gate() -> None:
         seed=7,
     )
 
-    assert assessment.status == "FAIL"
-    assert "scoring methodology" in assessment.reason
+    assert assessment.status == "PASS"
 
 
 def test_string_validation_flags_cannot_be_truthy_coerced() -> None:
@@ -266,13 +273,14 @@ def test_string_validation_flags_cannot_be_truthy_coerced() -> None:
 def test_report_discloses_adjustment_and_data_quality_counts() -> None:
     events = _events([0.10, 0.20])
     results = PeriodResults(
-        BacktestPeriod.OOS,
-        EventGroup("top_decile", BacktestPeriod.OOS, events),
-        EventGroup("simple_benchmark", BacktestPeriod.OOS, events),
+        BacktestPeriod.VALIDATION,
+        EventGroup("top_decile", BacktestPeriod.VALIDATION, events),
+        EventGroup("simple_benchmark", BacktestPeriod.VALIDATION, events),
     )
 
     report = build_backtest_report(
         results,
+        period=BacktestPeriod.VALIDATION,
         validation_evidence=_EVIDENCE,
         bootstrap_iterations=300,
         bootstrap_seed=7,
@@ -285,15 +293,17 @@ def test_report_discloses_adjustment_and_data_quality_counts() -> None:
     assert "ADJUSTMENT_BASIS_COUNTS" in {caveat.code for caveat in report.caveats}
     assert report.scoring_provenance.score_config_hash == _LOCKED_SCORING.score_config_hash
     assert report.scoring_provenance.score_lineage == _LOCKED_SCORING.score_lineage
-    assert report.scoring_provenance.frozen_at == _FROZEN_AT
-    assert report.gate is not None and report.gate.status == "INCONCLUSIVE"
+    assert report.scoring_provenance.methodology_hash == _LOCKED_SCORING.methodology_hash
+    assert report.scoring_provenance.methodology_status == "CANDIDATE"
+    assert report.scoring_provenance.frozen_at is None
+    assert report.gate is None
     assert {row.name for row in report.benchmark_table} == {
         "full_engine",
         "simple_benchmark",
     }
 
 
-def test_oos_report_rejects_score_sensitivity() -> None:
+def test_oos_report_rejects_candidate_methodology_before_sensitivity() -> None:
     events = _events([0.10])
     results = PeriodResults(
         BacktestPeriod.OOS,
@@ -301,7 +311,7 @@ def test_oos_report_rejects_score_sensitivity() -> None:
         EventGroup("simple_benchmark", BacktestPeriod.OOS, events),
     )
 
-    with pytest.raises(ReportingError, match="forbidden for sealed OOS"):
+    with pytest.raises(ReportingError, match="FROZEN, complete methodology lock"):
         build_backtest_report(
             results,
             sensitivity_scenarios={"threshold-search": {"scores": [60, 70], "threshold": 65}},
@@ -312,7 +322,7 @@ def test_report_rejects_mixed_scoring_provenance() -> None:
     events = list(_events([0.10, 0.20]))
     events[1] = replace(
         events[1],
-        signal=replace(events[1].signal, frozen_at=_FROZEN_AT.replace(second=8)),
+        signal=replace(events[1].signal, methodology_hash="sha256:" + "0" * 64),
     )
     rows = tuple(events)
     results = PeriodResults(
@@ -321,7 +331,7 @@ def test_report_rejects_mixed_scoring_provenance() -> None:
         EventGroup("simple_benchmark", BacktestPeriod.VALIDATION, rows),
     )
 
-    with pytest.raises(ReportingError, match="share one frozen"):
+    with pytest.raises(ReportingError, match="share one scoring.v1 methodology"):
         build_backtest_report(results, period=BacktestPeriod.VALIDATION)
 
 
@@ -333,6 +343,8 @@ def test_report_rejects_missing_scoring_provenance() -> None:
             event.signal,
             score_config_hash=None,
             score_lineage=None,
+            methodology_hash=None,
+            methodology_status=None,
             frozen_at=None,
         ),
     )

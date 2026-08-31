@@ -92,7 +92,7 @@ def test_local_sec_update_carries_explicit_run_lineage_and_requires_aware_time(
 
 def test_backtest_uses_explicit_separate_benchmark_streams(tmp_path: Path) -> None:
     sessions: list[date] = []
-    cursor = date(2023, 1, 3)
+    cursor = date(2022, 1, 3)
     while len(sessions) < 140:
         if cursor.weekday() < 5:
             sessions.append(cursor)
@@ -113,10 +113,12 @@ def test_backtest_uses_explicit_separate_benchmark_streams(tmp_path: Path) -> No
         "ticker": "ACME",
         "signal_type": "TURNING",
         "score": 80,
-        "accepted_at": datetime(2023, 1, 4, 14, tzinfo=UTC).isoformat(),
+        "accepted_at": datetime(2022, 1, 4, 14, tzinfo=UTC).isoformat(),
         "score_config_hash": scoring.score_config_hash,
         "score_lineage": scoring.score_lineage,
-        "frozen_at": scoring.score_frozen_at.isoformat(),
+        "methodology_hash": scoring.methodology_hash,
+        "methodology_status": scoring.methodology_status,
+        "frozen_at": None,
     }
     events = tmp_path / "events.json"
     events.write_text(
@@ -164,8 +166,9 @@ def test_backtest_uses_explicit_separate_benchmark_streams(tmp_path: Path) -> No
 
     assert result.exit_code == 0, result.output
     report = json.loads(output.read_text(encoding="utf-8"))
-    assert report["status"] == "FAIL"
-    assert "benchmark freshness" in report["formalReport"]["gate"]["reason"]
+    assert report["status"] == "DEVELOPMENT"
+    assert report["evaluationStage"] == "dev-validation"
+    assert report["formalReport"]["gate"] is None
     assert report["benchmarkEvents"] == {"simple_ps": 1}
     names = {row["name"] for row in report["formalReport"]["benchmark_table"]}
     assert {"full_engine", "simple_ps"} <= names

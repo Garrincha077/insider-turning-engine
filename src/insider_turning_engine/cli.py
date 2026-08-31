@@ -14,7 +14,13 @@ import httpx
 import polars as pl
 import typer
 
-from .backtest import BacktestSignal, build_backtest_report, run_backtest
+from .backtest import (
+    BacktestPeriod,
+    BacktestSignal,
+    EvaluationStage,
+    build_backtest_report,
+    run_backtest,
+)
 from .export.dashboard import (
     DashboardExportError,
     validate_dashboard_directory,
@@ -318,6 +324,10 @@ def backtest(
             help="JSON validation attestation; omitted evidence can never produce a PASS gate."
         ),
     ] = None,
+    evaluation_stage: Annotated[
+        EvaluationStage,
+        typer.Option(help="dev-validation never reveals sealed OOS results."),
+    ] = EvaluationStage.DEV_VALIDATION,
     output: Annotated[Path, typer.Option()] = Path("data/backtest/report.json"),
 ) -> None:
     """Run the point-in-time event backtest after validated inputs are supplied."""
@@ -388,6 +398,15 @@ def backtest(
             score_lineage=(
                 str(row["score_lineage"]) if row.get("score_lineage") is not None else None
             ),
+            methodology_hash=(
+                str(row["methodology_hash"]) if row.get("methodology_hash") is not None else None
+            ),
+            methodology_status=(
+                str(row["methodology_status"])
+                if row.get("methodology_status") is not None
+                else None
+            ),
+            run_id=str(row["run_id"]) if row.get("run_id") is not None else None,
             frozen_at=(
                 datetime.fromisoformat(str(row["frozen_at"])) if row.get("frozen_at") else None
             ),
@@ -418,28 +437,38 @@ def backtest(
     if not full_signals:
         raise typer.BadParameter("events must include a FULL_ENGINE exposure family")
     result = run_backtest(full_signals, bars=company_bars, spy_bars=spy)
-    oos = result.sealed_oos.final_report()
+    sealed = evaluation_stage is EvaluationStage.SEALED_OOS
+    selected_period = BacktestPeriod.OOS if sealed else BacktestPeriod.VALIDATION
+    oos_report = result.sealed_oos.final_report() if sealed else None
+    selected_results = oos_report.results if oos_report is not None else result.validation
     benchmark_groups = {}
     benchmark_counts = {}
     for family, benchmark_name in benchmark_families.items():
-        selected = [signal for signal in signals if signal.exposure_family == family]
-        if not selected:
+        selected_signals = [signal for signal in signals if signal.exposure_family == family]
+        if not selected_signals:
             continue
-        benchmark_result = run_backtest(selected, bars=company_bars, spy_bars=spy)
-        benchmark_oos = benchmark_result.sealed_oos.final_report()
-        events_for_family = benchmark_oos.results.simple_benchmark.events
+        benchmark_result = run_backtest(selected_signals, bars=company_bars, spy_bars=spy)
+        benchmark_period = (
+            benchmark_result.sealed_oos.final_report().results
+            if sealed
+            else benchmark_result.validation
+        )
+        events_for_family = benchmark_period.simple_benchmark.events
         benchmark_groups[benchmark_name] = events_for_family
         benchmark_counts[benchmark_name] = len(events_for_family)
     formal = build_backtest_report(
-        oos,
+        oos_report if oos_report is not None else selected_results,
+        period=selected_period,
         benchmark_groups=benchmark_groups,
         validation_evidence=evidence,
+        evaluation_stage=evaluation_stage,
     )
     gate = formal.gate
     report = {
         "schemaVersion": "1.0.0",
         "scoreVersion": "scoring.v1",
-        "status": gate.status if gate is not None else "INCONCLUSIVE",
+        "evaluationStage": evaluation_stage.value,
+        "status": gate.status if gate is not None else "DEVELOPMENT",
         "publicationDisposition": (
             "VALIDATED"
             if gate is not None and gate.status == "PASS"
@@ -450,10 +479,10 @@ def backtest(
         "alertsDefaultEnabled": gate is not None and gate.status == "PASS",
         "developmentEvents": len(result.development.simple_benchmark.events),
         "validationEvents": len(result.validation.simple_benchmark.events),
-        "oosEvents": len(oos.results.simple_benchmark.events),
+        "oosEvents": len(oos_report.results.simple_benchmark.events) if oos_report else None,
         "benchmarkEvents": benchmark_counts,
         "formalReport": asdict(formal),
-        "attrition": asdict(oos.attrition),
+        "attrition": asdict(oos_report.attrition) if oos_report else asdict(result.attrition),
         "caveats": [asdict(item) for item in formal.caveats],
         "duplicateSignalIds": list(result.duplicate_signal_ids),
         "sealedOosAccess": [purpose.value for purpose in result.sealed_oos.access_log],

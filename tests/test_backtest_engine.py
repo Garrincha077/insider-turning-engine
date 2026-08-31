@@ -61,6 +61,8 @@ def _signal(
     payload: dict[str, object] = {
         "score_config_hash": _LOCKED_SCORING.score_config_hash,
         "score_lineage": _LOCKED_SCORING.score_lineage,
+        "methodology_hash": _LOCKED_SCORING.methodology_hash,
+        "methodology_status": _LOCKED_SCORING.methodology_status,
         "frozen_at": _FROZEN_AT,
     }
     payload.update(kwargs)
@@ -90,6 +92,8 @@ def test_filing_knowledge_time_not_transaction_date_and_entry_is_next_open() -> 
         transaction_date=transaction_day,
         score_config_hash=_LOCKED_SCORING.score_config_hash,
         score_lineage=_LOCKED_SCORING.score_lineage,
+        methodology_hash=_LOCKED_SCORING.methodology_hash,
+        methodology_status=_LOCKED_SCORING.methodology_status,
         frozen_at=_FROZEN_AT,
     )
 
@@ -309,7 +313,7 @@ def test_date_only_as_of_rejects_late_feature_even_when_signal_is_outside_window
         )
 
 
-def test_evaluated_runs_require_frozen_scoring_provenance_and_bounded_scores() -> None:
+def test_evaluated_runs_require_exact_scoring_provenance_and_bounded_scores() -> None:
     sessions = _sessions(date(2020, 1, 2), 30)
     with pytest.raises(BacktestError, match=r"\[0, 100\]"):
         _signal("bad-score", datetime(2020, 1, 3, 14, tzinfo=UTC), score=100.01)
@@ -341,14 +345,14 @@ def test_evaluated_runs_require_frozen_scoring_provenance_and_bounded_scores() -
             spy_bars=_bars("SPY", sessions, base=200),
         )
 
-    forged_freeze = _signal(
-        "forged-freeze",
+    forged_methodology = _signal(
+        "forged-methodology",
         datetime(2020, 1, 3, 14, tzinfo=UTC),
-        frozen_at=datetime(2015, 12, 31, 20, tzinfo=UTC),
+        methodology_hash="sha256:" + "0" * 64,
     )
-    with pytest.raises(ScoringProvenanceError, match="exact scoring.v1 lock frozenAt"):
+    with pytest.raises(ScoringProvenanceError, match="exact scoring.v1 lock"):
         BacktestEngine(horizons=(21,)).run(
-            [forged_freeze],
+            [forged_methodology],
             bars=_bars("ACME", sessions),
             spy_bars=_bars("SPY", sessions, base=200),
         )

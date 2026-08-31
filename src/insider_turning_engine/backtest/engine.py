@@ -167,13 +167,13 @@ def validate_evaluation_inputs(
 def validate_scoring_provenance(
     signals: Iterable[BacktestSignal], *, windows: BacktestWindows | None = None
 ) -> None:
-    """Require one frozen ``scoring.v1`` lineage for an evaluated run.
+    """Require one exact ``scoring.v1`` methodology lineage for an evaluated run.
 
     A signal object remains usable as an audit fixture without this evidence,
     but ``BacktestEngine.run`` always calls this validator before it schedules
-    an event.  The model configuration therefore has to be frozen before the
-    sealed OOS evaluation is opened, and all evaluated signals have to identify
-    the exact same version/hash/lineage/freeze point.  ``windows`` is retained for
+    an event. Candidate lineage is allowed for development/validation, while
+    the reporting gate separately requires FROZEN before sealed OOS. All
+    evaluated signals have to identify the same exact methodology. ``windows`` is retained for
     API compatibility, but historical event dates are not evidence of when an
     analyst first opened the OOS result.  That independent control is carried
     by ``ValidationEvidence.temporal_valid`` at the formal gate.
@@ -188,30 +188,38 @@ def validate_scoring_provenance(
         locked_engine.score_config_hash,
         locked_engine.score_lineage,
     )
-    locked_provenance = (*locked_identity, locked_engine.score_frozen_at)
-    expected: tuple[str, str, str, datetime] | None = None
+    locked_provenance = (
+        *locked_identity,
+        locked_engine.methodology_hash,
+        locked_engine.methodology_status,
+        locked_engine.score_frozen_at,
+    )
+    expected: tuple[str, str, str, str, str, datetime | None] | None = None
     for signal in rows:
         if (
             signal.score_version != "scoring.v1"
             or signal.score_config_hash is None
             or signal.score_lineage is None
-            or signal.frozen_at is None
+            or signal.methodology_hash is None
+            or signal.methodology_status is None
         ):
             raise ScoringProvenanceError(
                 "evaluated signals require scoring.v1 score_config_hash, "
-                "score_lineage, and frozen_at evidence"
+                "score_lineage, methodology_hash, and methodology_status evidence"
             )
         provenance = (
             signal.score_version,
             signal.score_config_hash,
             signal.score_lineage,
-            _as_utc(signal.frozen_at),
+            signal.methodology_hash,
+            signal.methodology_status,
+            _as_utc(signal.frozen_at) if signal.frozen_at is not None else None,
         )
         if expected is None:
             expected = provenance
         elif provenance != expected:
             raise ScoringProvenanceError(
-                "evaluated signals must share one frozen scoring.v1 provenance"
+                "evaluated signals must share one scoring.v1 methodology provenance"
             )
     if expected != locked_provenance:
         if expected is not None and expected[:3] != locked_identity:
@@ -219,9 +227,7 @@ def validate_scoring_provenance(
                 "evaluated signals must reference the locked config/scoring.v1.yaml "
                 "version, sha256, and lineage"
             )
-        raise ScoringProvenanceError(
-            "evaluated signals must reference the exact scoring.v1 lock frozenAt"
-        )
+        raise ScoringProvenanceError("evaluated signals must reference the exact scoring.v1 lock")
 
 
 class BacktestEngine:

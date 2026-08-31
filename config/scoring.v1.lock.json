@@ -1,9 +1,67 @@
 {
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "scoreVersion": "scoring.v1",
+  "status": "CANDIDATE",
   "scoreConfig": "config/scoring.v1.yaml",
-  "scoreConfigHash": "sha256:f1f66f6c295a66c6b562a3f3dd96174c1a5e5168ffb56afebd3f3d29e2629d3e",
-  "scoreLineage": "config/scoring.v1.yaml@sha256:f1f66f6c295a66c6b562a3f3dd96174c1a5e5168ffb56afebd3f3d29e2629d3e",
-  "frozenAt": "2026-08-30T22:35:09Z",
-  "sourceCommit": "6b6f8246a3ea1ad41cb52ab1439c0d0b8c4b6ace"
+  "scoreConfigHash": "sha256:80e0f1102149276401f0d9f8cb76ad75dd66e2ee5ad346b17721e23651fea02e",
+  "methodologyFiles": [
+    {
+      "path": "config/scoring.v1.yaml",
+      "sha256": "sha256:80e0f1102149276401f0d9f8cb76ad75dd66e2ee5ad346b17721e23651fea02e"
+    },
+    {
+      "path": "src/insider_turning_engine/features/cluster.py",
+      "sha256": "sha256:bcc6dce5c005693892259f5a83974aeedc3b8c60eb361c7250c2aafb71ee5a5f"
+    },
+    {
+      "path": "src/insider_turning_engine/features/conviction.py",
+      "sha256": "sha256:348ca443172592754e9147f034634f23557254b4d5990e2d8b4df5dba4d65c51"
+    },
+    {
+      "path": "src/insider_turning_engine/features/cost_basis.py",
+      "sha256": "sha256:a1a6830e4cc15009b611f906dbca9e0a56d9abb9c2334ca8e6ceb96729b3072f"
+    },
+    {
+      "path": "src/insider_turning_engine/features/divergence.py",
+      "sha256": "sha256:165d203a52e2230c269b8e64d498fd8327fc96ee10adb1856ed678be8d84e732"
+    },
+    {
+      "path": "src/insider_turning_engine/features/opportunistic.py",
+      "sha256": "sha256:d5cc112e7925052c43ed47ef5a7c9806631473b9d20b091c8cb550b357bc1d34"
+    },
+    {
+      "path": "src/insider_turning_engine/features/price.py",
+      "sha256": "sha256:58da875c1681208241b5e7e320ce9d4fcbf55548a06bc610f8e1b7bd5c9a5330"
+    },
+    {
+      "path": "src/insider_turning_engine/features/pulse.py",
+      "sha256": "sha256:5d8942377f1c90b5721a240861d1f461e0507818232f53dc52f33ca987cc39d7"
+    },
+    {
+      "path": "src/insider_turning_engine/features/rs.py",
+      "sha256": "sha256:ca21ba8ab7155256d941854b061cb5ab8b7a3729747d6abaa42d0984116685dd"
+    },
+    {
+      "path": "src/insider_turning_engine/features/technical.py",
+      "sha256": "sha256:70beb49d3b68c9249a50839a3e911f3d81d65cc8819d8a67d97f223f3f55c68e"
+    },
+    {
+      "path": "src/insider_turning_engine/notifications/rules.py",
+      "sha256": "sha256:ecc832246d99988a511dad3c739b4dcce7038abeb14ac2fe6db68c00a8fbaae7"
+    },
+    {
+      "path": "src/insider_turning_engine/scoring/components.py",
+      "sha256": "sha256:50ab22459c3d42b12abab33b7ff17beece737f59a6ad3f5bd368a5fa57bea3ca"
+    },
+    {
+      "path": "src/insider_turning_engine/scoring/engine.py",
+      "sha256": "sha256:17590b26d63a37e120fb8063587791a4b4c10f413a12d2c2996ac8214cbc62ff"
+    },
+    {
+      "path": "src/insider_turning_engine/scoring/state_machine.py",
+      "sha256": "sha256:6f2684554a1d97f4c800ee2fe97c91cac2a6b8d4819a4d4af34c1221a94f817b"
+    }
+  ],
+  "methodologyHash": "sha256:397d81b2dbfdca82c36ee8adbbcf0755987ceea95260a9301296baf660533dd4",
+  "componentContractComplete": true
 }

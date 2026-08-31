@@ -46,7 +46,7 @@ def _data() -> dict[str, object]:
         "schemaVersion": "1.0.0",
         "scoreVersion": "scoring.v1",
         "generatedAt": "2026-08-31T00:00:00Z",
-        "status": "VALIDATED",
+        "status": "EXPERIMENTAL",
         "marketPulse": 72,
         "pulsePercentile": 88,
         "pulseHistory": [{"date": "2026-08-31", "market": 72, "technology": 70, "financials": 66}],
@@ -55,9 +55,9 @@ def _data() -> dict[str, object]:
         "backtest": [],
         "companySeries": [],
         "quality": {
-            "disposition": "PASS",
+            "disposition": "DEGRADED",
             "canonicalValid": True,
-            "methodologyComplete": True,
+            "methodologyComplete": False,
             "benchmarkFresh": True,
             "parseSuccess": {
                 "numerator": 100,
@@ -80,7 +80,7 @@ def _data() -> dict[str, object]:
                 "threshold": 0.85,
                 "result": "PASS",
             },
-            "issues": [],
+            "issues": ["SCORING_METHODOLOGY_INCOMPLETE"],
         },
     }
 
@@ -192,6 +192,8 @@ def _signal_snapshot(scoring: ScoreEngine) -> dict[str, object]:
             "inputHash": "sha256:" + "1" * 64,
             "scoreConfigHash": scoring.score_config_hash,
             "scoreLineage": scoring.score_lineage,
+            "methodologyHash": scoring.methodology_hash,
+            "methodologyStatus": scoring.methodology_status,
             "scoreFrozenAt": scoring.score_frozen_at_iso,
         },
     }
@@ -239,7 +241,13 @@ def test_manifest_schema_exposes_exporter_content_address_contract() -> None:
     signal_schema = json.loads(
         (ROOT / "schemas" / "signal-snapshot.schema.json").read_text(encoding="utf-8")
     )
-    assert {"scoreConfigHash", "scoreLineage", "scoreFrozenAt"} <= set(
+    assert {
+        "scoreConfigHash",
+        "scoreLineage",
+        "methodologyHash",
+        "methodologyStatus",
+        "scoreFrozenAt",
+    } <= set(
         signal_schema["$defs"]["provenance"]["required"]
     )
 
@@ -286,7 +294,7 @@ def test_pages_policy_allows_healthy_experimental_but_keeps_alerts_off(
     result = export_dashboard(data, tmp_path / "data", run_id="run_1234567890123456")
     manifest = validate_dashboard_directory(result.output_dir)
 
-    assert dashboard_publication_policy(manifest) == (True, False)
+    assert dashboard_publication_policy(manifest) == (False, False)
 
 
 def test_degraded_quality_measurements_must_still_be_coherent(tmp_path: Path) -> None:
@@ -308,16 +316,14 @@ def test_degraded_quality_measurements_must_still_be_coherent(tmp_path: Path) ->
         export_dashboard(data, tmp_path / "data", run_id="run_1234567890123456")
 
 
-@pytest.mark.parametrize(
-    "field", ["canonicalValid", "methodologyComplete", "benchmarkFresh"]
-)
-def test_pass_requires_explicit_canonical_methodology_and_benchmark_evidence(
-    tmp_path: Path, field: str
-) -> None:
+def test_candidate_lock_cannot_be_promoted_by_caller_quality_boolean(tmp_path: Path) -> None:
     data = _data()
-    data["quality"][field] = False  # type: ignore[index]
+    data["status"] = "VALIDATED"
+    data["quality"]["disposition"] = "PASS"  # type: ignore[index]
+    data["quality"]["methodologyComplete"] = True  # type: ignore[index]
+    data["quality"]["issues"] = []  # type: ignore[index]
     with pytest.raises(DashboardExportError, match="JSON Schema|complete passing evidence"):
-        export_dashboard(data, tmp_path / field, run_id="run_1234567890123456")
+        export_dashboard(data, tmp_path / "candidate", run_id="run_1234567890123456")
 
 
 def test_dataframe_input_and_repeat_are_byte_deterministic(tmp_path: Path) -> None:

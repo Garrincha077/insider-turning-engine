@@ -7,6 +7,8 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
 
+from insider_turning_engine.domain.scoring_lock import ScoringLockError, load_scoring_lock
+
 from .models import AlertCandidate, AlertType, QualityGateResult, Severity
 
 _THRESHOLDS = {
@@ -85,15 +87,13 @@ def assess_quality_gates(
         if isinstance(benchmark_fresh, bool):
             benchmark_state = not benchmark_fresh
     canonical = canonical_valid if canonical_valid is not None else _get(quality, "canonical_valid")
-    methodology = (
-        scoring_methodology_complete
-        if scoring_methodology_complete is not None
-        else _get(
-            quality,
-            "scoring_methodology_complete",
-            _get(quality, "methodology_complete"),
-        )
-    )
+    # Caller-provided booleans are not methodology evidence. The exact
+    # repository lock is the sole source of this decision.
+    del scoring_methodology_complete
+    try:
+        methodology = load_scoring_lock().methodology_complete
+    except ScoringLockError:
+        methodology = False
 
     reasons: list[str] = []
     checks: dict[str, bool] = {}

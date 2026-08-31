@@ -100,7 +100,8 @@ def test_benchmark_fresh_alias_is_supported_without_relaxing_missing_checks() ->
         "quality_gate_passed": True,
     }
     result = assess_quality_gates(quality)
-    assert result.allowed
+    assert not result.allowed
+    assert result.reasons == ("SCORING_METHODOLOGY_INCOMPLETE",)
     assert result.checks["stale_benchmark"] is True
 
     string_rate = assess_quality_gates({**quality, "parse_success_rate": "1.0"})

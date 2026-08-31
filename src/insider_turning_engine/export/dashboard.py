@@ -342,9 +342,22 @@ def _make_manifest(
     artifacts: list[dict[str, Any]],
     files: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    quality = data.get("quality")
-    if quality is None:
-        quality = _default_quality()
+    supplied_quality = data.get("quality")
+    quality = (
+        dict(supplied_quality)
+        if isinstance(supplied_quality, Mapping)
+        else _default_quality()
+    )
+    try:
+        methodology_complete = load_scoring_lock().methodology_complete
+    except ScoringLockError:
+        methodology_complete = False
+    quality["methodologyComplete"] = methodology_complete
+    if not methodology_complete:
+        issues = list(quality.get("issues") or ())
+        if "SCORING_METHODOLOGY_INCOMPLETE" not in issues:
+            issues.append("SCORING_METHODOLOGY_INCOMPLETE")
+        quality["issues"] = issues
     watermarks = data.get("watermarks") or {
         "secAcceptedThrough": None,
         "marketSessionThrough": None,
@@ -844,14 +857,19 @@ def _validate_signal_snapshot(value: Any, *, expected_run_id: str) -> None:
     if (
         provenance.get("scoreConfigHash") != scoring.config_hash
         or provenance.get("scoreLineage") != scoring.lineage
+        or provenance.get("methodologyHash") != scoring.methodology_hash
+        or provenance.get("methodologyStatus") != scoring.status.value
     ):
         raise DashboardExportError("signal snapshot scoring provenance is not locked scoring.v1")
-    frozen_at = _parse_aware_instant(provenance.get("scoreFrozenAt"), "scoreFrozenAt")
+    frozen_raw = provenance.get("scoreFrozenAt")
+    frozen_at = (
+        _parse_aware_instant(frozen_raw, "scoreFrozenAt") if frozen_raw is not None else None
+    )
     if frozen_at != scoring.frozen_at:
         raise DashboardExportError("signal snapshot scoreFrozenAt does not match scoring.v1 lock")
     generated_at = _parse_aware_instant(value["generatedAt"], "generatedAt")
     _parse_aware_instant(value["asOf"], "asOf")
-    if frozen_at > generated_at:
+    if frozen_at is not None and frozen_at > generated_at:
         raise DashboardExportError("signal snapshot score was frozen after it was generated")
 
 

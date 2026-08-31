@@ -11,6 +11,7 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +23,8 @@ from insider_turning_engine.domain.scoring_lock import (
     ScoringLockError,
     load_scoring_lock,
 )
+
+from .components import deterministic_reason_codes
 
 
 class ScoreValidationError(ValueError):
@@ -38,7 +41,11 @@ class ScoreResult:
     reason_codes: tuple[str, ...]
     score_config_hash: str = ""
     score_lineage: str = ""
-    frozen_at: str = ""
+    methodology_hash: str = ""
+    methodology_status: str = "CANDIDATE"
+    as_of: str | None = None
+    run_id: str | None = None
+    frozen_at: str | None = None
     score_source_commit: str = ""
 
 
@@ -64,6 +71,8 @@ class ScoreEngine:
         config_path: str | Path = DEFAULT_CONFIG,
         *,
         lock_path: str | Path | None = None,
+        as_of: date | datetime | None = None,
+        run_id: str | None = None,
     ) -> None:
         self.config_path = Path(config_path)
         self.lock_path = (
@@ -103,7 +112,22 @@ class ScoreEngine:
         self.score_frozen_at = lock.frozen_at
         self.score_frozen_at_iso = lock.frozen_at_iso
         self.score_source_commit = lock.source_commit
+        self.methodology_hash = lock.methodology_hash
+        self.methodology_status = lock.status.value
+        self.methodology_complete = lock.methodology_complete
+        self.as_of = self._as_of(as_of)
+        self.run_id = run_id
         self._validate_weights()
+
+    @staticmethod
+    def _as_of(value: date | datetime | None) -> str | None:
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            if value.tzinfo is None:
+                raise ScoreValidationError("as_of datetime must be timezone-aware")
+            return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
+        return value.isoformat()
 
     def _validate_weights(self) -> None:
         models = self._config["models"]
@@ -139,22 +163,21 @@ class ScoreEngine:
         if active_weight <= 0:
             raise ScoreValidationError(f"{name} has no active components")
         result = weighted / active_weight
-        ranked = sorted(
-            ((key, value) for key, value in values.items() if value is not None),
-            key=lambda item: (-item[1], item[0]),
-        )
-        reasons = tuple(
-            f"{key.upper()}_{'STRONG' if value >= 65 else 'WEAK'}" for key, value in ranked
-        )
+        reasons = deterministic_reason_codes((), values, {k: float(v) for k, v in weights.items()})
+        active_count = sum(value is not None for value in values.values())
         return ScoreResult(
             name=name,
             score=round(result, 6),
             components=values,
-            confidence=round(len(ranked) / len(weights), 6),
+            confidence=round(active_count / len(weights), 6),
             score_version=self.score_version,
             reason_codes=reasons,
             score_config_hash=self.score_config_hash,
             score_lineage=self.score_lineage,
+            methodology_hash=self.methodology_hash,
+            methodology_status=self.methodology_status,
+            as_of=self.as_of,
+            run_id=self.run_id,
             frozen_at=self.score_frozen_at_iso,
             score_source_commit=self.score_source_commit,
         )

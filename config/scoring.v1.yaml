@@ -55,6 +55,73 @@ models:
       volume: 0.05
       fundamental: 0.05
 
+component_contract:
+  status: complete
+  point_in_time:
+    percentile_method: midrank
+    history_inclusion: known_at_strictly_before_as_of
+    future_row_policy: reject
+    weekly_slope_history:
+      maximum_observations: 104
+      minimum_observations: 26
+    daily_volume_history:
+      maximum_observations: 252
+      minimum_observations: 60
+    insufficient_history:
+      value: 50
+      reason_code: LOW_CONFIDENCE_HISTORY
+  dollar_winsorization:
+    percentile: 0.995
+    quantile_method: type_7_linear
+    minimum_prior_observations: 200
+    insufficient_history_policy: no_cap_with_quality_flag
+  base_structure:
+    no_new_52_week_low_20_sessions: 25
+    volatility_20d_at_most_80pct_prior_20d: 20
+    median_volume_20d_at_most_80pct_prior_20d: 20
+    absolute_ma20_slope_5d_at_most_0_001_price_per_session: 20
+    close_at_or_above_ma20: 15
+  ordinary_rs_turn:
+    current_ordinary_rs_3m: 0.30
+    prior_percentile_ordinary_rs_3m_slope_4w: 0.70
+  mansfield:
+    level_linear_clamp:
+      minus_10: 0
+      zero: 50
+      plus_10: 100
+    level: 0.30
+    prior_percentile_slope_4w: 0.70
+  volume_accumulation:
+    window_sessions: 20
+    signed_volume_ratio_fixed_linear_clamp:
+      minus_0_10: 0
+      plus_0_30: 100
+    fixed_score: 0.50
+    prior_percentile: 0.50
+  cost_basis_reclaim:
+    basis_window_calendar_days: 90
+    fresh_cross_sessions: 10
+    fresh_cross_score: 100
+    above_without_fresh_cross_score: 50
+    below_score: 0
+  company_insider:
+    aggregation_window_calendar_days: 90
+    cluster_window_calendar_days: 30
+    conviction: winsorized_dollar_weighted_qualified_buys
+    cluster: maximum_cluster_score
+    opportunistic: winsorized_dollar_weighted_qualified_buys
+    net_buying_absence_sales: buy_dollars_over_buy_plus_sale_dollars
+  total_inputs:
+    mansfield_rs:
+      market: 0.60
+      sector: 0.40
+    fundamental: null_excluded_and_remaining_weights_renormalized
+    missing_required_component: reject
+  stale_data:
+    state_policy: hold_prior_state
+    reason_code: STALE_DATA_HOLD
+    alerts_allowed: false
+
 state_model:
   version: state.v1
   ordered_states:

@@ -38,6 +38,13 @@ class BacktestPeriod(StrEnum):
     OOS = "oos"
 
 
+class EvaluationStage(StrEnum):
+    """Disclosure boundary for evaluation/reporting operations."""
+
+    DEV_VALIDATION = "dev-validation"
+    SEALED_OOS = "sealed-oos"
+
+
 class SealedAccessPurpose(StrEnum):
     """The only supported readers for an OOS result.
 
@@ -74,6 +81,9 @@ class BacktestSignal:
     score_version: str = "scoring.v1"
     score_config_hash: str | None = None
     score_lineage: str | None = None
+    methodology_hash: str | None = None
+    methodology_status: str | None = None
+    run_id: str | None = None
     frozen_at: datetime | None = None
 
     def __post_init__(self) -> None:
@@ -115,10 +125,16 @@ class BacktestSignal:
         family = self.exposure_family.strip().upper() if self.exposure_family else None
         if self.exposure_family is not None and not family:
             raise BacktestError("exposure_family must be non-empty when supplied")
-        for name in ("score_config_hash", "score_lineage"):
+        for name in ("score_config_hash", "score_lineage", "methodology_hash", "run_id"):
             value = getattr(self, name)
             if value is not None and not value.strip():
                 raise BacktestError(f"{name} must be non-empty when supplied")
+        if self.methodology_status not in {None, "CANDIDATE", "FROZEN"}:
+            raise BacktestError("methodology_status must be CANDIDATE or FROZEN")
+        if self.methodology_status == "CANDIDATE" and self.frozen_at is not None:
+            raise BacktestError("a CANDIDATE signal cannot carry frozen_at")
+        if self.methodology_status == "FROZEN" and self.frozen_at is None:
+            raise BacktestError("a FROZEN signal requires frozen_at")
         object.__setattr__(self, "ticker", ticker)
         object.__setattr__(self, "issuer_cik", cik)
         object.__setattr__(self, "exposure_family", family)
@@ -264,6 +280,7 @@ __all__ = [
     "BacktestPeriod",
     "BacktestResult",
     "BacktestSignal",
+    "EvaluationStage",
     "EventGroup",
     "ForwardReturn",
     "HORIZONS",

@@ -13,8 +13,15 @@ from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from statistics import median
 from typing import Any
+
+from insider_turning_engine.domain.scoring_lock import (
+    DEFAULT_LOCK,
+    ScoringLockError,
+    load_scoring_lock,
+)
 
 from .models import (
     BacktestCaveat,
@@ -22,6 +29,7 @@ from .models import (
     BacktestPeriod,
     BacktestResult,
     BacktestSignal,
+    EvaluationStage,
     EventGroup,
     ForwardReturn,
     OOSReport,
@@ -158,6 +166,9 @@ class ValidationEvidence:
     hash_valid: bool | None = None
     temporal_valid: bool | None = None
     benchmark_fresh: bool | None = None
+    # Retained only so older evidence payloads remain parseable. The reporting
+    # API ignores this caller-provided value and derives methodology completion
+    # from the content-validated scoring lock.
     scoring_methodology_complete: bool | None = None
 
     @property
@@ -226,7 +237,9 @@ class ScoringProvenance:
     score_version: str
     score_config_hash: str
     score_lineage: str
-    frozen_at: datetime
+    methodology_hash: str
+    methodology_status: str
+    frozen_at: datetime | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -509,13 +522,20 @@ def _report_scoring_provenance(
     except ScoringProvenanceError as exc:
         raise ReportingError(f"invalid scoring provenance: {exc}") from exc
     first = signals[0]
-    if first.score_config_hash is None or first.score_lineage is None or first.frozen_at is None:
+    if (
+        first.score_config_hash is None
+        or first.score_lineage is None
+        or first.methodology_hash is None
+        or first.methodology_status is None
+    ):
         raise ReportingError("scoring provenance is incomplete")
     return ScoringProvenance(
         score_version=first.score_version,
         score_config_hash=first.score_config_hash,
         score_lineage=first.score_lineage,
-        frozen_at=first.frozen_at.astimezone(UTC),
+        methodology_hash=first.methodology_hash,
+        methodology_status=first.methodology_status,
+        frozen_at=(first.frozen_at.astimezone(UTC) if first.frozen_at is not None else None),
     )
 
 
@@ -542,11 +562,42 @@ def summarize_attrition(events: Iterable[BacktestEvent]) -> AttritionSummary:
     )
 
 
+def _evaluation_stage(
+    value: EvaluationStage | str | None,
+    *,
+    period: BacktestPeriod | None = None,
+) -> EvaluationStage:
+    if value is None:
+        return (
+            EvaluationStage.SEALED_OOS
+            if period is BacktestPeriod.OOS
+            else EvaluationStage.DEV_VALIDATION
+        )
+    try:
+        return EvaluationStage(value)
+    except ValueError as exc:
+        raise ReportingError("evaluation_stage must be dev-validation or sealed-oos") from exc
+
+
+def _sealed_methodology_failure(lock_path: str | Path) -> str | None:
+    """Return a fail-closed reason without touching any OOS result."""
+
+    try:
+        lock = load_scoring_lock(lock_path=lock_path)
+    except ScoringLockError as exc:
+        return f"sealed OOS requires an exact frozen methodology lock: {exc}"
+    if not lock.methodology_complete:
+        return "sealed OOS requires a FROZEN, complete methodology lock"
+    return None
+
+
 def evaluate_formal_gate(
     comparisons: Sequence[BenchmarkComparison],
     *,
     sealed_oos_events: int,
     validation_evidence: ValidationEvidence | Mapping[str, Any] | None = None,
+    evaluation_stage: EvaluationStage | str = EvaluationStage.SEALED_OOS,
+    scoring_lock_path: str | Path = DEFAULT_LOCK,
     minimum_events: int = 200,
     confidence: float = 0.95,
     iterations: int = 2_000,
@@ -560,6 +611,23 @@ def evaluate_formal_gate(
     satisfy the formal sample-size threshold.
     """
 
+    stage = _evaluation_stage(evaluation_stage)
+    methodology_failure = (
+        _sealed_methodology_failure(scoring_lock_path)
+        if stage is EvaluationStage.SEALED_OOS
+        else None
+    )
+    if methodology_failure is not None:
+        return GateAssessment(
+            "FAIL",
+            None,
+            BootstrapInterval(None, None, None, confidence, iterations, seed),
+            None,
+            sealed_oos_events,
+            minimum_events,
+            methodology_failure,
+            0,
+        )
     evidence_status, evidence_reason = _validation_evidence_status(validation_evidence)
     by_name = {_canonical_benchmark_name(row.name): row for row in comparisons}
     full = by_name.get("full_engine")
@@ -676,7 +744,6 @@ def _validation_evidence_status(
         "hash": evidence.hash_valid,
         "temporal": evidence.temporal_valid,
         "benchmark freshness": evidence.benchmark_fresh,
-        "scoring methodology": evidence.scoring_methodology_complete,
     }
     missing = [name for name, (value, _threshold) in rates.items() if value is None]
     missing.extend(name for name, value in booleans.items() if value is None)
@@ -708,7 +775,7 @@ def _coerce_validation_evidence(
             hash_valid=_optional_bool(raw.hash_valid),
             temporal_valid=_optional_bool(raw.temporal_valid),
             benchmark_fresh=_optional_bool(raw.benchmark_fresh),
-            scoring_methodology_complete=_optional_bool(raw.scoring_methodology_complete),
+            scoring_methodology_complete=None,
         )
     return ValidationEvidence(
         parse_success_rate=_optional_float(raw.get("parse_success_rate", raw.get("parse_success"))),
@@ -723,9 +790,7 @@ def _coerce_validation_evidence(
         hash_valid=_optional_bool(raw.get("hash_valid")),
         temporal_valid=_optional_bool(raw.get("temporal_valid")),
         benchmark_fresh=_optional_bool(raw.get("benchmark_fresh")),
-        scoring_methodology_complete=_optional_bool(
-            raw.get("scoring_methodology_complete", raw.get("component_contract_complete"))
-        ),
+        scoring_methodology_complete=None,
     )
 
 
@@ -886,11 +951,20 @@ def build_backtest_report(
     sensitivity_scenarios: Mapping[str, Sequence[BacktestSignalLike] | Mapping[str, Any] | float]
     | None = None,
     validation_evidence: ValidationEvidence | Mapping[str, Any] | None = None,
+    evaluation_stage: EvaluationStage | str | None = None,
+    scoring_lock_path: str | Path = DEFAULT_LOCK,
     bootstrap_iterations: int = 2_000,
     bootstrap_seed: int = 0,
 ) -> BacktestReport:
     """Build a complete benchmark, regime, attrition, caveat, and gate report."""
 
+    stage = _evaluation_stage(evaluation_stage, period=period)
+    if period is BacktestPeriod.OOS and stage is not EvaluationStage.SEALED_OOS:
+        raise ReportingError("OOS reports require the sealed-oos evaluation stage")
+    if stage is EvaluationStage.SEALED_OOS:
+        methodology_failure = _sealed_methodology_failure(scoring_lock_path)
+        if methodology_failure is not None:
+            raise ReportingError(methodology_failure)
     if period is BacktestPeriod.OOS and sensitivity_scenarios:
         raise ReportingError(
             "score sensitivity is forbidden for sealed OOS; use development or validation"
@@ -915,6 +989,8 @@ def build_backtest_report(
             comparisons,
             sealed_oos_events=sealed_count,
             validation_evidence=validation_evidence,
+            evaluation_stage=stage,
+            scoring_lock_path=scoring_lock_path,
             iterations=bootstrap_iterations,
             seed=bootstrap_seed,
         )

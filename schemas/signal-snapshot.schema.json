@@ -619,6 +619,8 @@
         "inputHash",
         "scoreConfigHash",
         "scoreLineage",
+        "methodologyHash",
+        "methodologyStatus",
         "scoreFrozenAt"
       ],
       "properties": {
@@ -673,8 +675,25 @@
           "type": "string",
           "pattern": "^config/scoring\\.v1\\.yaml@sha256:[a-f0-9]{64}$"
         },
+        "methodologyHash": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "methodologyStatus": {
+          "enum": [
+            "CANDIDATE",
+            "FROZEN"
+          ]
+        },
         "scoreFrozenAt": {
-          "$ref": "#/$defs/instant"
+          "oneOf": [
+            {
+              "$ref": "#/$defs/instant"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       }
     }

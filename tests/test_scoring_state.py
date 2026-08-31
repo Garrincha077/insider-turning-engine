@@ -61,6 +61,7 @@ def test_score_lock_rejects_hash_and_timestamp_tampering(tmp_path: Path) -> None
         ScoreEngine(lock_path=forged)
 
     lock = json.loads(DEFAULT_LOCK.read_text(encoding="utf-8"))
+    lock["status"] = "FROZEN"
     lock["frozenAt"] = "not-a-timestamp"
     forged.write_text(json.dumps(lock), encoding="utf-8")
     with pytest.raises(ScoreValidationError, match="canonical UTC timestamp"):
