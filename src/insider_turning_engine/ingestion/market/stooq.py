@@ -7,11 +7,12 @@ import io
 import time
 from collections.abc import Callable
 from datetime import UTC, date, datetime
-from datetime import time as clock_time
 from decimal import Decimal
 from urllib.parse import urlparse
 
 import httpx
+
+from insider_turning_engine.domain.time import us_equity_session_close
 
 from .base import DailyBar, ProviderHealth
 
@@ -183,7 +184,7 @@ class StooqMarketDataProvider:
                         volume=volume,
                         provider="stooq",
                         provider_record_id=f"stooq:{symbol}:{day.isoformat()}",
-                        available_at=datetime.combine(day, clock_time.max, tzinfo=UTC),
+                        available_at=us_equity_session_close(day),
                         is_adjusted=False,
                         adjustment_basis="unadjusted",
                         provenance={"source": "stooq", "locator": locator},

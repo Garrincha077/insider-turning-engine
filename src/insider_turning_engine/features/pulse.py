@@ -11,7 +11,7 @@ is represented by a null and an explicit quality reason.
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import UTC, date, datetime, timedelta
 from math import isfinite
 from pathlib import Path
 from typing import Any
@@ -20,6 +20,7 @@ import polars as pl
 import yaml  # type: ignore[import-untyped]
 
 from insider_turning_engine.domain.models import CanonicalTransaction
+from insider_turning_engine.domain.time import us_equity_session_close
 
 type TransactionsInput = (
     pl.DataFrame
@@ -54,7 +55,7 @@ def _as_of_datetime(value: date | datetime | None) -> datetime:
         if value.tzinfo is None:
             return value.replace(tzinfo=UTC)
         return value.astimezone(UTC)
-    return datetime.combine(value, time.max, tzinfo=UTC)
+    return us_equity_session_close(value)
 
 
 def _as_date(value: date | datetime | None) -> date:
@@ -508,10 +509,7 @@ def market_pulse(
                 prior = _aggregate(
                     scoped.filter(
                         pl.col("knowledge_at").is_null()
-                        | (
-                            pl.col("knowledge_at")
-                            <= datetime.combine(prior_end, time.max, tzinfo=UTC)
-                        )
+                        | (pl.col("knowledge_at") <= us_equity_session_close(prior_end))
                     ),
                     prior_start,
                     prior_end,

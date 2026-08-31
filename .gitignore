@@ -13,6 +13,7 @@ build/
 .pnpm-store/
 .pytest_cache/
 .pytest-*/
+.codex-test-tmp/
 .mypy_cache/
 .ruff_cache/
 .coverage

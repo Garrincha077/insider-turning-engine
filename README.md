@@ -15,6 +15,8 @@ result.
   backtest, notifications, and dashboard export.
 - `config/scoring.v1.yaml`: executable score weights, state gates, alert rules,
   provider pacing, and publication thresholds.
+- `config/scoring.v1.lock.json`: immutable v1 hash, lineage, freeze timestamp,
+  and source-commit attestation used by score/backtest/publication validators.
 - `schemas/`: canonical transaction, signal snapshot, and dashboard manifest
   interchange contracts.
 - `docs/architecture/`: accepted identity, point-in-time, provider, state, and
@@ -119,14 +121,14 @@ explicit external-delivery switch and reads `TELEGRAM_BOT_TOKEN` and
 Preview mode records candidates in the local SQLite outbox for audit and later
 replay; it never contacts Telegram.
 
-The scheduled workflow has additional deployment inputs that are not created by
-the `daily` CLI plan: `data/incoming/sec.xml` plus `data/incoming/sec.json`
-(`accession` and `sourceUrl`), `data/incoming/market.csv`, a ticker universe
-from `TICKER_UNIVERSE_FILE` or `config/universe.txt`, and per-ticker component
-JSON under `run/components/`. Scoring uses the checked-in
-`config/scoring.v1.yaml`. Missing source or universe/component inputs keep the
-run degraded or block publication; the checked-in repository does not include
-live incoming data or a default universe file.
+The scheduled workflow can consume deployment-provided
+`data/incoming/sec.xml` plus `data/incoming/sec.json` (`accession` and
+`sourceUrl`) and `data/incoming/market.csv`. The checked-in repository does not
+yet contain the canonical aggregation adapter that must produce per-ticker
+component JSON, `dashboard-input.json`, alert candidates, and SEC batch-commit
+evidence. Those files are deliberately not synthesized or copied from an old
+dashboard: their absence keeps publication and alerts blocked. A full live
+universe and default universe files are also not checked in.
 
 ## Research protocol and limitations
 

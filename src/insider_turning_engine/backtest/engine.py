@@ -19,7 +19,9 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 
+from insider_turning_engine.domain.time import us_equity_session_close
 from insider_turning_engine.ingestion.market.base import DailyBar
+from insider_turning_engine.scoring import ScoreEngine
 
 from .models import (
     HORIZONS,
@@ -38,8 +40,6 @@ from .models import (
     ScoringProvenanceError,
     SealedOOSResults,
 )
-
-_CLOSE_TIME = time(16, 0)
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,27 +88,6 @@ def _as_cutoff(value: date | datetime) -> datetime:
     return datetime.combine(value, time.max, tzinfo=UTC)
 
 
-def _sunday_in_month(year: int, month: int, occurrence: int) -> date:
-    first = date(year, month, 1)
-    days_to_sunday = (6 - first.weekday()) % 7
-    return first + timedelta(days=days_to_sunday + 7 * (occurrence - 1))
-
-
-def _session_close(session: date) -> datetime:
-    """Return the US equity 16:00 close in UTC without host tzdata.
-
-    The package must run on minimal Windows images where the standard library
-    has neither the IANA zone database nor the optional ``tzdata`` wheel.  US
-    Eastern daylight-saving boundaries are stable for the supported sample
-    period: the second Sunday of March through the first Sunday of November.
-    """
-
-    daylight_start = _sunday_in_month(session.year, 3, 2)
-    daylight_end = _sunday_in_month(session.year, 11, 1)
-    utc_offset_hours = 4 if daylight_start <= session < daylight_end else 5
-    return datetime.combine(session, _CLOSE_TIME, tzinfo=UTC) + timedelta(hours=utc_offset_hours)
-
-
 def _bar_value(value: Decimal) -> float:
     number = float(value)
     if number <= 0:
@@ -154,29 +133,32 @@ def validate_evaluation_inputs(
 
     cutoff = _as_cutoff(as_of)
     # A date cutoff denotes the US regular-session close, not the end of the
-    # UTC calendar day.  Keep market-bar date checks date-based (providers may
-    # publish an end-of-day timestamp), but apply the exact close to feature
-    # timestamps so a later same-day calculation cannot slip through.
-    feature_cutoff = _session_close(cutoff.date()) if not isinstance(as_of, datetime) else cutoff
+    # UTC calendar day.  Keep market-bar date checks date-based, but apply the
+    # exact close to every information-availability timestamp so a filing,
+    # feature, or provider publication received later that day cannot slip
+    # through a date-only snapshot.
+    information_cutoff = (
+        us_equity_session_close(cutoff.date()) if not isinstance(as_of, datetime) else cutoff
+    )
     signal_rows = tuple(signals)
     for signal in signal_rows:
-        if _as_utc(signal.availability_at) > cutoff:
+        if _as_utc(signal.availability_at) > information_cutoff:
             raise LookaheadError("signal knowledge/acceptance time later than evaluation as_of")
         if signal.feature_as_of is not None:
             if isinstance(signal.feature_as_of, datetime):
-                if _as_utc(signal.feature_as_of) > feature_cutoff:
+                if _as_utc(signal.feature_as_of) > information_cutoff:
                     raise LookaheadError("feature as_of later than evaluation as_of")
             elif signal.feature_as_of > cutoff.date():
                 raise LookaheadError("feature as_of later than evaluation as_of")
         if (
             signal.feature_available_at is not None
-            and _as_utc(signal.feature_available_at) > feature_cutoff
+            and _as_utc(signal.feature_available_at) > information_cutoff
         ):
             raise LookaheadError("feature available_at later than evaluation as_of")
     for bar in (*_flatten_bars(bars), *tuple(spy_bars)):
         if bar.date > cutoff.date():
             raise LookaheadError("market bar dated later than evaluation as_of")
-        if bar.available_at is not None and _as_utc(bar.available_at) > cutoff:
+        if bar.available_at is not None and _as_utc(bar.available_at) > information_cutoff:
             raise LookaheadError("market bar available_at later than evaluation as_of")
     if require_scoring_provenance:
         validate_scoring_provenance(signal_rows, windows=windows)
@@ -190,15 +172,24 @@ def validate_scoring_provenance(
     A signal object remains usable as an audit fixture without this evidence,
     but ``BacktestEngine.run`` always calls this validator before it schedules
     an event.  The model configuration therefore has to be frozen before the
-    sealed OOS window begins, and all evaluated signals have to identify the
-    exact same version/hash/lineage/freeze point.
+    sealed OOS evaluation is opened, and all evaluated signals have to identify
+    the exact same version/hash/lineage/freeze point.  ``windows`` is retained for
+    API compatibility, but historical event dates are not evidence of when an
+    analyst first opened the OOS result.  That independent control is carried
+    by ``ValidationEvidence.temporal_valid`` at the formal gate.
     """
 
     rows = tuple(signals)
     if not rows:
         return
+    locked_engine = ScoreEngine()
+    locked_identity = (
+        locked_engine.score_version,
+        locked_engine.score_config_hash,
+        locked_engine.score_lineage,
+    )
+    locked_provenance = (*locked_identity, locked_engine.score_frozen_at)
     expected: tuple[str, str, str, datetime] | None = None
-    freeze_deadline = _session_close(windows.oos_start) if windows is not None else None
     for signal in rows:
         if (
             signal.score_version != "scoring.v1"
@@ -222,10 +213,15 @@ def validate_scoring_provenance(
             raise ScoringProvenanceError(
                 "evaluated signals must share one frozen scoring.v1 provenance"
             )
-        if freeze_deadline is not None and provenance[3] > freeze_deadline:
+    if expected != locked_provenance:
+        if expected is not None and expected[:3] != locked_identity:
             raise ScoringProvenanceError(
-                "scoring provenance was frozen after the sealed OOS boundary"
+                "evaluated signals must reference the locked config/scoring.v1.yaml "
+                "version, sha256, and lineage"
             )
+        raise ScoringProvenanceError(
+            "evaluated signals must reference the exact scoring.v1 lock frozenAt"
+        )
 
 
 class BacktestEngine:
@@ -291,7 +287,10 @@ class BacktestEngine:
         if not spy:
             raise BacktestError("at least one SPY daily bar is required")
         session_dates = tuple(sorted(spy))
-        cutoff = _as_cutoff(as_of) if as_of is not None else _session_close(session_dates[-1])
+        evaluation_as_of: date | datetime = (
+            as_of if as_of is not None else us_equity_session_close(session_dates[-1])
+        )
+        cutoff = _as_cutoff(evaluation_as_of)
         windows = self._configured_windows or default_windows(cutoff)
         # This is deliberately strict even when the caller omitted ``as_of``:
         # the final SPY session is then the run's public information boundary.
@@ -300,7 +299,7 @@ class BacktestEngine:
             signals=signal_rows,
             bars=stock_rows,
             spy_bars=spy_rows,
-            as_of=cutoff,
+            as_of=evaluation_as_of,
             require_scoring_provenance=True,
             windows=windows,
         )
@@ -394,7 +393,7 @@ class BacktestEngine:
             return None
         # A filing made after the market's daily close belongs to the following
         # market close.  This keeps a same-day 16:01 filing out of that close.
-        if sessions[candidate] == available.date() and available > _session_close(
+        if sessions[candidate] == available.date() and available > us_equity_session_close(
             sessions[candidate]
         ):
             candidate += 1
@@ -406,7 +405,7 @@ class BacktestEngine:
         event_session: date,
         stock_by_symbol: Mapping[str, Mapping[date, DailyBar]],
     ) -> None:
-        event_close = _session_close(event_session)
+        event_close = us_equity_session_close(event_session)
         if signal.feature_as_of is not None:
             feature_later = (
                 _as_utc(signal.feature_as_of) > event_close

@@ -7,6 +7,7 @@ signal snapshot: an :class:`AlertCandidate` is an immutable audit record.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -22,8 +23,7 @@ class AlertType(StrEnum):
 
 class Severity(StrEnum):
     INFO = "INFO"
-    LOW = "LOW"
-    MEDIUM = "MEDIUM"
+    WATCH = "WATCH"
     HIGH = "HIGH"
     CRITICAL = "CRITICAL"
 
@@ -71,8 +71,34 @@ class AlertCandidate:
         object.__setattr__(self, "created_at", _utc(self.created_at))
         object.__setattr__(self, "reasons", tuple(self.reasons))
         object.__setattr__(self, "suppression_reasons", tuple(self.suppression_reasons))
-        if not self.issuer_cik or not self.trigger_snapshot_id:
+        if (
+            not self.issuer_cik
+            or not self.issuer_cik.isdigit()
+            or len(self.issuer_cik) != 10
+            or not self.trigger_snapshot_id
+        ):
             raise ValueError("issuer_cik and trigger_snapshot_id are required")
+        if (
+            isinstance(self.score, bool)
+            or not isinstance(self.score, (int, float))
+            or not math.isfinite(float(self.score))
+        ):
+            raise ValueError("score must be finite and within [0, 100]")
+        if not 0.0 <= self.score <= 100.0:
+            raise ValueError("score must be finite and within [0, 100]")
+        if not isinstance(self.important_flag, bool):
+            raise ValueError("important_flag must be a boolean")
+        if self.previous_important_flag is not None and not isinstance(
+            self.previous_important_flag, bool
+        ):
+            raise ValueError("previous_important_flag must be a boolean or null")
+        if self.absolute_score_delta is not None and (
+            isinstance(self.absolute_score_delta, bool)
+            or not isinstance(self.absolute_score_delta, (int, float))
+            or not math.isfinite(float(self.absolute_score_delta))
+            or float(self.absolute_score_delta) < 0
+        ):
+            raise ValueError("absolute_score_delta must be a finite non-negative number")
         if not isinstance(self.alert_type, AlertType):
             object.__setattr__(self, "alert_type", AlertType(self.alert_type))
         if not isinstance(self.severity, Severity):
@@ -104,13 +130,19 @@ class AlertCandidate:
         suppression = get("suppression_reasons", ())
         if isinstance(suppression, str):
             suppression = (suppression,)
+        important_flag = get("important_flag", False)
+        previous_important_flag = get("previous_important_flag")
+        if not isinstance(important_flag, bool):
+            raise ValueError("important_flag must be a JSON boolean")
+        if previous_important_flag is not None and not isinstance(previous_important_flag, bool):
+            raise ValueError("previous_important_flag must be a JSON boolean or null")
         return cls(
             issuer_cik=str(get("issuer_cik")),
             alert_type=AlertType(get("alert_type")),
             trigger_snapshot_id=str(get("trigger_snapshot_id")),
             score=float(get("score", get("total_score", 0))),
             severity=Severity(get("severity", Severity.INFO)),
-            important_flag=bool(get("important_flag", False)),
+            important_flag=important_flag,
             reasons=tuple(str(item) for item in reasons),
             ticker=get("ticker"),
             state=get("state"),
@@ -118,7 +150,7 @@ class AlertCandidate:
             previous_severity=(
                 Severity(get("previous_severity")) if get("previous_severity") is not None else None
             ),
-            previous_important_flag=get("previous_important_flag"),
+            previous_important_flag=previous_important_flag,
             absolute_score_delta=(
                 float(get("absolute_score_delta"))
                 if get("absolute_score_delta") is not None

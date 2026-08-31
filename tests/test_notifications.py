@@ -1,5 +1,8 @@
+import math
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+
+import pytest
 
 from insider_turning_engine.notifications import (
     AlertCandidate,
@@ -90,6 +93,7 @@ def test_benchmark_fresh_alias_is_supported_without_relaxing_missing_checks() ->
     quality = {
         "benchmark_fresh": True,
         "canonical_valid": True,
+        "scoring_methodology_complete": True,
         "parse_success_rate": 1.0,
         "market_data_coverage_rate": 0.95,
         "core_branch_coverage_rate": 0.90,
@@ -98,6 +102,36 @@ def test_benchmark_fresh_alias_is_supported_without_relaxing_missing_checks() ->
     result = assess_quality_gates(quality)
     assert result.allowed
     assert result.checks["stale_benchmark"] is True
+
+    string_rate = assess_quality_gates({**quality, "parse_success_rate": "1.0"})
+    assert not string_rate.allowed
+    assert "INSUFFICIENT_PARSE_SUCCESS_RATE" in string_rate.reasons
+
+    incomplete = assess_quality_gates({**quality, "scoring_methodology_complete": False})
+    assert not incomplete.allowed
+    assert "SCORING_METHODOLOGY_INCOMPLETE" in incomplete.reasons
+
+
+def test_candidate_rejects_truthy_string_flags_and_non_finite_scores() -> None:
+    base = {
+        "issuer_cik": "0000000001",
+        "alert_type": "TURNING",
+        "trigger_snapshot_id": "snap_strict",
+        "score": 80,
+    }
+    with pytest.raises(ValueError, match="JSON boolean"):
+        AlertCandidate.from_mapping({**base, "important_flag": "false"})
+    with pytest.raises(ValueError, match="finite"):
+        AlertCandidate.from_mapping({**base, "score": math.nan})
+    with pytest.raises(ValueError, match="important_flag"):
+        evaluate_alert_rules(
+            {
+                "issuer_cik": "0000000001",
+                "snapshot_id": "snap_rule_strict",
+                "transaction_value_usd": 1_000_000,
+                "important_flag": "false",
+            }
+        )
 
 
 class FakeChannel:
@@ -163,8 +197,40 @@ def test_corrupt_outbox_is_quarantined_before_recovery(tmp_path: Path) -> None:
         assert outbox.recovered_path is not None
         assert outbox.recovered_path.read_bytes() == b"not a sqlite database"
         assert path.is_file()
+        candidate = AlertCandidate("0000000001", AlertType.TURNING, "snap_corrupt", 80)
+        channel = FakeChannel()
+        assert outbox.deliver(candidate, channel) == DeliveryStatus.UNCERTAIN
+        assert channel.sent == 0
     finally:
         outbox.close()
+
+
+def test_cooldown_important_override_only_fires_when_flag_is_added() -> None:
+    now = datetime(2026, 8, 30, tzinfo=UTC)
+    channel = FakeChannel()
+    outbox = SQLiteOutbox()
+    first = AlertCandidate(
+        "0000000001",
+        AlertType.TURNING,
+        "snap_important",
+        80,
+        important_flag=True,
+        created_at=now,
+    )
+    removed = AlertCandidate(
+        "0000000001",
+        AlertType.TURNING,
+        "snap_removed",
+        80,
+        important_flag=False,
+        created_at=now + timedelta(days=1),
+    )
+
+    assert outbox.deliver(first, channel, at=now) == DeliveryStatus.SENT
+    assert outbox.deliver(removed, channel, at=now + timedelta(days=1)) == (
+        DeliveryStatus.SUPPRESSED
+    )
+    assert channel.sent == 1
 
 
 def test_outbox_checkpoint_survives_process_restart(tmp_path: Path) -> None:
@@ -182,3 +248,37 @@ def test_outbox_checkpoint_survives_process_restart(tmp_path: Path) -> None:
         assert second.history(candidate.idempotency_key)[-1]["status"] == DeliveryStatus.SENT.value
     finally:
         second.close()
+
+
+def test_restart_after_durable_claim_is_uncertain_and_never_sends(tmp_path: Path) -> None:
+    path = tmp_path / "alerts.sqlite"
+    candidate = AlertCandidate("0000000001", AlertType.TURNING, "snap_crash", 80)
+    first = SQLiteOutbox(path)
+    try:
+        assert first.claim(candidate, "fake") == DeliveryStatus.CLAIMED
+    finally:
+        first.close()
+
+    channel = FakeChannel()
+    second = SQLiteOutbox(path)
+    try:
+        assert second.deliver(candidate, channel) == DeliveryStatus.UNCERTAIN
+        assert channel.sent == 0
+        assert second.history(candidate.idempotency_key)[-1]["status"] == "UNCERTAIN"
+    finally:
+        second.close()
+
+
+def test_second_claim_cannot_steal_an_inflight_delivery() -> None:
+    outbox = SQLiteOutbox()
+    candidate = AlertCandidate("0000000001", AlertType.TURNING, "snap_inflight", 80)
+
+    assert outbox.claim(candidate, "fake") == DeliveryStatus.CLAIMED
+    assert outbox.claim(candidate, "fake") == DeliveryStatus.UNCERTAIN
+    assert outbox.record_result(candidate, "fake", SendResult.sent("late")) == (
+        DeliveryStatus.UNCERTAIN
+    )
+    assert [row["status"] for row in outbox.history(candidate.idempotency_key)] == [
+        "CLAIMED",
+        "UNCERTAIN",
+    ]

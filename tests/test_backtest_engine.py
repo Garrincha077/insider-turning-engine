@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
@@ -16,6 +17,10 @@ from insider_turning_engine.backtest import (
     validate_evaluation_inputs,
 )
 from insider_turning_engine.ingestion.market import DailyBar
+from insider_turning_engine.scoring import ScoreEngine
+
+_LOCKED_SCORING = ScoreEngine()
+_FROZEN_AT = _LOCKED_SCORING.score_frozen_at
 
 
 def _sessions(start: date, count: int) -> list[date]:
@@ -54,9 +59,9 @@ def _signal(
     **kwargs: object,
 ) -> BacktestSignal:
     payload: dict[str, object] = {
-        "score_config_hash": "scoring-v1-config-sha256",
-        "score_lineage": "config/scoring.v1.yaml@scoring-v1-config-sha256",
-        "frozen_at": datetime(2015, 12, 31, 20, tzinfo=UTC),
+        "score_config_hash": _LOCKED_SCORING.score_config_hash,
+        "score_lineage": _LOCKED_SCORING.score_lineage,
+        "frozen_at": _FROZEN_AT,
     }
     payload.update(kwargs)
     return BacktestSignal(
@@ -83,9 +88,9 @@ def test_filing_knowledge_time_not_transaction_date_and_entry_is_next_open() -> 
         accepted_at=accepted,
         knowledge_at=knowledge,
         transaction_date=transaction_day,
-        score_config_hash="scoring-v1-config-sha256",
-        score_lineage="config/scoring.v1.yaml@scoring-v1-config-sha256",
-        frozen_at=datetime(2015, 12, 31, 20, tzinfo=UTC),
+        score_config_hash=_LOCKED_SCORING.score_config_hash,
+        score_lineage=_LOCKED_SCORING.score_lineage,
+        frozen_at=_FROZEN_AT,
     )
 
     result = BacktestEngine(horizons=(21,)).run(
@@ -257,6 +262,53 @@ def test_same_date_feature_timestamp_after_daily_close_is_rejected_with_timezone
         )
 
 
+def test_date_only_as_of_rejects_same_day_information_after_market_close() -> None:
+    session = date(2020, 1, 3)
+    after_close = datetime(2020, 1, 3, 21, 0, 1, tzinfo=UTC)
+
+    with pytest.raises(LookaheadError, match="signal knowledge/acceptance time"):
+        validate_evaluation_inputs(
+            signals=[_signal("late-filing", after_close)],
+            bars=[],
+            spy_bars=[],
+            as_of=session,
+        )
+
+    late_bar = replace(_bars("ACME", [session])[0], available_at=after_close)
+    with pytest.raises(LookaheadError, match="market bar available_at"):
+        validate_evaluation_inputs(
+            signals=[],
+            bars=[late_bar],
+            spy_bars=[],
+            as_of=session,
+        )
+
+
+def test_date_only_as_of_rejects_late_feature_even_when_signal_is_outside_windows() -> None:
+    session = date(2020, 1, 3)
+    windows = BacktestWindows(
+        development_start=date(2016, 1, 1),
+        development_end=date(2016, 12, 31),
+        validation_start=date(2017, 1, 1),
+        validation_end=date(2017, 12, 31),
+        oos_start=date(2018, 1, 1),
+        oos_end=date(2018, 12, 31),
+    )
+    signal = _signal(
+        "late-unscheduled-feature",
+        datetime(2020, 1, 3, 14, tzinfo=UTC),
+        feature_as_of=datetime(2020, 1, 3, 21, 0, 1, tzinfo=UTC),
+    )
+
+    with pytest.raises(LookaheadError, match="feature as_of"):
+        BacktestEngine(horizons=(1,), windows=windows).run(
+            [signal],
+            bars=_bars("ACME", [session]),
+            spy_bars=_bars("SPY", [session], base=200),
+            as_of=session,
+        )
+
+
 def test_evaluated_runs_require_frozen_scoring_provenance_and_bounded_scores() -> None:
     sessions = _sessions(date(2020, 1, 2), 30)
     with pytest.raises(BacktestError, match=r"\[0, 100\]"):
@@ -272,6 +324,31 @@ def test_evaluated_runs_require_frozen_scoring_provenance_and_bounded_scores() -
     with pytest.raises(ScoringProvenanceError, match="score_config_hash"):
         BacktestEngine(horizons=(21,)).run(
             [unprovenanced],
+            bars=_bars("ACME", sessions),
+            spy_bars=_bars("SPY", sessions, base=200),
+        )
+
+    forged = _signal(
+        "forged-provenance",
+        datetime(2020, 1, 3, 14, tzinfo=UTC),
+        score_config_hash="sha256:" + "0" * 64,
+        score_lineage="config/scoring.v1.yaml@sha256:" + "0" * 64,
+    )
+    with pytest.raises(ScoringProvenanceError, match="locked config/scoring.v1.yaml"):
+        BacktestEngine(horizons=(21,)).run(
+            [forged],
+            bars=_bars("ACME", sessions),
+            spy_bars=_bars("SPY", sessions, base=200),
+        )
+
+    forged_freeze = _signal(
+        "forged-freeze",
+        datetime(2020, 1, 3, 14, tzinfo=UTC),
+        frozen_at=datetime(2015, 12, 31, 20, tzinfo=UTC),
+    )
+    with pytest.raises(ScoringProvenanceError, match="exact scoring.v1 lock frozenAt"):
+        BacktestEngine(horizons=(21,)).run(
+            [forged_freeze],
             bars=_bars("ACME", sessions),
             spy_bars=_bars("SPY", sessions, base=200),
         )

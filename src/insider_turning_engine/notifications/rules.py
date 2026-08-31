@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
@@ -58,6 +59,7 @@ def assess_quality_gates(
     *,
     stale_benchmark: bool | None = None,
     canonical_valid: bool | None = None,
+    scoring_methodology_complete: bool | None = None,
     parse_success_rate: float | None = None,
     market_data_coverage_rate: float | None = None,
     core_branch_coverage_rate: float | None = None,
@@ -80,17 +82,27 @@ def assess_quality_gates(
     )
     if benchmark_state is None:
         benchmark_fresh = _get(quality, "benchmark_fresh")
-        if benchmark_fresh is not None:
-            benchmark_state = not bool(benchmark_fresh)
+        if isinstance(benchmark_fresh, bool):
+            benchmark_state = not benchmark_fresh
     canonical = canonical_valid if canonical_valid is not None else _get(quality, "canonical_valid")
+    methodology = (
+        scoring_methodology_complete
+        if scoring_methodology_complete is not None
+        else _get(
+            quality,
+            "scoring_methodology_complete",
+            _get(quality, "methodology_complete"),
+        )
+    )
 
     reasons: list[str] = []
     checks: dict[str, bool] = {}
-    checks["benchmark_available"] = benchmark_state is not None
-    if benchmark_state is None:
+    benchmark_available = isinstance(benchmark_state, bool)
+    checks["benchmark_available"] = benchmark_available
+    if not benchmark_available:
         reasons.append("MISSING_BENCHMARK")
-    stale = bool(benchmark_state)
-    checks["stale_benchmark"] = benchmark_state is False
+    stale = benchmark_state is True
+    checks["stale_benchmark"] = benchmark_available and not stale
     if stale:
         reasons.append("STALE_BENCHMARK")
     checks["canonical_valid"] = canonical is True
@@ -98,6 +110,11 @@ def assess_quality_gates(
         reasons.append("MISSING_CANONICAL_EVIDENCE")
     elif canonical is not True:
         reasons.append("CANONICAL_INVALID")
+    checks["scoring_methodology_complete"] = methodology is True
+    if methodology is None:
+        reasons.append("MISSING_SCORING_METHODOLOGY_EVIDENCE")
+    elif methodology is not True:
+        reasons.append("SCORING_METHODOLOGY_INCOMPLETE")
 
     for name, explicit in (
         ("parse_success_rate", parse_success_rate),
@@ -105,15 +122,39 @@ def assess_quality_gates(
         ("core_branch_coverage_rate", core_branch_coverage_rate),
     ):
         value = q(name, explicit)
+        coherent = (
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and math.isfinite(float(value))
+        )
         if isinstance(value, Mapping):
+            numerator = value.get("numerator")
+            denominator = value.get("denominator")
             value = value.get("rate")
+            coherent = (
+                isinstance(numerator, int)
+                and not isinstance(numerator, bool)
+                and isinstance(denominator, int)
+                and not isinstance(denominator, bool)
+                and denominator > 0
+                and 0 <= numerator <= denominator
+                and isinstance(value, (int, float))
+                and not isinstance(value, bool)
+                and math.isfinite(float(value))
+                and abs(float(value) - numerator / denominator) <= 1e-9
+            )
         if value is None:
             checks[name] = False
             reasons.append(f"MISSING_{name.upper()}")
             continue
         try:
             numeric = float(value)
-            passed = numeric == numeric and numeric >= _THRESHOLDS[name]
+            passed = (
+                coherent
+                and math.isfinite(numeric)
+                and 0.0 <= numeric <= 1.0
+                and numeric >= _THRESHOLDS[name]
+            )
         except (TypeError, ValueError, OverflowError):
             passed = False
         checks[name] = passed
@@ -134,7 +175,7 @@ def _severity(alert_type: AlertType, snapshot: Any) -> Severity:
         return Severity(value)
     return {
         AlertType.MAJOR_INSIDER_BUY: Severity.HIGH,
-        AlertType.STEALTH_ACCUMULATION: Severity.MEDIUM,
+        AlertType.STEALTH_ACCUMULATION: Severity.WATCH,
         AlertType.TURNING: Severity.HIGH,
     }[alert_type]
 
@@ -161,6 +202,9 @@ def _candidate(
     state = _get(snapshot, "state", _get(snapshot, "current_state"))
     previous_state = _get(snapshot, "previous_state", _get(snapshot, "from_state"))
     delta = _get(snapshot, "absolute_score_delta")
+    important_flag = _get(snapshot, "important_flag", False)
+    if not isinstance(important_flag, bool):
+        raise ValueError("important_flag must be a boolean")
     score = _number(snapshot, "total_score")
     if delta is None and _get(snapshot, "previous_total_score") is not None:
         delta = abs(score - _number(snapshot, "previous_total_score"))
@@ -171,7 +215,7 @@ def _candidate(
         trigger_snapshot_id=str(trigger_snapshot_id),
         score=score,
         severity=_severity(alert_type, snapshot),
-        important_flag=bool(_get(snapshot, "important_flag", False)),
+        important_flag=important_flag,
         reasons=tuple(reasons),
         state=state,
         previous_state=previous_state,

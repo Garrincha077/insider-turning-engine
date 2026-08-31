@@ -1,0 +1,9 @@
+{
+  "schemaVersion": "1.0.0",
+  "scoreVersion": "scoring.v1",
+  "scoreConfig": "config/scoring.v1.yaml",
+  "scoreConfigHash": "sha256:f1f66f6c295a66c6b562a3f3dd96174c1a5e5168ffb56afebd3f3d29e2629d3e",
+  "scoreLineage": "config/scoring.v1.yaml@sha256:f1f66f6c295a66c6b562a3f3dd96174c1a5e5168ffb56afebd3f3d29e2629d3e",
+  "frozenAt": "2026-08-30T22:35:09Z",
+  "sourceCommit": "6b6f8246a3ea1ad41cb52ab1439c0d0b8c4b6ace"
+}

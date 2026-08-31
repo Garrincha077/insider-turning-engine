@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 import polars as pl
@@ -56,6 +56,24 @@ def test_weekly_ohlcv_uses_last_observed_session() -> None:
         date(2025, 1, 14),
     ]
     assert weekly.get_column("volume").to_list() == [300, 500, 200]
+
+
+def test_date_only_price_cutoff_excludes_post_close_provider_row() -> None:
+    frame = pl.DataFrame(
+        {
+            "date": [date(2025, 1, 2), date(2025, 1, 3)],
+            "symbol": ["ACME", "ACME"],
+            "close": [10.0, 11.0],
+            "provider": ["stooq", "stooq"],
+            "available_at": [
+                datetime(2025, 1, 2, 21, 0, tzinfo=UTC),
+                datetime(2025, 1, 3, 21, 0, 1, tzinfo=UTC),
+            ],
+        }
+    )
+
+    result = price_features(frame, as_of=date(2025, 1, 3))
+    assert result.get_column("date").to_list() == [date(2025, 1, 2)]
 
 
 def test_split_quarantine_nulls_derived_facts() -> None:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import asdict
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -14,7 +15,13 @@ import polars as pl
 import typer
 
 from .backtest import BacktestSignal, build_backtest_report, run_backtest
-from .export.dashboard import export_dashboard as publish_dashboard
+from .export.dashboard import (
+    DashboardExportError,
+    validate_dashboard_directory,
+)
+from .export.dashboard import (
+    export_dashboard as publish_dashboard,
+)
 from .features.price import price_features
 from .ingestion.market import CsvMarketDataProvider
 from .ingestion.sec import (
@@ -124,6 +131,7 @@ def update_sec(
     since: Annotated[str | None, typer.Option()] = None,
     through: Annotated[str | None, typer.Option()] = None,
     cursor_file: Annotated[Path, typer.Option()] = Path("data/state/sec.cursor"),
+    run_id: Annotated[str | None, typer.Option(help="Immutable pipeline run identifier.")] = None,
     execute: Annotated[bool, typer.Option(help="Allow SEC network requests.")] = False,
     output: Annotated[Path, typer.Option()] = Path("data/staging/sec-incremental.json"),
 ) -> None:
@@ -147,10 +155,15 @@ def update_sec(
     recovered_cursor: Path | None = None
     cursor: str | None = None
     next_cursor: str | None = None
+    resolved_run_id = run_id or f"run_cli_{datetime.now(UTC).strftime('%Y%m%dT%H%M%S%fZ')}"
+    if re.fullmatch(r"run_[A-Za-z0-9_-]{16,64}", resolved_run_id) is None:
+        raise typer.BadParameter("--run-id must match run_[A-Za-z0-9_-]{16,64}")
     if xml is not None:
         if accession is None or source_url is None:
             raise typer.BadParameter("--accession and --source-url are required with --xml")
         accepted = datetime.fromisoformat(accepted_at) if accepted_at else datetime.now(UTC)
+        if accepted.tzinfo is None:
+            raise typer.BadParameter("--accepted-at must include a timezone")
         result = parse_sec_filing(
             xml.read_bytes(),
             {
@@ -158,7 +171,7 @@ def update_sec(
                 "source_url": source_url,
                 "accepted_at": accepted,
                 "observed_at": datetime.now(UTC),
-                "run_id": "run_cli_incremental_20260830",
+                "run_id": resolved_run_id,
             },
         )
         records.extend(record.canonical_dump() for record in result.records)
@@ -171,12 +184,19 @@ def update_sec(
         except ValueError as exc:
             raise typer.BadParameter(str(exc)) from exc
         cik_text = cik_file.read_text("utf-8")
-        ciks = [item.strip() for item in cik_text.replace(",", "\n").splitlines() if item.strip()]
+        ciks = [
+            item.strip()
+            for item in cik_text.replace(",", "\n").splitlines()
+            if item.strip() and not item.strip().startswith("#")
+        ]
+        if not ciks or any(not cik.isdigit() or len(cik) > 10 for cik in ciks):
+            raise typer.BadParameter("CIK file must contain one or more 1-10 digit CIKs")
+        ciks = list(dict.fromkeys(ciks))
         source = SECIncrementalSource(
             ciks,
             user_agent,
             cache_dir="data/cache/sec-incremental",
-            run_id="run_cli_incremental_20260830",
+            run_id=resolved_run_id,
         )
         cursor, recovered_cursor = _recover_cursor(cursor_file)
         page = source.fetch(cursor, through, since=since)
@@ -280,12 +300,10 @@ def build_signals(
     raw = json.loads(components.read_text("utf-8"))
     if not isinstance(raw, dict):
         raise typer.BadParameter("components must be a JSON object keyed by model name")
+    if any(not isinstance(values, dict) for values in raw.values()):
+        raise typer.BadParameter("every component model must contain a JSON object")
     engine = ScoreEngine()
-    results = {
-        name: asdict(engine.score(name, values))
-        for name, values in raw.items()
-        if isinstance(values, dict)
-    }
+    results = {name: asdict(engine.score(name, values)) for name, values in raw.items()}
     _write_json(output, results)
     _echo({"command": "build-signals", "status": "SUCCEEDED", "output": str(output)})
 
@@ -294,6 +312,12 @@ def build_signals(
 def backtest(
     events: PathOption = None,
     bars: PathOption = None,
+    validation_evidence: Annotated[
+        Path | None,
+        typer.Option(
+            help="JSON validation attestation; omitted evidence can never produce a PASS gate."
+        ),
+    ] = None,
     output: Annotated[Path, typer.Option()] = Path("data/backtest/report.json"),
 ) -> None:
     """Run the point-in-time event backtest after validated inputs are supplied."""
@@ -310,6 +334,17 @@ def backtest(
     rows = json.loads(events.read_text("utf-8"))
     if not isinstance(rows, list):
         raise typer.BadParameter("events must be a JSON array")
+    if any(not isinstance(row, dict) for row in rows):
+        raise typer.BadParameter("every event must be a JSON object")
+    evidence: dict[str, Any] | None = None
+    if validation_evidence is not None:
+        try:
+            loaded_evidence = json.loads(validation_evidence.read_text("utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise typer.BadParameter(f"validation evidence is unreadable: {exc}") from exc
+        if not isinstance(loaded_evidence, dict):
+            raise typer.BadParameter("validation evidence must be a JSON object")
+        evidence = loaded_evidence
     signals = [
         BacktestSignal(
             signal_id=str(row["signal_id"]),
@@ -358,14 +393,48 @@ def backtest(
             ),
         )
         for row in rows
-        if isinstance(row, dict)
     ]
     provider = CsvMarketDataProvider(bars, as_of_date=date.max)
     spy = provider.get_daily_bars("SPY")
     company_bars = [bar for bar in provider.bars if bar.symbol != "SPY"]
-    result = run_backtest(signals, bars=company_bars, spy_bars=spy)
+    benchmark_families = {
+        "SIMPLE_PS": "simple_ps",
+        "UNIQUE_BUYER_RATIO": "unique_buyer_ratio",
+        "LARGEST_BUYS": "largest_buys",
+        "CLUSTER_BUYS": "cluster_buys",
+    }
+    unknown_families = sorted(
+        {
+            str(signal.exposure_family)
+            for signal in signals
+            if signal.exposure_family not in {None, "FULL_ENGINE", *benchmark_families}
+        }
+    )
+    if unknown_families:
+        raise typer.BadParameter(
+            "unsupported exposure_family values: " + ", ".join(unknown_families)
+        )
+    full_signals = [signal for signal in signals if signal.exposure_family in {None, "FULL_ENGINE"}]
+    if not full_signals:
+        raise typer.BadParameter("events must include a FULL_ENGINE exposure family")
+    result = run_backtest(full_signals, bars=company_bars, spy_bars=spy)
     oos = result.sealed_oos.final_report()
-    formal = build_backtest_report(oos)
+    benchmark_groups = {}
+    benchmark_counts = {}
+    for family, benchmark_name in benchmark_families.items():
+        selected = [signal for signal in signals if signal.exposure_family == family]
+        if not selected:
+            continue
+        benchmark_result = run_backtest(selected, bars=company_bars, spy_bars=spy)
+        benchmark_oos = benchmark_result.sealed_oos.final_report()
+        events_for_family = benchmark_oos.results.simple_benchmark.events
+        benchmark_groups[benchmark_name] = events_for_family
+        benchmark_counts[benchmark_name] = len(events_for_family)
+    formal = build_backtest_report(
+        oos,
+        benchmark_groups=benchmark_groups,
+        validation_evidence=evidence,
+    )
     gate = formal.gate
     report = {
         "schemaVersion": "1.0.0",
@@ -382,6 +451,7 @@ def backtest(
         "developmentEvents": len(result.development.simple_benchmark.events),
         "validationEvents": len(result.validation.simple_benchmark.events),
         "oosEvents": len(oos.results.simple_benchmark.events),
+        "benchmarkEvents": benchmark_counts,
         "formalReport": asdict(formal),
         "attrition": asdict(oos.attrition),
         "caveats": [asdict(item) for item in formal.caveats],
@@ -418,6 +488,7 @@ def send_alerts(
     candidates: PathOption = None,
     execute: Annotated[bool, typer.Option(help="Enable external delivery.")] = False,
     outbox: Annotated[Path, typer.Option()] = Path("data/state/alerts.sqlite"),
+    manifest: PathOption = None,
 ) -> None:
     """Preview alert delivery unless external sending is explicitly enabled."""
 
@@ -434,7 +505,30 @@ def send_alerts(
     raw = json.loads(candidates.read_text("utf-8"))
     if not isinstance(raw, list):
         raise typer.BadParameter("candidates must be a JSON array")
-    alerts = [AlertCandidate.from_mapping(row) for row in raw if isinstance(row, dict)]
+    if any(not isinstance(row, dict) for row in raw):
+        raise typer.BadParameter("every candidate must be a JSON object")
+    if execute:
+        if manifest is None:
+            raise typer.BadParameter("--manifest is required for external delivery")
+        expected_manifest = manifest.parent / "manifest.json"
+        if manifest.resolve() != expected_manifest.resolve():
+            raise typer.BadParameter("--manifest must name the publication manifest.json")
+        try:
+            publication = validate_dashboard_directory(manifest.parent)
+        except DashboardExportError as exc:
+            raise typer.BadParameter(f"publication manifest is invalid: {exc}") from exc
+        quality = publication.get("quality", {})
+        if publication.get("status") != "SUCCEEDED" or quality.get("disposition") != "PASS":
+            raise typer.BadParameter("external delivery requires a PASS publication manifest")
+        run_id = str(publication["runId"])
+        mismatched = [
+            index
+            for index, row in enumerate(raw)
+            if not isinstance(row, dict) or str(row.get("runId", row.get("run_id", ""))) != run_id
+        ]
+        if mismatched:
+            raise typer.BadParameter("every alert candidate must reference the PASS manifest runId")
+    alerts = [AlertCandidate.from_mapping(row) for row in raw]
     if not execute:
         # Preview is deliberately side-effect free with respect to providers,
         # but candidates still belong in the durable audit ledger so a run
@@ -467,6 +561,16 @@ def send_alerts(
     ledger = SQLiteOutbox(outbox)
     channel = TelegramHTTPChannel(token, chat_id, transport)
     try:
+        if ledger.recovered_path is not None:
+            _echo(
+                {
+                    "command": "send-alerts",
+                    "status": "BLOCKED",
+                    "reason": "OUTBOX_CORRUPTION_RECOVERED",
+                    "recoveryEvidence": str(ledger.recovered_path),
+                }
+            )
+            raise typer.Exit(code=1)
         statuses = [ledger.deliver(item, channel).value for item in alerts]
     finally:
         ledger.close()

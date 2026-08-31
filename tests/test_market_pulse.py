@@ -61,6 +61,34 @@ def test_pulse_is_idempotent_and_future_rows_do_not_change_snapshot() -> None:
     assert first.equals(second)
 
 
+def test_date_only_pulse_cutoff_excludes_same_day_post_close_knowledge() -> None:
+    session = date(2026, 8, 25)
+    frame = pl.DataFrame(
+        {
+            "transaction_id": ["buy", "late-buy", "sale"],
+            "issuer_cik": ["1", "2", "3"],
+            "owner_id": ["o1", "o2", "o3"],
+            "transaction_date": [session] * 3,
+            "code": ["P", "P", "S"],
+            "shares": [10.0, 10.0, 10.0],
+            "value": [100.0, 100.0, 100.0],
+            # August close is 20:00 UTC. The second buy is not known at close.
+            "knowledge_at": [
+                datetime(2026, 8, 25, 20, 0, tzinfo=UTC),
+                datetime(2026, 8, 25, 20, 0, 1, tzinfo=UTC),
+                datetime(2026, 8, 25, 19, 59, tzinfo=UTC),
+            ],
+        }
+    )
+
+    market = (
+        market_pulse(frame, as_of=session, grains=("weekly",))
+        .filter(pl.col("scope") == "market")
+        .row(0, named=True)
+    )
+    assert market["transaction_ps_ratio"] == 1.0
+
+
 def test_zero_denominators_are_null_with_explicit_reason() -> None:
     frame = _rows().filter(pl.col("code") == "P")
     row = (

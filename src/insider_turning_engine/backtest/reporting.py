@@ -12,6 +12,7 @@ import random
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from statistics import median
 from typing import Any
 
@@ -25,6 +26,7 @@ from .models import (
     ForwardReturn,
     OOSReport,
     PeriodResults,
+    ScoringProvenanceError,
 )
 
 _REPORT_HORIZONS: tuple[int, ...] = (63, 126, 252)
@@ -156,6 +158,7 @@ class ValidationEvidence:
     hash_valid: bool | None = None
     temporal_valid: bool | None = None
     benchmark_fresh: bool | None = None
+    scoring_methodology_complete: bool | None = None
 
     @property
     def market_coverage_rate(self) -> float | None:
@@ -217,6 +220,16 @@ class SensitivityScenario:
 
 
 @dataclass(frozen=True, slots=True)
+class ScoringProvenance:
+    """The single locked scoring identity used by every event in a report."""
+
+    score_version: str
+    score_config_hash: str
+    score_lineage: str
+    frozen_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
 class BacktestReport:
     """Answer-first report assembled from one period of a backtest."""
 
@@ -228,6 +241,7 @@ class BacktestReport:
     gate: GateAssessment | None
     sensitivity: tuple[SensitivityScenario, ...]
     data_quality: DataQualityDisclosure
+    scoring_provenance: ScoringProvenance
 
     @property
     def benchmarks(self) -> tuple[BenchmarkComparison, ...]:
@@ -449,14 +463,17 @@ def _groups_for(
             name = _canonical_benchmark_name(raw_name)
             events = raw_group.events if isinstance(raw_group, EventGroup) else tuple(raw_group)
             groups[name] = EventGroup(name, results.period, tuple(events))
-    # The engine always supplies these canonical groups.  Aliased simple
-    # benchmarks default to the all-event comparator when no dedicated group
-    # was provided, preserving a complete, honest table.
+    # The engine supplies a full-engine selection and an all-event reference.
+    # Named simple benchmarks must be supplied explicitly: relabeling the same
+    # all-event group as P/S, buyer-ratio, largest-buy, and cluster strategies
+    # would fabricate evidence for the formal gate.
     groups.setdefault(
         "full_engine", EventGroup("full_engine", results.period, results.top_decile.events)
     )
-    for name in _SIMPLE_BENCHMARKS:
-        groups.setdefault(name, EventGroup(name, results.period, results.simple_benchmark.events))
+    groups.setdefault(
+        "simple_benchmark",
+        EventGroup("simple_benchmark", results.period, results.simple_benchmark.events),
+    )
     return groups
 
 
@@ -471,9 +488,35 @@ def compare_benchmarks(
 
     results = _period_results(source, period)
     groups = _groups_for(results, benchmark_groups)
-    ordered = [*(_SIMPLE_BENCHMARKS), "full_engine"]
+    ordered = [name for name in (*_SIMPLE_BENCHMARKS, "full_engine") if name in groups]
     ordered.extend(name for name in sorted(groups) if name not in ordered)
     return tuple(summarize_group(groups[name], horizons=horizons) for name in ordered)
+
+
+def _report_scoring_provenance(
+    comparisons: Sequence[BenchmarkComparison],
+) -> ScoringProvenance:
+    events = tuple(event for comparison in comparisons for event in comparison.events)
+    if not events:
+        raise ReportingError("a backtest report requires scored events with provenance")
+
+    signals = tuple(event.signal for event in events)
+    # Import locally so the reporting projection remains acyclic at module load.
+    from .engine import validate_scoring_provenance
+
+    try:
+        validate_scoring_provenance(signals)
+    except ScoringProvenanceError as exc:
+        raise ReportingError(f"invalid scoring provenance: {exc}") from exc
+    first = signals[0]
+    if first.score_config_hash is None or first.score_lineage is None or first.frozen_at is None:
+        raise ReportingError("scoring provenance is incomplete")
+    return ScoringProvenance(
+        score_version=first.score_version,
+        score_config_hash=first.score_config_hash,
+        score_lineage=first.score_lineage,
+        frozen_at=first.frozen_at.astimezone(UTC),
+    )
 
 
 def summarize_attrition(events: Iterable[BacktestEvent]) -> AttritionSummary:
@@ -618,7 +661,10 @@ def _validation_evidence_status(
 
     if raw is None:
         return "INCONCLUSIVE", "required validation evidence is missing"
-    evidence = _coerce_validation_evidence(raw)
+    try:
+        evidence = _coerce_validation_evidence(raw)
+    except (ReportingError, TypeError, ValueError) as exc:
+        return "FAIL", f"validation evidence is malformed: {exc}"
     rates = {
         "parse success": (evidence.parse_success_rate, 0.995),
         "market coverage": (evidence.market_coverage, 0.90),
@@ -630,6 +676,7 @@ def _validation_evidence_status(
         "hash": evidence.hash_valid,
         "temporal": evidence.temporal_valid,
         "benchmark freshness": evidence.benchmark_fresh,
+        "scoring methodology": evidence.scoring_methodology_complete,
     }
     missing = [name for name, (value, _threshold) in rates.items() if value is None]
     missing.extend(name for name, value in booleans.items() if value is None)
@@ -638,7 +685,9 @@ def _validation_evidence_status(
     failed: list[str] = []
     for name, (value, threshold) in rates.items():
         assert value is not None
-        if not math.isfinite(float(value)) or float(value) < threshold:
+        if not math.isfinite(float(value)) or not 0.0 <= float(value) <= 1.0:
+            failed.append(f"{name} is not a finite 0..1 rate")
+        elif float(value) < threshold:
             failed.append(f"{name} below {threshold:.3f}")
     failed.extend(name for name, value in booleans.items() if value is False)
     if failed:
@@ -650,7 +699,17 @@ def _coerce_validation_evidence(
     raw: ValidationEvidence | Mapping[str, Any],
 ) -> ValidationEvidence:
     if isinstance(raw, ValidationEvidence):
-        return raw
+        return ValidationEvidence(
+            parse_success_rate=_optional_float(raw.parse_success_rate),
+            market_coverage=_optional_float(raw.market_coverage),
+            core_branch_coverage=_optional_float(raw.core_branch_coverage),
+            canonical_valid=_optional_bool(raw.canonical_valid),
+            schema_valid=_optional_bool(raw.schema_valid),
+            hash_valid=_optional_bool(raw.hash_valid),
+            temporal_valid=_optional_bool(raw.temporal_valid),
+            benchmark_fresh=_optional_bool(raw.benchmark_fresh),
+            scoring_methodology_complete=_optional_bool(raw.scoring_methodology_complete),
+        )
     return ValidationEvidence(
         parse_success_rate=_optional_float(raw.get("parse_success_rate", raw.get("parse_success"))),
         market_coverage=_optional_float(
@@ -664,15 +723,26 @@ def _coerce_validation_evidence(
         hash_valid=_optional_bool(raw.get("hash_valid")),
         temporal_valid=_optional_bool(raw.get("temporal_valid")),
         benchmark_fresh=_optional_bool(raw.get("benchmark_fresh")),
+        scoring_methodology_complete=_optional_bool(
+            raw.get("scoring_methodology_complete", raw.get("component_contract_complete"))
+        ),
     )
 
 
 def _optional_float(value: Any) -> float | None:
-    return None if value is None else float(value)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ReportingError("validation evidence rates must be JSON numbers")
+    return float(value)
 
 
 def _optional_bool(value: Any) -> bool | None:
-    return None if value is None else bool(value)
+    if value is None:
+        return None
+    if not isinstance(value, bool):
+        raise ReportingError("validation evidence flags must be JSON booleans")
+    return value
 
 
 def _events_for_comparison(
@@ -821,6 +891,10 @@ def build_backtest_report(
 ) -> BacktestReport:
     """Build a complete benchmark, regime, attrition, caveat, and gate report."""
 
+    if period is BacktestPeriod.OOS and sensitivity_scenarios:
+        raise ReportingError(
+            "score sensitivity is forbidden for sealed OOS; use development or validation"
+        )
     results = _period_results(source, period)
     # Materialize custom iterables once: report assembly calls the table and
     # gate paths independently, and a generator must not disappear on the
@@ -834,6 +908,7 @@ def build_backtest_report(
     comparisons = list(
         compare_benchmarks(source, period=period, benchmark_groups=materialized_groups)
     )
+    scoring_provenance = _report_scoring_provenance(comparisons)
     sealed_count = len(results.simple_benchmark.events)
     gate = (
         evaluate_formal_gate(
@@ -874,14 +949,15 @@ def build_backtest_report(
     caveats.extend(_quality_caveats(data_quality))
     deduped = tuple({c.code: c for c in caveats}.values())
     return BacktestReport(
-        period,
-        tuple(comparisons),
-        _regime_table(results.simple_benchmark.events, _REPORT_HORIZONS),
-        attrition,
-        deduped,
-        gate,
-        score_sensitivity_report(sensitivity_scenarios or {}),
-        data_quality,
+        period=period,
+        benchmark_table=tuple(comparisons),
+        regime_table=_regime_table(results.simple_benchmark.events, _REPORT_HORIZONS),
+        attrition=attrition,
+        caveats=deduped,
+        gate=gate,
+        sensitivity=score_sensitivity_report(sensitivity_scenarios or {}),
+        data_quality=data_quality,
+        scoring_provenance=scoring_provenance,
     )
 
 
@@ -902,6 +978,7 @@ __all__ = [
     "MetricSummary",
     "RegimeSummary",
     "ReportingError",
+    "ScoringProvenance",
     "SensitivityScenario",
     "ValidationEvidence",
     "BacktestSignalLike",

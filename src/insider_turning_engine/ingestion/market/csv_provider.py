@@ -5,10 +5,12 @@ from __future__ import annotations
 import csv
 import io
 from collections.abc import Iterable, Mapping
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import TextIO
+
+from insider_turning_engine.domain.time import us_equity_session_close
 
 from .base import DailyBar, ProviderHealth
 
@@ -139,10 +141,9 @@ class CsvMarketDataProvider:
                     ),
                     "provider": self.provider,
                     "provider_record_id": f"{self.provider}:{symbol}:{day.isoformat()}",
-                    # A daily close is usable only after that session closes.
-                    # The conservative UTC end-of-day pin is reproducible and
-                    # keeps historical features from seeing a future session.
-                    "available_at": datetime.combine(day, time.max, tzinfo=UTC),
+                    # A daily bar becomes eligible at the US regular-session
+                    # close, using the same clock as features and backtests.
+                    "available_at": us_equity_session_close(day),
                     "is_adjusted": _bool(str(row.get("is_adjusted", row.get("adjusted", "false")))),
                     "adjustment_basis": str(
                         row.get("adjustment_basis", "unadjusted") or "unadjusted"

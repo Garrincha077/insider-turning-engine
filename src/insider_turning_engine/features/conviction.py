@@ -9,7 +9,7 @@ context.  Every returned row is explainable through ``reason_codes`` and has a
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from math import isfinite, log10
 from typing import Any
@@ -21,6 +21,7 @@ from insider_turning_engine.domain.models import (
     EconomicClassification,
     TransactionClassification,
 )
+from insider_turning_engine.domain.time import us_equity_session_close
 
 _ROLE_POINTS: dict[str, float] = {
     "CEO": 100.0,
@@ -41,7 +42,7 @@ def _cutoff(as_of: date | datetime | None) -> tuple[date, datetime]:
         stamp = as_of if as_of.tzinfo else as_of.replace(tzinfo=UTC)
         stamp = stamp.astimezone(UTC)
         return stamp.date(), stamp
-    return as_of, datetime.combine(as_of, time.max, tzinfo=UTC)
+    return as_of, us_equity_session_close(as_of)
 
 
 def _finite(value: Any) -> bool:

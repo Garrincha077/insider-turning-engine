@@ -19,6 +19,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -43,52 +50,18 @@ jobs:
           test -s app/dist/index.html
           test -s app/dist/data/dashboard.json
           test -s app/dist/data/manifest.json
-          python - <<'PY'
-          import hashlib
-          import json
+          uv run python - <<'PY'
           from pathlib import Path
 
-          root = Path("app/dist/data").resolve()
-          manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
-          required = {"manifestId", "runId", "versions", "watermarks", "quality", "files", "artifacts"}
-          if not required <= set(manifest) or not isinstance(manifest.get("files"), list) or not manifest["files"]:
-              raise SystemExit("manifest is incomplete")
-          if manifest.get("status") not in {"SUCCEEDED", "DEGRADED"}:
-              raise SystemExit("manifest is not publishable")
-          if manifest.get("scoreVersion") != "scoring.v1":
-              raise SystemExit("manifest score version is not frozen")
-          if manifest.get("versions") != {
-              "scoring": "scoring.v1",
-              "stateModel": "state.v1",
-              "canonicalSchema": "1.0.0",
-              "signalSchema": "1.0.0",
-          }:
-              raise SystemExit("manifest versions do not match frozen contracts")
-          quality = manifest.get("quality", {})
-          if quality.get("disposition") not in {"PASS", "DEGRADED"}:
-              raise SystemExit("quality gate blocked publication")
-          if (manifest.get("status") == "SUCCEEDED") != (quality.get("disposition") == "PASS"):
-              raise SystemExit("manifest status and quality disposition disagree")
-          semantic = {key: value for key, value in manifest.items() if key != "manifestId"}
-          expected_manifest_id = "mft_" + hashlib.sha256(
-              (json.dumps(semantic, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
-          ).hexdigest()[:32]
-          if manifest.get("manifestId") != expected_manifest_id:
-              raise SystemExit("manifest semantic id mismatch")
-          for record in manifest.get("files", []):
-              target = (root / str(record.get("path", ""))).resolve()
-              if root not in target.parents or not target.is_file():
-                  raise SystemExit("manifest references a missing artifact")
-              if target.suffix == ".json":
-                  json.loads(target.read_text(encoding="utf-8"))
-              digest = hashlib.sha256(target.read_bytes()).hexdigest()
-              if digest != record.get("sha256"):
-                  raise SystemExit("manifest artifact hash mismatch")
-          file_hashes = {str(record.get("path")): str(record.get("sha256")) for record in manifest.get("files", [])}
-          for artifact in manifest.get("artifacts", []):
-              uri = str(artifact.get("uri", ""))
-              if file_hashes.get(uri) is None or artifact.get("contentHash") != f"sha256:{file_hashes[uri]}":
-                  raise SystemExit("manifest artifact content hash mismatch")
+          from insider_turning_engine.export import (
+              dashboard_publication_policy,
+              validate_dashboard_directory,
+          )
+
+          manifest = validate_dashboard_directory(Path("app/dist/data"))
+          publishable, _ = dashboard_publication_policy(manifest)
+          if not publishable:
+              raise SystemExit("dashboard artifact does not satisfy Pages publication policy")
           PY
       - uses: actions/configure-pages@v5
         with:

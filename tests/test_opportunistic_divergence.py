@@ -97,3 +97,19 @@ def test_features_reject_future_accepted_or_knowledge_rows() -> None:
         cluster_features(frame, as_of=date(2026, 1, 1))
     with pytest.raises(ValueError, match="knowledge_at"):
         divergence_features(frame, as_of=date(2026, 1, 1))
+
+
+def test_date_only_divergence_context_cutoff_is_us_session_close() -> None:
+    trades = _trades([("owner", date(2026, 1, 2), "P", 100.0, 10.0)])
+
+    with pytest.raises(ValueError, match="available_at"):
+        divergence_features(
+            trades,
+            as_of=date(2026, 1, 2),
+            price_context={
+                "0000000001": {
+                    "price_weakness_score": 80.0,
+                    "available_at": datetime(2026, 1, 2, 21, 0, 1, tzinfo=UTC),
+                }
+            },
+        )

@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import httpx
@@ -12,6 +12,13 @@ from insider_turning_engine.ingestion.market import (
 )
 
 FIXTURE = "tests/fixtures/daily_market.csv"
+
+
+def test_daily_provider_availability_uses_us_session_close() -> None:
+    provider = CsvMarketDataProvider(FIXTURE, as_of_date=date(2026, 8, 31))
+    bar = provider.get_daily_bars("ACME")[0]
+
+    assert bar.available_at == datetime(2026, 8, 3, 20, tzinfo=UTC)
 
 
 def test_csv_provider_normalizes_sorts_and_slices_as_of() -> None:

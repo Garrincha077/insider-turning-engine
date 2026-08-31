@@ -616,7 +616,10 @@
         "secAcceptedThrough",
         "marketSessionThrough",
         "fundamentalsAvailableThrough",
-        "inputHash"
+        "inputHash",
+        "scoreConfigHash",
+        "scoreLineage",
+        "scoreFrozenAt"
       ],
       "properties": {
         "runId": {
@@ -661,6 +664,17 @@
         "inputHash": {
           "type": "string",
           "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "scoreConfigHash": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "scoreLineage": {
+          "type": "string",
+          "pattern": "^config/scoring\\.v1\\.yaml@sha256:[a-f0-9]{64}$"
+        },
+        "scoreFrozenAt": {
+          "$ref": "#/$defs/instant"
         }
       }
     }

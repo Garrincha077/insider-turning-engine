@@ -91,6 +91,17 @@ def test_conviction_rejects_late_filing_and_market_rows() -> None:
         )
 
 
+def test_date_only_conviction_cutoff_is_us_session_close() -> None:
+    row = (
+        _purchases()
+        .head(1)
+        .with_columns(pl.lit(datetime(2025, 12, 1, 21, 0, 1, tzinfo=UTC)).alias("accepted_at"))
+    )
+
+    with pytest.raises(ValueError, match="accepted_at"):
+        conviction_features(row, as_of=date(2025, 12, 1))
+
+
 def test_cost_basis_reclaim_is_inclusive_and_future_purchase_cannot_leak() -> None:
     as_of = date(2026, 3, 2)
     result = cost_basis_reclaim_facts(

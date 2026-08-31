@@ -18,6 +18,8 @@ from typing import Any, cast
 
 import yaml  # type: ignore[import-untyped]
 
+from insider_turning_engine.domain.time import us_equity_session_close
+
 _ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_SIC_MAPPING_PATH = _ROOT / "config" / "sic-sector.v1.yaml"
 IDENTITY_VERSION = "identity.v1"
@@ -133,6 +135,40 @@ def _date(value: Any) -> date | None:
     return None
 
 
+def _instant(value: Any) -> datetime | None:
+    """Preserve knowledge-time precision at the point-in-time boundary.
+
+    Date-only evidence is interpreted at the US regular-session close.  A
+    full timestamp remains exact, so knowledge obtained after that close
+    cannot leak into the same daily snapshot.
+    """
+
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        current = value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+        return current.astimezone(UTC)
+    if isinstance(value, date):
+        return us_equity_session_close(value)
+    if isinstance(value, str):
+        candidate = value.strip()
+        if not candidate:
+            return None
+        if len(candidate) == 10:
+            try:
+                return us_equity_session_close(date.fromisoformat(candidate))
+            except ValueError:
+                return None
+        try:
+            current = datetime.fromisoformat(candidate.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        if current.tzinfo is None:
+            current = current.replace(tzinfo=UTC)
+        return current.astimezone(UTC)
+    return None
+
+
 def normalize_cik(value: Any) -> str | None:
     """Return the SEC CIK as exactly ten digits, or ``None`` if invalid."""
 
@@ -172,15 +208,17 @@ class TickerInterval:
     valid_from: date | None = None
     valid_to: date | None = None
     source: str = "sec"
-    knowledge_at: date | None = None
+    knowledge_at: date | datetime | None = None
     provenance: Mapping[str, Any] = field(default_factory=dict)
 
     def contains(self, as_of: Any = None) -> bool:
         point = _date(as_of) if as_of is not None else None
+        point_instant = _instant(as_of) if as_of is not None else None
+        known = _instant(self.knowledge_at)
         if point is None:
             return self.knowledge_at is None
         return (
-            (self.knowledge_at is None or self.knowledge_at <= point)
+            (known is None or (point_instant is not None and known <= point_instant))
             and (self.valid_from is None or self.valid_from <= point)
             and (self.valid_to is None or point < self.valid_to)
         )
@@ -269,7 +307,7 @@ def _interval_from_record(record: Any, *, default_source: str = "filing") -> Tic
             record, ("valid_to",), ("validTo",), ("effective_to",), ("effectiveTo",), default=None
         )
     )
-    knowledge_at = _date(
+    knowledge_at = _instant(
         _nested(
             record,
             ("knowledge_at",),
@@ -366,6 +404,7 @@ class IssuerIdentityIndex:
         cik: Any,
         as_of: Any = None,
         filing_issuer_trading_symbol: Any = None,
+        filing_ticker_known_at: Any = None,
     ) -> IdentityResolution:
         normalized = normalize_cik(cik)
         if normalized is None:
@@ -376,15 +415,42 @@ class IssuerIdentityIndex:
                 provenance={"source": "invalid_cik", "version": self.version},
             )
         filing_ticker = normalize_ticker(filing_issuer_trading_symbol)
-        if filing_ticker:
+        point = _date(as_of) if as_of is not None else None
+        point_instant = _instant(as_of) if as_of is not None else None
+        filing_known = _instant(filing_ticker_known_at)
+        if filing_ticker and (
+            point is None
+            or (
+                filing_known is not None
+                and point_instant is not None
+                and filing_known <= point_instant
+            )
+        ):
             return self._resolution(
                 normalized,
                 filing_ticker,
                 {
                     "source": "filing_issuerTradingSymbol",
                     "method": "filing_preferred",
+                    "knowledge_at": filing_known.isoformat() if filing_known else None,
                     "version": self.version,
                     "historical_mapping_caveat": False,
+                },
+            )
+        current = self.sec_current_mapping.get(normalized)
+        if current is not None and point is None:
+            return self._resolution(
+                normalized,
+                current.ticker,
+                {
+                    "source": "sec_current_mapping",
+                    "method": "current_mapping_fallback",
+                    "version": self.version,
+                    "historical_mapping_caveat": True,
+                    "caveat": (
+                        "SEC current mapping is not a historical ticker map; "
+                        "use valid-time intervals for backtests."
+                    ),
                 },
             )
         candidates = [
@@ -403,6 +469,7 @@ class IssuerIdentityIndex:
                 ),
                 reverse=True,
             )[0]
+            chosen_known = _instant(chosen.knowledge_at)
             return self._resolution(
                 normalized,
                 chosen.ticker,
@@ -411,18 +478,25 @@ class IssuerIdentityIndex:
                     "method": "valid_time_interval",
                     "valid_from": chosen.valid_from.isoformat() if chosen.valid_from else None,
                     "valid_to": chosen.valid_to.isoformat() if chosen.valid_to else None,
+                    "knowledge_at": chosen_known.isoformat() if chosen_known is not None else None,
                     "version": self.version,
                     "historical_mapping_caveat": False,
                 },
             )
-        current = self.sec_current_mapping.get(normalized)
-        if current is not None:
+        current_known = _instant(current.knowledge_at) if current is not None else None
+        if (
+            current is not None
+            and current_known is not None
+            and point_instant is not None
+            and current_known <= point_instant
+        ):
             return self._resolution(
                 normalized,
                 current.ticker,
                 {
                     "source": "sec_current_mapping",
                     "method": "current_mapping_fallback",
+                    "knowledge_at": current_known.isoformat(),
                     "version": self.version,
                     "historical_mapping_caveat": True,
                     "caveat": (
@@ -435,10 +509,20 @@ class IssuerIdentityIndex:
             normalized,
             None,
             {
-                "source": "unresolved",
+                "source": (
+                    "sec_current_mapping_withheld"
+                    if current is not None and point is not None
+                    else "unresolved"
+                ),
                 "method": "no_point_in_time_mapping",
                 "version": self.version,
-                "historical_mapping_caveat": False,
+                "historical_mapping_caveat": current is not None and point is not None,
+                "caveat": (
+                    "SEC current mapping was withheld because it has no point-in-time "
+                    "knowledge evidence."
+                    if current is not None and point is not None
+                    else None
+                ),
             },
         )
 
@@ -446,7 +530,17 @@ class IssuerIdentityIndex:
         if isinstance(record_or_cik, (str, int)):
             return self.resolve_ticker(record_or_cik, as_of)
         cik, _name, filing_ticker, _exchange, _sic = _issuer_fields(record_or_cik)
-        return self.resolve_ticker(cik, as_of, filing_ticker)
+        filing_known_at = _nested(
+            record_or_cik,
+            ("knowledge_at",),
+            ("knowledgeAt",),
+            ("accepted_at",),
+            ("acceptedAt",),
+            ("timestamps", "knowledge_at"),
+            ("timestamps", "knowledgeAt"),
+            default=None,
+        )
+        return self.resolve_ticker(cik, as_of, filing_ticker, filing_known_at)
 
     def _resolution(
         self, cik: str, ticker: str | None, provenance: Mapping[str, Any]
@@ -542,15 +636,20 @@ def evaluate_security_universe(
     )
     reasons: list[str] = []
     point = _date(as_of) if as_of is not None else None
+    point_instant = _instant(as_of) if as_of is not None else None
     if point is not None:
-        knowledge_at = _date(
+        knowledge_at = _instant(
             _get(record, "knowledge_at", "knowledgeAt", "accepted_at", "acceptedAt")
         )
         valid_from = _date(
             _get(record, "valid_from", "validFrom", "effective_from", "effectiveFrom")
         )
         valid_to = _date(_get(record, "valid_to", "validTo", "effective_to", "effectiveTo"))
-        if knowledge_at is not None and knowledge_at > point:
+        if (
+            knowledge_at is not None
+            and point_instant is not None
+            and knowledge_at > point_instant
+        ):
             reasons.append("membership_known_after_as_of")
         if valid_from is not None and valid_from > point:
             reasons.append("membership_not_yet_effective")
@@ -722,10 +821,16 @@ def resolve_ticker_as_of(
     cik: Any,
     as_of: Any = None,
     filing_issuer_trading_symbol: Any = None,
+    filing_ticker_known_at: Any = None,
 ) -> IdentityResolution:
     """Functional convenience wrapper for point-in-time ticker resolution."""
 
-    return index.resolve_ticker(cik, as_of, filing_issuer_trading_symbol)
+    return index.resolve_ticker(
+        cik,
+        as_of,
+        filing_issuer_trading_symbol,
+        filing_ticker_known_at,
+    )
 
 
 __all__ = [

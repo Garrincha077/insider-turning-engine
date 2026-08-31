@@ -3,8 +3,9 @@
 This document describes the intended, reproducible research contract. It does
 not certify live data quality or performance. The executable authority for v1
 weights and thresholds is [`config/scoring.v1.yaml`](../config/scoring.v1.yaml);
-the schemas and accepted architecture decisions are the interchange and
-lineage contracts.
+the matching [`config/scoring.v1.lock.json`](../config/scoring.v1.lock.json)
+attests its exact bytes, lineage, freeze time, and source commit. The schemas
+and accepted architecture decisions are the interchange and lineage contracts.
 
 ## Information boundary and data lifecycle
 
@@ -53,6 +54,12 @@ components reject a score. Weights are frozen in `scoring.v1` and must sum to
 | Divergence | price weakness 0.35; insider activity percentile 0.35; acceleration cluster 0.20; absence of relevant sales 0.10 |
 | Turn | base structure 0.35; ordinary RS turn 0.25; Mansfield market 0.15; Mansfield sector 0.10; volume accumulation 0.10; cost-basis reclaim 0.05 |
 | Total | divergence 0.25; conviction 0.15; cluster 0.10; opportunistic 0.10; base 0.10; ordinary RS 0.10; Mansfield RS 0.10; volume 0.05; fundamental 0.05 |
+
+The current lock attests these weights and thresholds, but the configuration
+does not yet specify every raw-feature-to-`[0, 100]` transform used by Turn and
+Total. It is therefore a config-drift guard, not yet a complete methodological
+freeze. Those transforms and their implementation lineage must be reviewed,
+versioned, and re-locked on a clean commit before sealed OOS is opened.
 
 The Total model is the sole exception: a null fundamental excludes that factor
 and renormalizes the other weights (the null is recorded in
@@ -126,9 +133,13 @@ timestamped feature must be available no later than that event session's
 daily close; timezone-aware timestamps are compared at full precision.
 
 Each evaluated signal carries `scoring.v1`, the frozen scoring-config hash,
-lineage, and a timezone-aware `frozen_at` timestamp. One run must share that
-provenance, frozen before OOS begins. Missing future bars, including a missing
-intermediate low/bar in the MAE path, are retained as named attrition or
+lineage, and the exact timezone-aware `frozen_at` value from the checked-in
+lock. One run must share that provenance. The lock proves which configuration
+was frozen and when; it does not by itself prove that an analyst had not
+already inspected historical OOS outcomes. Formal PASS therefore separately
+requires an explicit `temporal_valid` attestation that the OOS result remained
+sealed until the scoring decision was final. Missing future bars, including a
+missing intermediate low/bar in the MAE path, are retained as named attrition or
 quality evidence, never converted to zero return. The final report also lists
 adjustment-basis, survivorship, missing issuer/ticker identity, missing sector,
 and missing-return counts.

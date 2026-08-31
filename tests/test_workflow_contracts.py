@@ -61,8 +61,11 @@ def test_daily_has_fixture_mode_quality_gate_state_lease_and_release() -> None:
         "retention-days:",
         "PAGES_BASE_PATH",
         "group: pages",
-        "MANIFEST_ID_MISMATCH",
-        "QUALITY_STATUS_MISMATCH",
+        "validate_dashboard_directory",
+        "dashboard_publication_policy",
+        "sec.cursor.pending",
+        '--run-id "$(cat run/run-id)"',
+        "run_gh_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}_daily_pipeline",
     ):
         assert required in text
     assert "state branch contains forbidden paths" in text
@@ -89,6 +92,11 @@ def test_daily_uses_live_sec_incremental_cursor_and_fail_closed_universe() -> No
     assert "alerts.sqlite" in text
     assert "10 MiB operational-state limit" in text
     assert "publishable_quality" in text
+    assert "sec-batch-committed.sha256" in text
+    assert "alerts.sqlite.corrupt-*" in text
+    assert "uv run python - <<'PY'\n          import json, os" in text
+    assert 'echo "MARKET_SESSION=$market_session" >> "$GITHUB_ENV"' in text
+    assert '--as-of "${MARKET_SESSION:?market session was not established}"' in text
 
 
 def test_quarterly_release_contains_only_normalized_staging() -> None:
@@ -100,9 +108,14 @@ def test_quarterly_release_contains_only_normalized_staging() -> None:
         "\n  daily:", 1
     )[0]
     assert "Validate normalized SEC Parquet staging" in text
-    assert "find \"$partition\" -maxdepth 1 -type f -name '*.parquet'" in text
-    assert 'tar -czf "$archive" -C data/staging/sec' in release
-    assert 'gh release upload "$release_tag" "$archive" --clobber' in release
+    assert "pl.read_parquet" in text
+    assert "parse-success quality gate failed" in text
+    assert '-czf "$archive" -C data/staging/sec' in release
+    assert "immutable SEC release assets differ" in release
+    assert 'cmp -s "${archive}.sha256"' in release
+    assert "--sort=name" in release
+    assert "sha256sum" in release
+    assert "--clobber" not in release
     assert 'gh release create "$release_tag" "$archive"' in release
     assert "data/cache/sec" not in release
     assert ".zip" not in release
@@ -120,13 +133,26 @@ def test_fixture_job_is_offline_and_state_allowlist_includes_only_small_state() 
     assert "run/public/data" in text
 
 
+def test_tagged_dashboard_release_is_deterministic_and_immutable() -> None:
+    _, text = _workflow(DAILY)
+    release = text.split("  release:", 1)[1]
+
+    assert "--sort=name" in release
+    assert "sha256sum" in release
+    assert "immutable dashboard release assets differ" in release
+    assert 'cmp -s "${archive}.sha256"' in release
+    assert "--clobber" not in release
+    assert 'gh release create "$GITHUB_REF_NAME" "$archive" "${archive}.sha256"' in release
+
+
 def test_pages_validates_manifest_and_hashes_before_upload() -> None:
     _, text = _workflow(PAGES)
     assert "manifest.json" in text
-    assert "hash mismatch" in text
-    assert "semantic id mismatch" in text
-    assert "artifact content hash mismatch" in text
-    assert "frozen contracts" in text
+    assert "validate_dashboard_directory" in text
+    assert "dashboard_publication_policy" in text
+    assert "uv run python - <<'PY'" in text
+    assert "uv sync --all-groups --frozen" in text
+    assert "actions/setup-python@v5" in text
     assert text.index("Validate atomic dashboard snapshot") < text.index(
         "actions/upload-pages-artifact@v3"
     )

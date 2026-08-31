@@ -102,15 +102,52 @@ jobs:
         run: |
           set -euo pipefail
           partition="data/staging/sec/year=${{ steps.quarter.outputs.year }}/quarter=${{ steps.quarter.outputs.quarter }}"
-          test -s "$partition/manifest.json"
-          mapfile -t parquet_files < <(find "$partition" -maxdepth 1 -type f -name '*.parquet' -print)
-          ((${#parquet_files[@]} > 0)) || {
-            echo "normalized SEC staging has no Parquet tables"
-            exit 1
-          }
-          for parquet in "${parquet_files[@]}"; do
-            test -s "$parquet"
-          done
+          PARTITION="$partition" uv run python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          import polars as pl
+
+          root = Path(os.environ["PARTITION"])
+          manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+          if manifest.get("source") != "sec" or manifest.get("schema_version") != "1.0":
+              raise SystemExit("invalid SEC staging manifest contract")
+          tables = manifest.get("tables")
+          if not isinstance(tables, list) or not tables:
+              raise SystemExit("normalized SEC staging has no Parquet tables")
+          expected = {"manifest.json"}
+          parsed_rows = 0
+          for table in tables:
+              path = str(table["path"])
+              target = root / path
+              if Path(path).name != path or not path.endswith(".parquet") or path in expected:
+                  raise SystemExit("invalid SEC staging table path")
+              content = target.read_bytes()
+              if hashlib.sha256(content).hexdigest() != table["sha256"]:
+                  raise SystemExit("SEC staging table hash mismatch")
+              rows = pl.read_parquet(target).height
+              if rows != table["rows"]:
+                  raise SystemExit("SEC staging table row count mismatch")
+              parsed_rows += rows
+              expected.add(path)
+          quarantined = int(manifest.get("quarantined_rows", -1))
+          if quarantined > 0:
+              expected.add("quarantine.jsonl")
+          actual = {path.name for path in root.iterdir() if path.is_file()}
+          if actual != expected:
+              raise SystemExit("SEC staging contains missing or unreferenced files")
+          total = parsed_rows + quarantined
+          rate = parsed_rows / total if total else 0.0
+          if (
+              parsed_rows != manifest.get("parsed_rows")
+              or total != manifest.get("total_rows")
+              or abs(rate - float(manifest.get("parse_success_rate", -1))) > 1e-12
+              or rate < 0.995
+          ):
+              raise SystemExit("SEC staging parse-success quality gate failed")
+          PY
       - name: Publish idempotent versioned SEC Release artifact
         env:
           GH_TOKEN: ${{ github.token }}
@@ -120,11 +157,19 @@ jobs:
           version="${{ steps.quarter.outputs.year }}-q${{ steps.quarter.outputs.quarter }}"
           release_tag="sec-${version}"
           archive="insider-turning-sec-${version}.tar.gz"
-          tar -czf "$archive" -C data/staging/sec "year=${{ steps.quarter.outputs.year }}/quarter=${{ steps.quarter.outputs.quarter }}"
+          tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
+            -czf "$archive" -C data/staging/sec "year=${{ steps.quarter.outputs.year }}/quarter=${{ steps.quarter.outputs.quarter }}"
+          sha256sum "$archive" > "${archive}.sha256"
           if gh release view "$release_tag" >/dev/null 2>&1; then
-            gh release upload "$release_tag" "$archive" --clobber
+            existing_dir="$(mktemp -d)"
+            gh release download "$release_tag" --pattern "${archive}*" --dir "$existing_dir"
+            cmp -s "$archive" "$existing_dir/$archive" && \
+              cmp -s "${archive}.sha256" "$existing_dir/${archive}.sha256" || {
+              echo "immutable SEC release assets differ from regenerated quarter"
+              exit 1
+            }
           else
-            gh release create "$release_tag" "$archive" \
+            gh release create "$release_tag" "$archive" "${archive}.sha256" \
               --title "SEC normalized dataset ${version}" \
               --notes "Versioned normalized SEC Parquet staging for ${version}."
           fi
@@ -160,7 +205,7 @@ jobs:
           set -euo pipefail
           rm -rf run
           mkdir -p run/{staging,warehouse,public/data,alerts,state,components}
-          echo "run_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}" > run/run-id
+          echo "run_gh_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}_daily_pipeline" > run/run-id
       - name: Restore SEC cursor from orphan state branch
         id: state-restore
         shell: bash
@@ -208,10 +253,15 @@ jobs:
             }
             END { exit !(valid && count > 0) }
           ' "$cik_file"; then
+            # The live cursor remains the last published checkpoint.  SEC may
+            # advance only a pending copy until the resulting PASS snapshot
+            # proves that it includes the whole fetched batch.
+            cp run/state/sec.cursor run/state/sec.cursor.pending 2>/dev/null || true
             uv run insider-turning update-sec \
               --cik-file "$cik_file" \
-              --cursor-file run/state/sec.cursor \
+              --cursor-file run/state/sec.cursor.pending \
               --output run/staging/sec-incremental.json \
+              --run-id "$(cat run/run-id)" \
               --execute
           # Keep a deployment-provided XML as a deterministic local fallback.
           # It is useful for replay, but is never synthesized when absent.
@@ -220,6 +270,7 @@ jobs:
               --xml data/incoming/sec.xml \
               --accession "$(jq -r .accession data/incoming/sec.json)" \
               --source-url "$(jq -r .sourceUrl data/incoming/sec.json)" \
+              --run-id "$(cat run/run-id)" \
               --output run/staging/sec-incremental.json
           else
             echo "SEC CIK universe is unavailable; marking run degraded" | tee run/staging/sec-warning.txt
@@ -234,6 +285,18 @@ jobs:
               --csv-path data/incoming/market.csv \
               --output run/warehouse/market.parquet \
               --as-of "$(date -u +%F)"
+            market_session="$(uv run python - <<'PY'
+          import polars as pl
+
+          session = pl.read_parquet("run/warehouse/market.parquet").select(
+              pl.col("date").max()
+          ).item()
+          if session is None:
+              raise SystemExit("market input contains no eligible sessions")
+          print(session.isoformat())
+          PY
+            )"
+            echo "MARKET_SESSION=$market_session" >> "$GITHUB_ENV"
           else
             echo "market input is unavailable; marking run degraded" | tee run/staging/market-warning.txt
           fi
@@ -246,7 +309,7 @@ jobs:
             uv run insider-turning build-features \
               --market run/warehouse/market.parquet \
               --output run/warehouse/price-features.parquet \
-              --as-of "$(date -u +%F)"
+              --as-of "${MARKET_SESSION:?market session was not established}"
           else
             echo "feature stage skipped because market stage was degraded"
           fi
@@ -295,72 +358,25 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
-          import hashlib, json, os
+          uv run python - <<'PY'
+          import json, os
           from pathlib import Path
 
+          from insider_turning_engine.export.dashboard import (
+              DashboardExportError,
+              dashboard_publication_policy,
+              validate_dashboard_directory,
+          )
+
           root = Path("run/public/data")
-          manifest_path = root / "manifest.json"
           publishable = False
           alerts_allowed = False
           reasons = []
           try:
-              manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-              required = {"manifestId", "runId", "versions", "watermarks", "quality", "files", "artifacts"}
-              missing = required - set(manifest)
-              if missing:
-                  reasons.append("MANIFEST_REQUIRED_FIELD_MISSING")
-              if not isinstance(manifest.get("files"), list) or not manifest["files"]:
-                  reasons.append("MANIFEST_HAS_NO_FILES")
-              if manifest.get("status") not in {"SUCCEEDED", "DEGRADED"}:
-                  reasons.append("INVALID_MANIFEST_STATUS")
-              if manifest.get("scoreVersion") != "scoring.v1":
-                  reasons.append("INVALID_SCORE_VERSION")
-              expected_versions = {
-                  "scoring": "scoring.v1",
-                  "stateModel": "state.v1",
-                  "canonicalSchema": "1.0.0",
-                  "signalSchema": "1.0.0",
-              }
-              if manifest.get("versions") != expected_versions:
-                  reasons.append("INVALID_MANIFEST_VERSIONS")
-              quality = manifest.get("quality", {})
-              disposition = quality.get("disposition")
-              if disposition == "BLOCKED":
-                  reasons.append("QUALITY_GATE_BLOCKED")
-              elif disposition not in {"PASS", "DEGRADED"}:
-                  reasons.append("QUALITY_GATE_MISSING")
-              if (manifest.get("status") == "SUCCEEDED") != (disposition == "PASS"):
-                  reasons.append("QUALITY_STATUS_MISMATCH")
-              semantic = {key: value for key, value in manifest.items() if key != "manifestId"}
-              expected_manifest_id = "mft_" + hashlib.sha256(
-                  (json.dumps(semantic, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
-              ).hexdigest()[:32]
-              if manifest.get("manifestId") != expected_manifest_id:
-                  reasons.append("MANIFEST_ID_MISMATCH")
-              for record in manifest.get("files", []):
-                  rel = str(record.get("path", ""))
-                  target = (root / rel).resolve()
-                  if root.resolve() not in target.parents or not target.is_file():
-                      reasons.append("MISSING_SNAPSHOT_ARTIFACT")
-                      continue
-                  if target.suffix == ".json":
-                      json.loads(target.read_text(encoding="utf-8"))
-                  digest = hashlib.sha256(target.read_bytes()).hexdigest()
-                  if digest != record.get("sha256"):
-                      reasons.append("SNAPSHOT_HASH_MISMATCH")
-              file_hashes = {
-                  str(record.get("path")): str(record.get("sha256"))
-                  for record in manifest.get("files", [])
-              }
-              for artifact in manifest.get("artifacts", []):
-                  uri = str(artifact.get("uri", ""))
-                  if file_hashes.get(uri) is None or artifact.get("contentHash") != f"sha256:{file_hashes[uri]}":
-                      reasons.append("ARTIFACT_HASH_MISMATCH")
-              publishable = not reasons
-              alerts_allowed = publishable and disposition == "PASS"
-          except (OSError, ValueError, TypeError, json.JSONDecodeError):
-              reasons.append("INVALID_SNAPSHOT")
+              manifest = validate_dashboard_directory(root)
+              publishable, alerts_allowed = dashboard_publication_policy(manifest)
+          except (DashboardExportError, OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+              reasons.append(f"INVALID_SNAPSHOT:{type(exc).__name__}")
           Path("run/staging/quality.json").write_text(
               json.dumps({"publishable": publishable, "alertsAllowed": alerts_allowed, "issues": reasons}, sort_keys=True) + "\n",
               encoding="utf-8",
@@ -384,11 +400,13 @@ jobs:
               echo "Telegram credentials are not configured; retaining candidates in the outbox"
               uv run insider-turning send-alerts \
               --candidates run/alerts/candidates.json \
-              --outbox run/state/alerts.sqlite
+              --outbox run/state/alerts.sqlite \
+              --manifest run/public/data/manifest.json
             else
               uv run insider-turning send-alerts \
                 --candidates run/alerts/candidates.json \
-                --outbox run/state/alerts.sqlite --execute
+                --outbox run/state/alerts.sqlite \
+                --manifest run/public/data/manifest.json --execute
             fi
           else
             echo "No alert candidate file; retaining an empty auditable outbox"
@@ -412,10 +430,72 @@ jobs:
           # degraded/experimental or blocked run must replay its inputs on
           # the next invocation instead of silently moving the checkpoint.
           publishable_quality="$(jq -r '.quality.disposition // ""' run/public/data/manifest.json 2>/dev/null || true)"
-          if [[ "$publishable_quality" == "PASS" ]]; then
+          sec_batch_included=true
+          if [[ -f run/state/sec.cursor.pending ]] && ! cmp -s run/state/sec.cursor.pending state-previous/sec.cursor; then
+            sec_batch_included=false
+            if [[ "$publishable_quality" == "PASS" ]] && \
+               [[ -s run/staging/sec-incremental.json ]] && \
+               python - <<'PY'
+          import base64
+          import hashlib
+          import json
+          from datetime import datetime
+          from pathlib import Path
+
+          def instant(value: str) -> datetime:
+              return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+          batch_path = Path("run/staging/sec-incremental.json")
+          commit_marker = Path("run/staging/sec-batch-committed.sha256")
+          payload = json.loads(batch_path.read_text(encoding="utf-8"))
+          manifest = json.loads(Path("run/public/data/manifest.json").read_text(encoding="utf-8"))
+          if not commit_marker.is_file():
+              raise SystemExit("SEC batch has no canonical commit evidence")
+          committed_hash = commit_marker.read_text(encoding="utf-8").strip()
+          actual_hash = hashlib.sha256(batch_path.read_bytes()).hexdigest()
+          if committed_hash != actual_hash:
+              raise SystemExit("SEC canonical commit evidence does not match the fetched batch")
+          if payload.get("failures") or payload.get("quarantines"):
+              raise SystemExit("SEC batch is incomplete")
+          accepted = [
+              instant(record["timestamps"]["acceptedAt"])
+              for record in payload.get("records", [])
+              if record.get("timestamps", {}).get("acceptedAt")
+          ]
+          if not accepted:
+              raise SystemExit("pending SEC cursor has no represented records")
+          cursor_doc = json.loads(Path("run/state/sec.cursor.pending").read_text(encoding="utf-8"))
+          cursor = str(cursor_doc["cursor"])
+          decoded = json.loads(base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)))
+          cursor_accepted = instant(str(decoded[1]))
+          watermark = manifest.get("watermarks", {}).get("secAcceptedThrough")
+          if watermark is None:
+              raise SystemExit("PASS snapshot has no SEC watermark")
+          batch_max = max(accepted)
+          if cursor_accepted != batch_max or instant(str(watermark)) < batch_max:
+              raise SystemExit("PASS snapshot does not include the pending SEC batch")
+          PY
+            then
+              sec_batch_included=true
+              cp run/state/sec.cursor.pending run/state/sec.cursor
+            else
+              echo "pending SEC cursor was not proven by the PASS snapshot; preserving prior cursor"
+            fi
+          fi
+          state_can_advance=false
+          if [[ "$publishable_quality" == "PASS" && "$sec_batch_included" == "true" ]]; then
+            state_can_advance=true
+          fi
+          if [[ "$state_can_advance" == "true" ]]; then
             jq '.watermarks // {}' run/public/data/manifest.json > run/state/watermarks.json
           else
             cp state-previous/watermarks.json run/state/watermarks.json 2>/dev/null || echo '{}' > run/state/watermarks.json
+          fi
+          # A quarantined corrupt ledger is audit evidence, not an empty
+          # replacement for cooldown/history state. Preserve the last remote
+          # ledger until an operator explicitly resolves the recovery.
+          if compgen -G 'run/state/alerts.sqlite.corrupt-*' > /dev/null; then
+            rm -f run/state/alerts.sqlite
           fi
           for file in "${allowed[@]}"; do
             [[ "$file" == "watermarks.json" ]] && continue
@@ -456,7 +536,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: daily-run-${{ github.run_id }}
-          path: run/staging
+          path: |
+            run/staging
+            run/state/alerts.sqlite.corrupt-*
           if-no-files-found: warn
           retention-days: 14
       - name: Retain validated dashboard bundle
@@ -485,6 +567,18 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Create clean dashboard artifact target
+        shell: bash
+        run: |
+          rm -rf app/public/data
+          mkdir -p app/public/data
       - uses: actions/download-artifact@v4
         with:
           name: dashboard-${{ github.run_id }}
@@ -493,24 +587,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
-          import hashlib, json
+          uv run python - <<'PY'
           from pathlib import Path
-          root = Path("app/public/data").resolve()
-          manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
-          required = {"manifestId", "runId", "versions", "watermarks", "quality", "files", "artifacts"}
-          if not required <= set(manifest) or not isinstance(manifest.get("files"), list) or not manifest["files"]:
-              raise SystemExit("manifest is incomplete")
-          if manifest.get("status") not in {"SUCCEEDED", "DEGRADED"}:
-              raise SystemExit("invalid manifest status")
-          for record in manifest.get("files", []):
-              target = (root / str(record["path"])).resolve()
-              if root not in target.parents or not target.is_file():
-                  raise SystemExit("manifest references a missing snapshot")
-              if target.suffix == ".json":
-                  json.loads(target.read_text(encoding="utf-8"))
-              if hashlib.sha256(target.read_bytes()).hexdigest() != record["sha256"]:
-                  raise SystemExit("manifest snapshot hash mismatch")
+
+          from insider_turning_engine.export.dashboard import (
+              dashboard_publication_policy,
+              validate_dashboard_directory,
+          )
+
+          manifest = validate_dashboard_directory(Path("app/public/data"))
+          publishable, _ = dashboard_publication_policy(manifest)
+          if not publishable:
+              raise SystemExit("dashboard artifact does not satisfy Pages publication policy")
           PY
       - uses: actions/setup-node@v4
         with:
@@ -560,11 +648,18 @@ jobs:
           path: dashboard
       - name: Build versioned release archive
         shell: bash
-        run: tar -czf "insider-turning-${GITHUB_REF_NAME}.tar.gz" -C dashboard .
+        run: |
+          set -euo pipefail
+          archive="insider-turning-${GITHUB_REF_NAME}.tar.gz"
+          tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
+            -czf "$archive" -C dashboard .
+          sha256sum "$archive" > "${archive}.sha256"
       - uses: actions/upload-artifact@v4
         with:
           name: insider-turning-${{ github.ref_name }}
-          path: insider-turning-${{ github.ref_name }}.tar.gz
+          path: |
+            insider-turning-${{ github.ref_name }}.tar.gz
+            insider-turning-${{ github.ref_name }}.tar.gz.sha256
           if-no-files-found: error
           retention-days: 90
       - name: Attach archive to the versioned GitHub Release
@@ -575,7 +670,13 @@ jobs:
           set -euo pipefail
           archive="insider-turning-${GITHUB_REF_NAME}.tar.gz"
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" "$archive" --clobber
+            existing_dir="$(mktemp -d)"
+            gh release download "$GITHUB_REF_NAME" --pattern "${archive}*" --dir "$existing_dir"
+            cmp -s "$archive" "$existing_dir/$archive" && \
+              cmp -s "${archive}.sha256" "$existing_dir/${archive}.sha256" || {
+              echo "immutable dashboard release assets differ from regenerated tag"
+              exit 1
+            }
           else
-            gh release create "$GITHUB_REF_NAME" "$archive" --generate-notes
+            gh release create "$GITHUB_REF_NAME" "$archive" "${archive}.sha256" --generate-notes
           fi

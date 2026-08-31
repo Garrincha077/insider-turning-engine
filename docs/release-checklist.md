@@ -12,6 +12,9 @@ performance and must not be presented as investment advice.
 - [ ] Run `uv run insider-turning daily --fixture-only`; confirm no network,
       alert, or secret side effect.
 - [ ] Validate JSON Schemas and deterministic replay/hash behavior.
+- [ ] Confirm the frozen score contract includes every raw-to-0--100 component
+      transform, not only model weights. Pin the exact implementation and
+      config lineage on a clean reviewed commit before opening sealed OOS.
 
 ## Data and quality
 
@@ -44,6 +47,10 @@ performance and must not be presented as investment advice.
 
 ## Dashboard and GitHub Pages artifacts
 
+- [ ] Confirm the daily run itself produces score components,
+      `dashboard-input.json`, alert candidates, and SEC batch-commit evidence
+      from canonical inputs. File-existence checks or pre-baked fixture output
+      do not satisfy this end-to-end gate.
 - [ ] Run `uv run insider-turning export-dashboard --source <source> --output
       app/public/data` and inspect `dashboard.json` plus `manifest.json`.
 - [ ] Confirm the manifest pins versions/watermarks and SHA-256 hashes for all

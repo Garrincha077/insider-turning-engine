@@ -8,7 +8,6 @@ total score; it is excluded and the remaining weights are renormalized.
 
 from __future__ import annotations
 
-import hashlib
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -17,7 +16,12 @@ from typing import Any
 
 import yaml  # type: ignore[import-untyped]
 
-DEFAULT_CONFIG = Path(__file__).resolve().parents[3] / "config" / "scoring.v1.yaml"
+from insider_turning_engine.domain.scoring_lock import (
+    DEFAULT_CONFIG,
+    DEFAULT_LOCK,
+    ScoringLockError,
+    load_scoring_lock,
+)
 
 
 class ScoreValidationError(ValueError):
@@ -34,6 +38,8 @@ class ScoreResult:
     reason_codes: tuple[str, ...]
     score_config_hash: str = ""
     score_lineage: str = ""
+    frozen_at: str = ""
+    score_source_commit: str = ""
 
 
 def _number(name: str, value: Any) -> float:
@@ -53,9 +59,22 @@ def _number(name: str, value: Any) -> float:
 class ScoreEngine:
     """Load frozen YAML weights and produce transparent component scores."""
 
-    def __init__(self, config_path: str | Path = DEFAULT_CONFIG) -> None:
+    def __init__(
+        self,
+        config_path: str | Path = DEFAULT_CONFIG,
+        *,
+        lock_path: str | Path | None = None,
+    ) -> None:
         self.config_path = Path(config_path)
-        config_bytes = self.config_path.read_bytes()
+        self.lock_path = (
+            Path(lock_path)
+            if lock_path is not None
+            else (
+                DEFAULT_LOCK
+                if self.config_path.resolve() == DEFAULT_CONFIG.resolve()
+                else self.config_path.with_suffix(".lock.json")
+            )
+        )
         with self.config_path.open("r", encoding="utf-8") as stream:
             raw = yaml.safe_load(stream)
         if not isinstance(raw, Mapping) or not isinstance(raw.get("models"), Mapping):
@@ -64,14 +83,26 @@ class ScoreEngine:
         self.score_version = str(raw.get("version", "unknown"))
         if self.score_version != "scoring.v1":
             raise ScoreValidationError("scoring config version must be scoring.v1")
-        self.score_config_hash = "sha256:" + hashlib.sha256(config_bytes).hexdigest()
         try:
             lineage_path = self.config_path.resolve().relative_to(
                 Path(__file__).resolve().parents[3]
             )
         except ValueError:
             lineage_path = Path(self.config_path.name)
-        self.score_lineage = f"{lineage_path.as_posix()}@{self.score_config_hash}"
+        try:
+            lock = load_scoring_lock(
+                self.config_path,
+                self.lock_path,
+                expected_score_version=self.score_version,
+                config_lineage_path=lineage_path.as_posix(),
+            )
+        except ScoringLockError as exc:
+            raise ScoreValidationError(str(exc)) from exc
+        self.score_config_hash = lock.config_hash
+        self.score_lineage = lock.lineage
+        self.score_frozen_at = lock.frozen_at
+        self.score_frozen_at_iso = lock.frozen_at_iso
+        self.score_source_commit = lock.source_commit
         self._validate_weights()
 
     def _validate_weights(self) -> None:
@@ -124,6 +155,8 @@ class ScoreEngine:
             reason_codes=reasons,
             score_config_hash=self.score_config_hash,
             score_lineage=self.score_lineage,
+            frozen_at=self.score_frozen_at_iso,
+            score_source_commit=self.score_source_commit,
         )
 
     def market_pulse(self, **components: float) -> ScoreResult:
@@ -143,4 +176,10 @@ class ScoreEngine:
         return self.score("total", components)
 
 
-__all__ = ["DEFAULT_CONFIG", "ScoreEngine", "ScoreResult", "ScoreValidationError"]
+__all__ = [
+    "DEFAULT_CONFIG",
+    "DEFAULT_LOCK",
+    "ScoreEngine",
+    "ScoreResult",
+    "ScoreValidationError",
+]

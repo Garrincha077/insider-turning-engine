@@ -18,13 +18,14 @@ The first command reports the network/quality prerequisites without fetching.
 The fixture command parses `tests/fixtures/form*.xml` and
 `tests/fixtures/daily_market.csv` without network or alerts and is the safest
 smoke test. `daily` without `--fixture-only` reports the scheduled plan; it
-does not itself execute the scheduled stages. The scheduled workflow expects
+does not itself execute the scheduled stages. The scheduled workflow can read
 deployment-provided `data/incoming/sec.xml` and `data/incoming/sec.json` (with
-`accession` and `sourceUrl`), `data/incoming/market.csv`, and per-ticker
-component JSON under `run/components/`. It reads the ticker list from
-`TICKER_UNIVERSE_FILE` or `config/universe.txt`, and uses the checked-in
-`config/scoring.v1.yaml`; missing incoming files or universe/component inputs
-make the run degraded or prevent publication.
+`accession` and `sourceUrl`) plus `data/incoming/market.csv`. The repository
+does not yet implement the canonical aggregation adapter that produces
+per-ticker score components, `dashboard-input.json`, alert candidates, and the
+SEC canonical commit marker. The workflow therefore remains intentionally
+fail-closed for live publication; existence checks and fixture data are not a
+substitute for that missing producer graph.
 
 ## Source ingestion
 
@@ -101,6 +102,20 @@ uv run insider-turning export-dashboard `
 
 Supplying both files executes the backtest and writes an `EXPERIMENTAL`
 report; omitting either input returns the command's `DRY_RUN` plan.
+Each event may set `exposure_family` to `FULL_ENGINE`, `SIMPLE_PS`,
+`UNIQUE_BUYER_RATIO`, `LARGEST_BUYS`, or `CLUSTER_BUYS`. The formal gate uses
+only separately supplied benchmark streams; it never relabels full-engine
+events as a simple strategy. Missing benchmark families therefore keep the
+result `INCONCLUSIVE`.
+
+Formal PASS also requires `--validation-evidence path/to/evidence.json` with
+numeric parse/market/core-coverage rates and actual JSON booleans for
+canonical, schema, hash, temporal, benchmark-freshness, and
+`scoring_methodology_complete` controls. Omitting the file or the methodology
+attestation can never produce PASS. The `temporal_valid` flag is an explicit
+review attestation that the sealed OOS result was not inspected before
+`config/scoring.v1.lock.json` froze the exact v1 config; do not infer it merely
+from historical event dates.
 
 `export-dashboard` validates the compact dashboard shape and atomically replaces
 the destination only after files and the manifest validate. Check

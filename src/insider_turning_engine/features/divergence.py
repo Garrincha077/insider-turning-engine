@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import UTC, date, datetime, timedelta
 from math import isfinite
 from typing import Any
 
 import polars as pl
 
 from insider_turning_engine.domain.models import CanonicalTransaction
+from insider_turning_engine.domain.time import us_equity_session_close
 
 from .conviction import _buy, _effective, _finite, _number, _rows, _validate
 
@@ -69,7 +70,7 @@ def _as_stamp(as_of: date | datetime) -> tuple[date, datetime]:
     if isinstance(as_of, datetime):
         stamp = as_of if as_of.tzinfo is not None else as_of.replace(tzinfo=UTC)
         return stamp.date(), stamp.astimezone(UTC)
-    return as_of, datetime.combine(as_of, time.max, tzinfo=UTC)
+    return as_of, us_equity_session_close(as_of)
 
 
 def _context_records(context: Any, *, as_of: date | datetime) -> list[dict[str, Any]]:

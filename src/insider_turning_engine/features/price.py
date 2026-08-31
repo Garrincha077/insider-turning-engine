@@ -14,6 +14,7 @@ from typing import Any
 
 import polars as pl
 
+from insider_turning_engine.domain.time import us_equity_session_close
 from insider_turning_engine.ingestion.market.base import DailyBar
 
 BarsInput = (
@@ -127,11 +128,7 @@ def _prepare(
         # dates. Explicit synthetic/unknown fixtures may omit it; provider
         # rows must carry a pinned timestamp and are filtered at full precision.
         available = pl.col("available_at").cast(pl.Datetime(time_zone="UTC"), strict=False)
-        cutoff_stamp = (
-            as_of
-            if isinstance(as_of, datetime)
-            else datetime.combine(cutoff, datetime.max.time(), tzinfo=UTC)
-        )
+        cutoff_stamp = as_of if isinstance(as_of, datetime) else us_equity_session_close(cutoff)
         if cutoff_stamp.tzinfo is None:
             cutoff_stamp = cutoff_stamp.replace(tzinfo=UTC)
         cutoff_stamp = cutoff_stamp.astimezone(UTC)

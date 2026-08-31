@@ -1,8 +1,11 @@
+import json
 import math
+from pathlib import Path
 
 import pytest
 
 from insider_turning_engine.scoring import (
+    DEFAULT_LOCK,
     CompanyState,
     ScoreEngine,
     ScoreValidationError,
@@ -45,6 +48,23 @@ def test_score_weights_and_null_fundamental_renormalization() -> None:
     assert total.score_config_hash.startswith("sha256:")
     assert total.score_lineage.startswith("config/scoring.v1.yaml@")
     assert total.score_lineage.endswith("@" + total.score_config_hash)
+    assert total.frozen_at == engine.score_frozen_at_iso
+    assert total.score_source_commit == engine.score_source_commit
+
+
+def test_score_lock_rejects_hash_and_timestamp_tampering(tmp_path: Path) -> None:
+    lock = json.loads(DEFAULT_LOCK.read_text(encoding="utf-8"))
+    lock["scoreConfigHash"] = "sha256:" + "0" * 64
+    forged = tmp_path / "forged.lock.json"
+    forged.write_text(json.dumps(lock), encoding="utf-8")
+    with pytest.raises(ScoreValidationError, match="lock hash"):
+        ScoreEngine(lock_path=forged)
+
+    lock = json.loads(DEFAULT_LOCK.read_text(encoding="utf-8"))
+    lock["frozenAt"] = "not-a-timestamp"
+    forged.write_text(json.dumps(lock), encoding="utf-8")
+    with pytest.raises(ScoreValidationError, match="canonical UTC timestamp"):
+        ScoreEngine(lock_path=forged)
 
 
 def test_score_rejects_missing_future_like_and_non_finite_inputs() -> None:

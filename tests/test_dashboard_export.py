@@ -11,8 +11,11 @@ from insider_turning_engine.export.dashboard import (
     DashboardExportError,
     _manifest_digest,
     _validate_manifest,
+    dashboard_publication_policy,
     export_dashboard,
+    validate_dashboard_directory,
 )
+from insider_turning_engine.scoring import ScoreEngine
 
 ROOT = Path(__file__).parents[1]
 
@@ -42,17 +45,20 @@ def _data() -> dict[str, object]:
     return {
         "schemaVersion": "1.0.0",
         "scoreVersion": "scoring.v1",
-        "generatedAt": "2026-08-30T00:00:00Z",
+        "generatedAt": "2026-08-31T00:00:00Z",
         "status": "VALIDATED",
         "marketPulse": 72,
         "pulsePercentile": 88,
-        "pulseHistory": [{"date": "2026-08-30", "market": 72, "technology": 70, "financials": 66}],
+        "pulseHistory": [{"date": "2026-08-31", "market": 72, "technology": 70, "financials": 66}],
         "candidates": [_candidate()],
         "filings": [],
         "backtest": [],
         "companySeries": [],
         "quality": {
             "disposition": "PASS",
+            "canonicalValid": True,
+            "methodologyComplete": True,
+            "benchmarkFresh": True,
             "parseSuccess": {
                 "numerator": 100,
                 "denominator": 100,
@@ -75,6 +81,118 @@ def _data() -> dict[str, object]:
                 "result": "PASS",
             },
             "issues": [],
+        },
+    }
+
+
+def _signal_snapshot(scoring: ScoreEngine) -> dict[str, object]:
+    return {
+        "schemaVersion": "1.0.0",
+        "snapshotId": "sig_1234567890123456",
+        "issuer": {
+            "cik": "0000000001",
+            "name": "ABC Corp",
+            "ticker": "ABC",
+            "sector": "Technology",
+        },
+        "asOf": "2026-08-31T00:00:00Z",
+        "generatedAt": "2026-08-31T00:00:00Z",
+        "versions": {"scoring": "scoring.v1", "stateModel": "state.v1"},
+        "scores": {
+            "marketPulse": {
+                "score": 70,
+                "components": {
+                    "transaction": 70,
+                    "uniqueInsiders": 70,
+                    "dollar": 70,
+                    "volume": 70,
+                    "companyBreadth": 70,
+                    "convictionWeighted": 70,
+                },
+            },
+            "companyInsider": {
+                "score": 75,
+                "components": {
+                    "conviction": 75,
+                    "cluster": 75,
+                    "opportunistic": 75,
+                    "netBuyingAbsenceSales": 75,
+                },
+            },
+            "divergence": {
+                "score": 80,
+                "components": {
+                    "priceWeakness": 80,
+                    "insiderActivityPercentile": 80,
+                    "accelerationCluster": 80,
+                    "absenceRelevantSales": 80,
+                },
+            },
+            "turn": {
+                "score": 85,
+                "components": {
+                    "baseStructure": 85,
+                    "ordinaryRsTurn": 85,
+                    "mansfieldMarket": 85,
+                    "mansfieldSector": 85,
+                    "volumeAccumulation": 85,
+                    "costBasisReclaim": 85,
+                },
+            },
+            "total": {
+                "score": 91,
+                "components": {
+                    "divergence": 91,
+                    "conviction": 91,
+                    "cluster": 91,
+                    "opportunistic": 91,
+                    "base": 91,
+                    "ordinaryRs": 91,
+                    "mansfieldRs": 91,
+                    "volume": 91,
+                    "fundamental": None,
+                },
+                "excludedFactors": ["fundamental"],
+            },
+        },
+        "state": {
+            "current": "EARLY_TURN",
+            "previous": "BASE_FORMING",
+            "changed": True,
+            "enteredAt": "2026-08-31T00:00:00Z",
+            "evaluationSequence": 1,
+            "criteria": {
+                "return3m": -0.1,
+                "closeBelowMa50": False,
+                "drawdownFrom52WeekHigh": -0.25,
+                "insiderScore": 75,
+                "qualifiedBuyAgeDays": 5,
+                "priorAccumulation": True,
+                "noNew52WeekLow20Sessions": True,
+                "volatilityContraction": True,
+                "volumeDryUp": True,
+                "ma20Flattening": True,
+                "ordinaryRsImprovingFourWeeks": True,
+                "mansfieldMarketFourWeekSlope": 0.1,
+                "closeAboveMa50DaysLast10": 6,
+                "mansfieldMarket": 0.2,
+                "costBasisReclaim": True,
+                "consecutiveFailures": 0,
+                "new52WeekLow": False,
+            },
+        },
+        "alerts": [],
+        "qualityFlags": ["LOW_CONFIDENCE"],
+        "provenance": {
+            "runId": "run_1234567890123456",
+            "transactionRevisionIds": [],
+            "secAcceptedThrough": None,
+            "marketSessionThrough": "2026-08-31",
+            "fundamentalsAvailableThrough": None,
+            "inputHash": "sha256:" + "1" * 64,
+            "scoreConfigHash": scoring.score_config_hash,
+            "scoreLineage": scoring.score_lineage,
+            "scoreFrozenAt": scoring.score_frozen_at_iso,
         },
     }
 
@@ -115,6 +233,15 @@ def test_manifest_schema_exposes_exporter_content_address_contract() -> None:
     assert schema["properties"]["scoreVersion"] == {"const": "scoring.v1"}
     assert schema["properties"]["files"]["items"] == {"$ref": "#/$defs/fileRecord"}
     assert schema["$defs"]["fileRecord"]["required"] == ["path", "size", "sha256"]
+    assert {"canonicalValid", "methodologyComplete", "benchmarkFresh"} <= set(
+        schema["$defs"]["quality"]["required"]
+    )
+    signal_schema = json.loads(
+        (ROOT / "schemas" / "signal-snapshot.schema.json").read_text(encoding="utf-8")
+    )
+    assert {"scoreConfigHash", "scoreLineage", "scoreFrozenAt"} <= set(
+        signal_schema["$defs"]["provenance"]["required"]
+    )
 
 
 def test_checked_in_sample_is_explicitly_degraded_and_content_addressed() -> None:
@@ -141,6 +268,56 @@ def test_missing_quality_evidence_is_blocked_and_not_validated(tmp_path: Path) -
     assert manifest["status"] == "DEGRADED"
     assert manifest["quality"]["disposition"] == "BLOCKED"
     assert manifest["quality"]["parseSuccess"]["result"] == "NOT_EVALUATED"
+    assert manifest["quality"]["canonicalValid"] is False
+    assert manifest["quality"]["methodologyComplete"] is False
+    assert manifest["quality"]["benchmarkFresh"] is False
+    assert dashboard_publication_policy(manifest) == (False, False)
+
+
+def test_pages_policy_allows_healthy_experimental_but_keeps_alerts_off(
+    tmp_path: Path,
+) -> None:
+    data = _data()
+    data["status"] = "EXPERIMENTAL"
+    quality = data["quality"]
+    assert isinstance(quality, dict)
+    quality["disposition"] = "DEGRADED"
+    quality["issues"] = ["OOS_INCONCLUSIVE"]
+    result = export_dashboard(data, tmp_path / "data", run_id="run_1234567890123456")
+    manifest = validate_dashboard_directory(result.output_dir)
+
+    assert dashboard_publication_policy(manifest) == (True, False)
+
+
+def test_degraded_quality_measurements_must_still_be_coherent(tmp_path: Path) -> None:
+    data = _data()
+    data["status"] = "EXPERIMENTAL"
+    quality = data["quality"]
+    assert isinstance(quality, dict)
+    quality["disposition"] = "DEGRADED"
+    quality["issues"] = ["OOS_INCONCLUSIVE"]
+    quality["marketCoverage"] = {
+        "numerator": 1,
+        "denominator": 100,
+        "rate": 1.0,
+        "threshold": 0.9,
+        "result": "PASS",
+    }
+
+    with pytest.raises(DashboardExportError, match="incoherent quality measurement"):
+        export_dashboard(data, tmp_path / "data", run_id="run_1234567890123456")
+
+
+@pytest.mark.parametrize(
+    "field", ["canonicalValid", "methodologyComplete", "benchmarkFresh"]
+)
+def test_pass_requires_explicit_canonical_methodology_and_benchmark_evidence(
+    tmp_path: Path, field: str
+) -> None:
+    data = _data()
+    data["quality"][field] = False  # type: ignore[index]
+    with pytest.raises(DashboardExportError, match="JSON Schema|complete passing evidence"):
+        export_dashboard(data, tmp_path / field, run_id="run_1234567890123456")
 
 
 def test_dataframe_input_and_repeat_are_byte_deterministic(tmp_path: Path) -> None:
@@ -166,6 +343,22 @@ def test_rejects_non_finite_data_and_preserves_previous_snapshot(tmp_path: Path)
     assert (output / "dashboard.json").read_bytes() == previous
 
 
+def test_export_recovers_previous_directory_before_rejecting_new_input(tmp_path: Path) -> None:
+    output = tmp_path / "data"
+    export_dashboard(_data(), output, run_id="run_1234567890123456")
+    previous = (output / "dashboard.json").read_bytes()
+    backup = tmp_path / ".data.previous"
+    output.replace(backup)
+    bad = _data()
+    bad["marketPulse"] = float("nan")
+
+    with pytest.raises(DashboardExportError, match="non-finite"):
+        export_dashboard(bad, output, run_id="run_1234567890123457")
+
+    assert (output / "dashboard.json").read_bytes() == previous
+    assert not backup.exists()
+
+
 def test_missing_required_metric_is_rejected_without_creating_output(tmp_path: Path) -> None:
     data = _data()
     del data["marketPulse"]
@@ -181,3 +374,55 @@ def test_manifest_artifact_must_match_content_addressed_file(tmp_path: Path) -> 
     manifest["manifestId"] = "mft_" + _manifest_digest(manifest)[:32]
     with pytest.raises(DashboardExportError, match="artifact hash"):
         _validate_manifest(manifest)
+
+
+def test_signal_reference_must_be_unique_and_match_file_inventory(tmp_path: Path) -> None:
+    scoring = ScoreEngine()
+    data = _data()
+    data["signals"] = [_signal_snapshot(scoring)]
+    result = export_dashboard(data, tmp_path / "signals", run_id="run_1234567890123456")
+    manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
+
+    bad_hash = dict(manifest)
+    bad_hash["signals"] = [dict(manifest["signals"][0])]
+    bad_hash["signals"][0]["contentHash"] = "sha256:" + "0" * 64
+    bad_hash["manifestId"] = "mft_" + _manifest_digest(bad_hash)[:32]
+    with pytest.raises(DashboardExportError, match="signal hash"):
+        _validate_manifest(bad_hash)
+
+    duplicate = dict(manifest)
+    duplicate["signals"] = [dict(manifest["signals"][0]), dict(manifest["signals"][0])]
+    duplicate["signals"][1]["snapshotId"] = "sig_abcdefghijklmnop"
+    duplicate["manifestId"] = "mft_" + _manifest_digest(duplicate)[:32]
+    with pytest.raises(DashboardExportError, match="unique"):
+        _validate_manifest(duplicate)
+
+    forged = _data()
+    forged["signals"] = [dict(data["signals"][0])]  # type: ignore[index]
+    forged["signals"][0]["provenance"] = dict(  # type: ignore[index]
+        forged["signals"][0]["provenance"]  # type: ignore[index]
+    )
+    forged["signals"][0]["provenance"]["scoreConfigHash"] = (  # type: ignore[index]
+        "sha256:" + "0" * 64
+    )
+    with pytest.raises(DashboardExportError, match="scoring provenance"):
+        export_dashboard(forged, tmp_path / "forged", run_id="run_1234567890123456")
+
+    forged_time = _data()
+    forged_time["signals"] = [dict(data["signals"][0])]  # type: ignore[index]
+    forged_time["signals"][0]["provenance"] = dict(  # type: ignore[index]
+        forged_time["signals"][0]["provenance"]  # type: ignore[index]
+    )
+    forged_time["signals"][0]["provenance"]["scoreFrozenAt"] = (  # type: ignore[index]
+        "2015-12-31T20:00:00Z"
+    )
+    with pytest.raises(DashboardExportError, match="scoring.v1 lock"):
+        export_dashboard(forged_time, tmp_path / "forged-time", run_id="run_1234567890123456")
+
+
+def test_publication_directory_rejects_unreferenced_files(tmp_path: Path) -> None:
+    result = export_dashboard(_data(), tmp_path / "data", run_id="run_1234567890123456")
+    (result.output_dir / "stale.json").write_text("{}\n", encoding="utf-8")
+
+    with pytest.raises(DashboardExportError, match="unreferenced"):
+        validate_dashboard_directory(result.output_dir)

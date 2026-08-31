@@ -206,8 +206,41 @@
     "quality": {
       "type": "object",
       "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "disposition": {
+                "const": "PASS"
+              }
+            },
+            "required": [
+              "disposition"
+            ]
+          },
+          "then": {
+            "properties": {
+              "canonicalValid": {
+                "const": true
+              },
+              "methodologyComplete": {
+                "const": true
+              },
+              "benchmarkFresh": {
+                "const": true
+              },
+              "issues": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ],
       "required": [
         "disposition",
+        "canonicalValid",
+        "methodologyComplete",
+        "benchmarkFresh",
         "parseSuccess",
         "marketCoverage",
         "coreBranchCoverage",
@@ -220,6 +253,15 @@
             "DEGRADED",
             "BLOCKED"
           ]
+        },
+        "canonicalValid": {
+          "type": "boolean"
+        },
+        "methodologyComplete": {
+          "type": "boolean"
+        },
+        "benchmarkFresh": {
+          "type": "boolean"
         },
         "parseSuccess": {
           "allOf": [

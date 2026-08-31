@@ -1,5 +1,17 @@
 """Publication helpers for the static dashboard bundle."""
 
-from .dashboard import DashboardExport, DashboardExportError, export_dashboard
+from .dashboard import (
+    DashboardExport,
+    DashboardExportError,
+    dashboard_publication_policy,
+    export_dashboard,
+    validate_dashboard_directory,
+)
 
-__all__ = ["DashboardExport", "DashboardExportError", "export_dashboard"]
+__all__ = [
+    "DashboardExport",
+    "DashboardExportError",
+    "dashboard_publication_policy",
+    "export_dashboard",
+    "validate_dashboard_directory",
+]

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, date, datetime
 
 import pytest
@@ -11,6 +12,7 @@ from insider_turning_engine.backtest import (
     EventGroup,
     ForwardReturn,
     PeriodResults,
+    ReportingError,
     ValidationEvidence,
     bootstrap_median_ci,
     build_backtest_report,
@@ -18,6 +20,10 @@ from insider_turning_engine.backtest import (
     summarize_events,
 )
 from insider_turning_engine.backtest.reporting import BenchmarkComparison
+from insider_turning_engine.scoring import ScoreEngine
+
+_LOCKED_SCORING = ScoreEngine()
+_FROZEN_AT = _LOCKED_SCORING.score_frozen_at
 
 _EVIDENCE = ValidationEvidence(
     parse_success_rate=0.995,
@@ -28,6 +34,7 @@ _EVIDENCE = ValidationEvidence(
     hash_valid=True,
     temporal_valid=True,
     benchmark_fresh=True,
+    scoring_methodology_complete=True,
 )
 
 
@@ -41,6 +48,9 @@ def _events(values: list[float], *, name: str = "group") -> tuple[BacktestEvent,
             score=float(index % 101),
             accepted_at=datetime(2020, 1, 2, 14, tzinfo=UTC),
             sector="Technology",
+            score_config_hash=_LOCKED_SCORING.score_config_hash,
+            score_lineage=_LOCKED_SCORING.score_lineage,
+            frozen_at=_FROZEN_AT,
         )
         rows.append(
             BacktestEvent(
@@ -195,6 +205,7 @@ def test_failed_validation_evidence_is_fail_closed() -> None:
         hash_valid=True,
         temporal_valid=True,
         benchmark_fresh=False,
+        scoring_methodology_complete=True,
     )
 
     assessment = evaluate_formal_gate(
@@ -207,6 +218,49 @@ def test_failed_validation_evidence_is_fail_closed() -> None:
 
     assert assessment.status == "FAIL"
     assert "benchmark freshness" in assessment.reason
+
+
+def test_incomplete_scoring_methodology_cannot_pass_oos_gate() -> None:
+    full = _comparison("full_engine", [0.20] * 220)
+    simple = _comparison("simple_ps", [0.01] * 220)
+
+    assessment = evaluate_formal_gate(
+        [full, simple],
+        sealed_oos_events=220,
+        validation_evidence=replace(_EVIDENCE, scoring_methodology_complete=False),
+        iterations=300,
+        seed=7,
+    )
+
+    assert assessment.status == "FAIL"
+    assert "scoring methodology" in assessment.reason
+
+
+def test_string_validation_flags_cannot_be_truthy_coerced() -> None:
+    full = _comparison("full_engine", [0.20] * 220)
+    simple = _comparison("simple_ps", [0.01] * 220)
+    malformed = {
+        "parse_success_rate": 0.995,
+        "market_coverage": 0.90,
+        "core_branch_coverage": 0.85,
+        "canonical_valid": "false",
+        "schema_valid": True,
+        "hash_valid": True,
+        "temporal_valid": True,
+        "benchmark_fresh": True,
+        "scoring_methodology_complete": True,
+    }
+
+    assessment = evaluate_formal_gate(
+        [full, simple],
+        sealed_oos_events=220,
+        validation_evidence=malformed,
+        iterations=300,
+        seed=7,
+    )
+
+    assert assessment.status == "FAIL"
+    assert "malformed" in assessment.reason
 
 
 def test_report_discloses_adjustment_and_data_quality_counts() -> None:
@@ -229,3 +283,65 @@ def test_report_discloses_adjustment_and_data_quality_counts() -> None:
     assert report.data_quality.sector_missing_count == 0
     assert report.data_quality.missing_return_count == 0
     assert "ADJUSTMENT_BASIS_COUNTS" in {caveat.code for caveat in report.caveats}
+    assert report.scoring_provenance.score_config_hash == _LOCKED_SCORING.score_config_hash
+    assert report.scoring_provenance.score_lineage == _LOCKED_SCORING.score_lineage
+    assert report.scoring_provenance.frozen_at == _FROZEN_AT
+    assert report.gate is not None and report.gate.status == "INCONCLUSIVE"
+    assert {row.name for row in report.benchmark_table} == {
+        "full_engine",
+        "simple_benchmark",
+    }
+
+
+def test_oos_report_rejects_score_sensitivity() -> None:
+    events = _events([0.10])
+    results = PeriodResults(
+        BacktestPeriod.OOS,
+        EventGroup("top_decile", BacktestPeriod.OOS, events),
+        EventGroup("simple_benchmark", BacktestPeriod.OOS, events),
+    )
+
+    with pytest.raises(ReportingError, match="forbidden for sealed OOS"):
+        build_backtest_report(
+            results,
+            sensitivity_scenarios={"threshold-search": {"scores": [60, 70], "threshold": 65}},
+        )
+
+
+def test_report_rejects_mixed_scoring_provenance() -> None:
+    events = list(_events([0.10, 0.20]))
+    events[1] = replace(
+        events[1],
+        signal=replace(events[1].signal, frozen_at=_FROZEN_AT.replace(second=8)),
+    )
+    rows = tuple(events)
+    results = PeriodResults(
+        BacktestPeriod.VALIDATION,
+        EventGroup("top_decile", BacktestPeriod.VALIDATION, rows),
+        EventGroup("simple_benchmark", BacktestPeriod.VALIDATION, rows),
+    )
+
+    with pytest.raises(ReportingError, match="share one frozen"):
+        build_backtest_report(results, period=BacktestPeriod.VALIDATION)
+
+
+def test_report_rejects_missing_scoring_provenance() -> None:
+    event = _events([0.10])[0]
+    event = replace(
+        event,
+        signal=replace(
+            event.signal,
+            score_config_hash=None,
+            score_lineage=None,
+            frozen_at=None,
+        ),
+    )
+    rows = (event,)
+    results = PeriodResults(
+        BacktestPeriod.VALIDATION,
+        EventGroup("top_decile", BacktestPeriod.VALIDATION, rows),
+        EventGroup("simple_benchmark", BacktestPeriod.VALIDATION, rows),
+    )
+
+    with pytest.raises(ReportingError, match="score_config_hash"):
+        build_backtest_report(results, period=BacktestPeriod.VALIDATION)

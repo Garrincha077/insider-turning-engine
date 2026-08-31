@@ -35,6 +35,7 @@ class SQLiteOutbox:
         self._db = self._open_database(path)
         try:
             self._initialize()
+            self._recover_abandoned_claims()
         except sqlite3.DatabaseError as exc:
             self._db.close()
             if self._path is None or not self._is_corrupt_database(exc):
@@ -83,6 +84,50 @@ class SQLiteOutbox:
             );
             """
         )
+
+    def _recover_abandoned_claims(self) -> None:
+        """Make claims left by a stopped process terminal before any send.
+
+        A durable ``CLAIMED`` row is intentionally ambiguous after restart:
+        the previous process may have reached the provider before it stopped.
+        At-most-once delivery therefore forbids reclaiming it automatically.
+        """
+
+        rows = self._db.execute(
+            "SELECT idempotency_key, channel FROM deliveries WHERE status='CLAIMED'"
+        ).fetchall()
+        if not rows:
+            return
+        at = datetime.now(UTC)
+        error = "process restarted with an unresolved durable claim"
+        with self._lock:
+            self._db.execute("BEGIN IMMEDIATE")
+            try:
+                for row in rows:
+                    cursor = self._db.execute(
+                        """UPDATE deliveries
+                           SET status=?, attempted_at=?, error=?
+                           WHERE idempotency_key=? AND channel=? AND status='CLAIMED'""",
+                        (
+                            DeliveryStatus.UNCERTAIN.value,
+                            _iso(at),
+                            error,
+                            row["idempotency_key"],
+                            row["channel"],
+                        ),
+                    )
+                    if cursor.rowcount == 1:
+                        self._record_history(
+                            row["idempotency_key"],
+                            row["channel"],
+                            DeliveryStatus.UNCERTAIN,
+                            at,
+                            error,
+                        )
+                self._db.commit()
+            except Exception:
+                self._db.rollback()
+                raise
 
     @staticmethod
     def _is_corrupt_database(error: sqlite3.DatabaseError) -> bool:
@@ -173,10 +218,7 @@ class SQLiteOutbox:
     def _cooldown_override(candidate: AlertCandidate, previous: AlertCandidate) -> bool:
         state_changed = candidate.state is not None and candidate.state != previous.state
         severity_changed = previous.severity is not None and candidate.severity != previous.severity
-        important_changed = (
-            previous.important_flag is not None
-            and candidate.important_flag != previous.important_flag
-        )
+        important_changed = candidate.important_flag and not previous.important_flag
         delta = candidate.absolute_score_delta
         if delta is None:
             delta = abs(candidate.score - previous.score)
@@ -197,24 +239,60 @@ class SQLiteOutbox:
                 ).fetchone()
                 if existing:
                     status = DeliveryStatus(existing["status"])
-                else:
-                    latest = self._latest_sent(candidate, channel, at)
-                    if latest:
-                        previous = AlertCandidate.from_mapping(json.loads(latest["candidate_json"]))
-                        status = (
-                            DeliveryStatus.CLAIMED
-                            if self._cooldown_override(candidate, previous)
-                            else DeliveryStatus.SUPPRESSED
+                    if status == DeliveryStatus.CLAIMED:
+                        # A second owner cannot distinguish an in-flight send
+                        # from a process that stopped after provider acceptance.
+                        # Resolve the durable ambiguity without sending again.
+                        status = DeliveryStatus.UNCERTAIN
+                        error = "durable claim already exists"
+                        self._db.execute(
+                            """UPDATE deliveries
+                               SET status=?, attempted_at=?, error=?
+                               WHERE idempotency_key=? AND channel=? AND status='CLAIMED'""",
+                            (
+                                status.value,
+                                _iso(at),
+                                error,
+                                candidate.idempotency_key,
+                                channel,
+                            ),
                         )
+                        self._record_history(candidate.idempotency_key, channel, status, at, error)
+                else:
+                    claim_error: str | None = None
+                    if self.recovered_path is not None:
+                        # The quarantined ledger may contain sends and cooldown
+                        # history that cannot be reconstructed safely.
+                        status = DeliveryStatus.UNCERTAIN
+                        claim_error = "outbox recovered from corruption; delivery disabled"
                     else:
-                        status = DeliveryStatus.CLAIMED
+                        latest = self._latest_sent(candidate, channel, at)
+                        if latest:
+                            previous = AlertCandidate.from_mapping(
+                                json.loads(latest["candidate_json"])
+                            )
+                            status = (
+                                DeliveryStatus.CLAIMED
+                                if self._cooldown_override(candidate, previous)
+                                else DeliveryStatus.SUPPRESSED
+                            )
+                        else:
+                            status = DeliveryStatus.CLAIMED
                     self._db.execute(
                         """INSERT INTO deliveries
-                           (idempotency_key, channel, status, attempted_at)
-                           VALUES (?, ?, ?, ?)""",
-                        (candidate.idempotency_key, channel, status.value, _iso(at)),
+                           (idempotency_key, channel, status, attempted_at, error)
+                           VALUES (?, ?, ?, ?, ?)""",
+                        (
+                            candidate.idempotency_key,
+                            channel,
+                            status.value,
+                            _iso(at),
+                            claim_error,
+                        ),
                     )
-                    self._record_history(candidate.idempotency_key, channel, status, at)
+                    self._record_history(
+                        candidate.idempotency_key, channel, status, at, claim_error
+                    )
                 self._db.commit()
                 return status
             except Exception:
@@ -236,7 +314,7 @@ class SQLiteOutbox:
         with self._lock:
             self._db.execute("BEGIN IMMEDIATE")
             try:
-                self._db.execute(
+                cursor = self._db.execute(
                     """UPDATE deliveries
                        SET status=?, attempted_at=?, error=?, provider_id=?
                        WHERE idempotency_key=? AND channel=? AND status='CLAIMED'""",
@@ -249,9 +327,23 @@ class SQLiteOutbox:
                         channel,
                     ),
                 )
-                self._record_history(
-                    candidate.idempotency_key, channel, status, at, result.error, result.provider_id
-                )
+                if cursor.rowcount == 1:
+                    self._record_history(
+                        candidate.idempotency_key,
+                        channel,
+                        status,
+                        at,
+                        result.error,
+                        result.provider_id,
+                    )
+                else:
+                    existing = self._db.execute(
+                        "SELECT status FROM deliveries WHERE idempotency_key=? AND channel=?",
+                        (candidate.idempotency_key, channel),
+                    ).fetchone()
+                    if existing is None:
+                        raise ValueError("delivery result has no durable claim")
+                    status = DeliveryStatus(existing["status"])
                 self._db.commit()
             except Exception:
                 self._db.rollback()

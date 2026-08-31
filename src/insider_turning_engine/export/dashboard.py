@@ -19,8 +19,14 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, cast
+
+from jsonschema import Draft202012Validator, FormatChecker
+from jsonschema.exceptions import SchemaError
+
+from insider_turning_engine.domain.scoring_lock import ScoringLockError, load_scoring_lock
 
 
 class DashboardExportError(ValueError):
@@ -76,6 +82,25 @@ _ROW_KEYS: dict[str, tuple[str, ...]] = {
 _OPTIONAL_ROW_KEYS = {"sourceReferences", "sourceReference", "reasonCodes"}
 _STATE_NAMES = {"FALLING", "INSIDER_ACCUMULATION", "BASE_FORMING", "EARLY_TURN", "CONFIRMED_TURN"}
 _DASHBOARD_STATUSES = {"VALIDATED", "EXPERIMENTAL", "STALE"}
+_SCHEMAS_ROOT = Path(__file__).resolve().parents[3] / "schemas"
+
+
+@lru_cache(maxsize=2)
+def _schema_validator(filename: str) -> Draft202012Validator:
+    """Load and check one trusted publication schema exactly once."""
+
+    try:
+        schema = json.loads((_SCHEMAS_ROOT / filename).read_text(encoding="utf-8"))
+        Draft202012Validator.check_schema(schema)
+    except (OSError, json.JSONDecodeError, SchemaError) as exc:
+        raise DashboardExportError(f"publication schema is invalid: {filename}") from exc
+    return Draft202012Validator(schema, format_checker=FormatChecker())
+
+
+def _validate_schema(value: Any, filename: str, label: str) -> None:
+    error = next(iter(_schema_validator(filename).iter_errors(value)), None)
+    if error is not None:
+        raise DashboardExportError(f"{label} violates JSON Schema at {error.json_path}")
 
 
 def export_dashboard(
@@ -106,6 +131,8 @@ def export_dashboard(
     if output_dir is None or isinstance(output_dir, Mapping):
         raise DashboardExportError("output_dir is required")
     destination = Path(output_dir)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    _recover_directory(destination)
     if per_ticker is not None:
         chunk_by_ticker = per_ticker
 
@@ -117,7 +144,6 @@ def export_dashboard(
     publication_run_id = run_id or f"run_{hashlib.sha256(dashboard_bytes).hexdigest()[:32]}"
     _validate_identifier(publication_run_id, "run_id", "run_")
 
-    destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = Path(tempfile.mkdtemp(prefix=f".{destination.name}.tmp-", dir=destination.parent))
     try:
         _write_bytes(temporary / "dashboard.json", dashboard_bytes)
@@ -133,7 +159,7 @@ def export_dashboard(
                 _write_bytes(temporary / rel, _canonical_bytes(chunk))
                 files.append(_file_record(temporary, rel.as_posix()))
 
-        signal_files, signal_refs = _write_signal_snapshots(temporary, data)
+        signal_files, signal_refs = _write_signal_snapshots(temporary, data, publication_run_id)
         files.extend(signal_files)
         artifacts = [
             {
@@ -154,8 +180,8 @@ def export_dashboard(
             artifacts,
             files,
         )
-        _validate_manifest(manifest)
         _write_bytes(temporary / "manifest.json", _canonical_bytes(manifest))
+        validate_dashboard_directory(temporary)
         _replace_directory(temporary, destination)
         temporary = Path()
     finally:
@@ -281,7 +307,9 @@ def _aliases(row: dict[str, Any], field: str) -> dict[str, Any]:
 
 
 def _validate_dashboard(value: Mapping[str, Any]) -> None:
-    if tuple(value) != _DASHBOARD_KEYS:
+    # JSON object ordering is not semantic, and canonical serialization sorts
+    # keys before the publication is read back from disk.
+    if set(value) != set(_DASHBOARD_KEYS):
         raise DashboardExportError("dashboard fields do not match app/lib/dashboard-data.ts")
     if value["schemaVersion"] != "1.0.0":
         raise DashboardExportError("unsupported dashboard schemaVersion")
@@ -357,6 +385,8 @@ def _make_manifest(
 
 
 def _validate_manifest(value: Mapping[str, Any]) -> None:
+    _assert_finite(value)
+    _validate_schema(value, "dashboard-manifest.schema.json", "dashboard manifest")
     required = {
         "schemaVersion",
         "manifestId",
@@ -378,6 +408,8 @@ def _validate_manifest(value: Mapping[str, Any]) -> None:
         raise DashboardExportError(f"manifest missing required fields: {sorted(missing)}")
     _validate_identifier(str(value["manifestId"]), "manifestId", "mft_")
     _validate_identifier(str(value["runId"]), "runId", "run_")
+    if value["schemaVersion"] != "1.0.0" or value["scoreVersion"] != "scoring.v1":
+        raise DashboardExportError("manifest versions do not match frozen contracts")
     if value["manifestId"] != "mft_" + _manifest_digest(value)[:32]:
         raise DashboardExportError("manifestId does not address all semantic fields")
     if value["status"] not in {"SUCCEEDED", "DEGRADED"}:
@@ -433,6 +465,61 @@ def _validate_manifest(value: Mapping[str, Any]) -> None:
             raise DashboardExportError("manifest file path must be unique and relative")
         seen_paths.add(path)
     file_hashes = {str(file["path"]): str(file["sha256"]) for file in value["files"]}
+    signal_keys = {
+        "snapshotId",
+        "issuerCik",
+        "ticker",
+        "state",
+        "totalScore",
+        "uri",
+        "contentHash",
+    }
+    seen_signal_ids: set[str] = set()
+    seen_signal_uris: set[str] = set()
+    for signal in value["signals"]:
+        if not isinstance(signal, Mapping) or set(signal) != signal_keys:
+            raise DashboardExportError("invalid manifest signal reference")
+        snapshot_id = str(signal["snapshotId"])
+        issuer_cik = str(signal["issuerCik"])
+        uri = str(signal["uri"])
+        score = signal["totalScore"]
+        if (
+            snapshot_id in seen_signal_ids
+            or uri in seen_signal_uris
+            or not snapshot_id.startswith("sig_")
+            or not 20 <= len(snapshot_id) <= 68
+            or any(
+                character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
+                for character in snapshot_id[4:]
+            )
+        ):
+            raise DashboardExportError("manifest signal identity and URI must be unique")
+        if len(issuer_cik) != 10 or not issuer_cik.isdigit():
+            raise DashboardExportError("manifest signal issuer CIK is invalid")
+        ticker = signal["ticker"]
+        if ticker is not None and (
+            not isinstance(ticker, str)
+            or not 1 <= len(ticker) <= 15
+            or ticker[0] not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+            or any(
+                character not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-" for character in ticker
+            )
+        ):
+            raise DashboardExportError("manifest signal ticker is invalid")
+        if signal["state"] not in _STATE_NAMES:
+            raise DashboardExportError("manifest signal state is invalid")
+        if (
+            isinstance(score, bool)
+            or not isinstance(score, (int, float))
+            or not math.isfinite(float(score))
+            or not 0 <= float(score) <= 100
+        ):
+            raise DashboardExportError("manifest signal score is invalid")
+        expected_hash = file_hashes.get(uri)
+        if expected_hash is None or signal["contentHash"] != f"sha256:{expected_hash}":
+            raise DashboardExportError("manifest signal hash does not match a file record")
+        seen_signal_ids.add(snapshot_id)
+        seen_signal_uris.add(uri)
     for artifact in value["artifacts"]:
         if not isinstance(artifact, Mapping) or not {
             "kind",
@@ -448,6 +535,104 @@ def _validate_manifest(value: Mapping[str, Any]) -> None:
     _assert_finite(value)
 
 
+def validate_dashboard_directory(directory: str | os.PathLike[str]) -> Mapping[str, Any]:
+    """Validate one complete, closed-world dashboard publication directory."""
+
+    root = Path(directory).resolve()
+    manifest_path = root / "manifest.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+        raise DashboardExportError("dashboard manifest is missing or invalid") from exc
+    if not isinstance(manifest, Mapping):
+        raise DashboardExportError("dashboard manifest must be an object")
+    _validate_manifest(manifest)
+
+    expected_paths = {str(record["path"]) for record in manifest["files"]}
+    actual_paths = {
+        path.relative_to(root).as_posix()
+        for path in root.rglob("*")
+        if path.is_file() and path != manifest_path
+    }
+    if actual_paths != expected_paths:
+        raise DashboardExportError("dashboard directory contains unreferenced or missing files")
+    for record in manifest["files"]:
+        target = (root / str(record["path"])).resolve()
+        try:
+            target.relative_to(root)
+        except ValueError as exc:
+            raise DashboardExportError("manifest file escapes dashboard directory") from exc
+        content = target.read_bytes()
+        if len(content) != record["size"]:
+            raise DashboardExportError("manifest file size mismatch")
+        if hashlib.sha256(content).hexdigest() != record["sha256"]:
+            raise DashboardExportError("manifest file hash mismatch")
+        if target.suffix == ".json":
+            try:
+                json.loads(content)
+            except (UnicodeError, ValueError, TypeError, json.JSONDecodeError) as exc:
+                raise DashboardExportError("manifest references invalid JSON") from exc
+
+    signal_by_uri = {str(signal["uri"]): signal for signal in manifest["signals"]}
+    for uri, reference in signal_by_uri.items():
+        snapshot = json.loads((root / uri).read_text(encoding="utf-8"))
+        _validate_signal_snapshot(snapshot, expected_run_id=str(manifest["runId"]))
+        issuer = snapshot["issuer"]
+        total = snapshot["scores"]["total"]["score"]
+        state = snapshot["state"]["current"]
+        if (
+            snapshot["snapshotId"] != reference["snapshotId"]
+            or issuer["cik"] != reference["issuerCik"]
+            or issuer.get("ticker") != reference["ticker"]
+            or state != reference["state"]
+            or total != reference["totalScore"]
+        ):
+            raise DashboardExportError("manifest signal reference disagrees with its snapshot")
+
+    dashboard_path = root / "dashboard.json"
+    if "dashboard.json" not in expected_paths:
+        raise DashboardExportError("manifest must reference dashboard.json")
+    dashboard = json.loads(dashboard_path.read_text(encoding="utf-8"))
+    if not isinstance(dashboard, Mapping):
+        raise DashboardExportError("dashboard.json must contain an object")
+    _validate_dashboard(dashboard)
+    if dashboard["scoreVersion"] != manifest["scoreVersion"]:
+        raise DashboardExportError("dashboard and manifest score versions disagree")
+    if (dashboard["status"] == "VALIDATED") != (manifest["status"] == "SUCCEEDED"):
+        raise DashboardExportError("dashboard and manifest publication status disagree")
+    return manifest
+
+
+def dashboard_publication_policy(manifest: Mapping[str, Any]) -> tuple[bool, bool]:
+    """Return ``(pages_allowed, alerts_allowed)`` for a validated manifest.
+
+    A methodologically degraded/experimental snapshot may remain visible only
+    when its operational inputs are healthy. Stale benchmarks, invalid
+    canonical data, or any below-threshold measurement block Pages entirely.
+    External alerts additionally require the manifest's full PASS disposition.
+    """
+
+    _validate_manifest(manifest)
+    quality = manifest["quality"]
+    operationally_healthy = (
+        quality["canonicalValid"] is True
+        and quality["methodologyComplete"] is True
+        and quality["benchmarkFresh"] is True
+        and all(
+            quality[name]["result"] == "PASS"
+            for name in ("parseSuccess", "marketCoverage", "coreBranchCoverage")
+        )
+    )
+    pages_allowed = operationally_healthy and quality["disposition"] in {
+        "PASS",
+        "DEGRADED",
+    }
+    alerts_allowed = (
+        pages_allowed and quality["disposition"] == "PASS" and manifest["status"] == "SUCCEEDED"
+    )
+    return pages_allowed, alerts_allowed
+
+
 def _default_quality() -> dict[str, Any]:
     def measurement(threshold: float) -> dict[str, Any]:
         return {
@@ -460,6 +645,9 @@ def _default_quality() -> dict[str, Any]:
 
     return {
         "disposition": "BLOCKED",
+        "canonicalValid": False,
+        "methodologyComplete": False,
+        "benchmarkFresh": False,
         "parseSuccess": measurement(0.995),
         "marketCoverage": measurement(0.9),
         "coreBranchCoverage": measurement(0.85),
@@ -477,6 +665,9 @@ def _validate_quality(value: Any, *, status: str) -> None:
         raise DashboardExportError("manifest quality must be an object")
     required = {
         "disposition",
+        "canonicalValid",
+        "methodologyComplete",
+        "benchmarkFresh",
         "parseSuccess",
         "marketCoverage",
         "coreBranchCoverage",
@@ -487,6 +678,17 @@ def _validate_quality(value: Any, *, status: str) -> None:
     disposition = str(value["disposition"])
     if disposition not in {"PASS", "DEGRADED", "BLOCKED"}:
         raise DashboardExportError("invalid quality disposition")
+    canonical_valid = value["canonicalValid"]
+    methodology_complete = value["methodologyComplete"]
+    benchmark_fresh = value["benchmarkFresh"]
+    if (
+        not isinstance(canonical_valid, bool)
+        or not isinstance(methodology_complete, bool)
+        or not isinstance(benchmark_fresh, bool)
+    ):
+        raise DashboardExportError(
+            "quality validity, methodology, and freshness evidence must be boolean"
+        )
     expected_thresholds = {
         "parseSuccess": 0.995,
         "marketCoverage": 0.90,
@@ -508,25 +710,47 @@ def _validate_quality(value: Any, *, status: str) -> None:
         denominator = measurement["denominator"]
         numerator = measurement["numerator"]
         rate = measurement["rate"]
-        passed = (
+        counts_valid = (
             isinstance(denominator, int)
             and not isinstance(denominator, bool)
-            and denominator > 0
+            and denominator >= 0
             and isinstance(numerator, int)
             and not isinstance(numerator, bool)
             and 0 <= numerator <= denominator
+        )
+        evaluated = denominator > 0 if counts_valid else False
+        rate_valid = (
+            evaluated
             and isinstance(rate, (int, float))
             and not isinstance(rate, bool)
             and math.isfinite(float(rate))
+            and 0.0 <= float(rate) <= 1.0
             and abs(float(rate) - numerator / denominator) <= 1e-9
-            and float(rate) >= threshold
-            and measurement["result"] == "PASS"
         )
+        expected_result = (
+            "PASS"
+            if rate_valid and float(rate) >= threshold
+            else ("FAIL" if rate_valid else "NOT_EVALUATED")
+        )
+        if (
+            not counts_valid
+            or (evaluated and not rate_valid)
+            or (not evaluated and rate is not None)
+            or measurement["result"] != expected_result
+        ):
+            raise DashboardExportError(f"incoherent quality measurement: {name}")
+        passed = expected_result == "PASS"
         all_passed = all_passed and passed
     issues = value["issues"]
     if not isinstance(issues, list) or any(not isinstance(issue, str) for issue in issues):
         raise DashboardExportError("quality issues must be a string list")
-    if disposition == "PASS" and (not all_passed or issues):
+    if disposition == "PASS" and (
+        not all_passed
+        or not canonical_valid
+        or not methodology_complete
+        or not benchmark_fresh
+        or issues
+    ):
         raise DashboardExportError("PASS quality requires complete passing evidence")
     if disposition != "PASS" and not issues:
         raise DashboardExportError("non-PASS quality must explain its issues")
@@ -537,7 +761,7 @@ def _validate_quality(value: Any, *, status: str) -> None:
 
 
 def _write_signal_snapshots(
-    directory: Path, data: Mapping[str, Any]
+    directory: Path, data: Mapping[str, Any], run_id: str
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     snapshots = data.get("signals") or data.get("signalSnapshots") or []
     if hasattr(snapshots, "to_dicts"):
@@ -555,6 +779,7 @@ def _write_signal_snapshots(
     ):
         snapshot = _json_ready(snapshot)
         _assert_finite(snapshot)
+        _validate_signal_snapshot(snapshot, expected_run_id=run_id)
         snapshot_id = str(snapshot.get("snapshotId", ""))
         if not snapshot_id:
             raise DashboardExportError("signal snapshot is missing snapshotId")
@@ -579,6 +804,69 @@ def _write_signal_snapshots(
     return records, refs
 
 
+def _validate_signal_snapshot(value: Any, *, expected_run_id: str) -> None:
+    """Enforce the immutable score identity at the publication boundary.
+
+    The checked-in JSON Schema remains the complete structural contract. This
+    guard duplicates only the security-critical invariants needed by the
+    dependency-light workflow validator.
+    """
+
+    _assert_finite(value)
+    _validate_schema(value, "signal-snapshot.schema.json", "signal snapshot")
+    required = {
+        "schemaVersion",
+        "snapshotId",
+        "issuer",
+        "asOf",
+        "generatedAt",
+        "versions",
+        "scores",
+        "state",
+        "alerts",
+        "qualityFlags",
+        "provenance",
+    }
+    if not isinstance(value, Mapping) or set(value) != required:
+        raise DashboardExportError("signal snapshot does not match the frozen top-level schema")
+    if value["schemaVersion"] != "1.0.0" or value["versions"] != {
+        "scoring": "scoring.v1",
+        "stateModel": "state.v1",
+    }:
+        raise DashboardExportError("signal snapshot versions do not match frozen contracts")
+    provenance = value["provenance"]
+    if not isinstance(provenance, Mapping) or provenance.get("runId") != expected_run_id:
+        raise DashboardExportError("signal snapshot runId does not match its manifest")
+    try:
+        scoring = load_scoring_lock()
+    except ScoringLockError as exc:
+        raise DashboardExportError(f"scoring.v1 lock is invalid: {exc}") from exc
+    if (
+        provenance.get("scoreConfigHash") != scoring.config_hash
+        or provenance.get("scoreLineage") != scoring.lineage
+    ):
+        raise DashboardExportError("signal snapshot scoring provenance is not locked scoring.v1")
+    frozen_at = _parse_aware_instant(provenance.get("scoreFrozenAt"), "scoreFrozenAt")
+    if frozen_at != scoring.frozen_at:
+        raise DashboardExportError("signal snapshot scoreFrozenAt does not match scoring.v1 lock")
+    generated_at = _parse_aware_instant(value["generatedAt"], "generatedAt")
+    _parse_aware_instant(value["asOf"], "asOf")
+    if frozen_at > generated_at:
+        raise DashboardExportError("signal snapshot score was frozen after it was generated")
+
+
+def _parse_aware_instant(value: Any, label: str) -> datetime:
+    if not isinstance(value, str):
+        raise DashboardExportError(f"signal snapshot {label} must be an ISO timestamp")
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise DashboardExportError(f"signal snapshot {label} is invalid") from exc
+    if parsed.tzinfo is None:
+        raise DashboardExportError(f"signal snapshot {label} must include a timezone")
+    return parsed.astimezone(UTC)
+
+
 def _file_record(directory: Path, relative: str) -> dict[str, Any]:
     content = (directory / relative).read_bytes()
     return {
@@ -590,8 +878,7 @@ def _file_record(directory: Path, relative: str) -> dict[str, Any]:
 
 def _replace_directory(temporary: Path, destination: Path) -> None:
     backup = destination.parent / f".{destination.name}.previous"
-    if backup.exists():
-        shutil.rmtree(backup, ignore_errors=True) if backup.is_dir() else backup.unlink()
+    _recover_directory(destination)
     moved_old = False
     try:
         if destination.exists():
@@ -604,6 +891,18 @@ def _replace_directory(temporary: Path, destination: Path) -> None:
         raise
     if backup.exists():
         shutil.rmtree(backup, ignore_errors=True) if backup.is_dir() else backup.unlink()
+
+
+def _recover_directory(destination: Path) -> None:
+    """Restore the last publication after a hard stop between directory swaps."""
+
+    backup = destination.parent / f".{destination.name}.previous"
+    if not backup.exists():
+        return
+    if not destination.exists():
+        os.replace(backup, destination)
+        return
+    shutil.rmtree(backup, ignore_errors=True) if backup.is_dir() else backup.unlink()
 
 
 def _canonical_bytes(value: Any) -> bytes:
@@ -674,4 +973,9 @@ def _safe_filename(value: str) -> str:
     )
 
 
-__all__ = ["DashboardExport", "DashboardExportError", "export_dashboard"]
+__all__ = [
+    "DashboardExport",
+    "DashboardExportError",
+    "export_dashboard",
+    "validate_dashboard_directory",
+]

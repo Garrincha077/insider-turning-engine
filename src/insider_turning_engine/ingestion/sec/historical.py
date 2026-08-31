@@ -19,12 +19,14 @@ import threading
 import time
 import uuid
 import zipfile
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 import polars as pl
@@ -34,12 +36,16 @@ SEC_ARCHIVE_URL_TEMPLATE = (
 )
 MIN_YEAR = 2006
 MAX_RETRY_DELAY_SECONDS = 60.0
+MAX_ARCHIVE_DOWNLOAD_BYTES = 512 * 1024 * 1024
 MAX_MEMBER_BYTES = 250 * 1024 * 1024
 MAX_TOTAL_EXTRACTED_BYTES = 750 * 1024 * 1024
+MAX_ARCHIVE_MEMBERS = 128
 _COPY_CHUNK_BYTES = 1024 * 1024
+SEC_ALLOWED_HOSTS = frozenset({"www.sec.gov", "data.sec.gov"})
 _CONTACT_EMAIL_RE = re.compile(
     r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+"
 )
+_CONTENT_RANGE_RE = re.compile(r"bytes ([0-9]+)-([0-9]+)/([0-9]+)", re.IGNORECASE)
 
 
 class SECDownloadError(RuntimeError):
@@ -230,6 +236,55 @@ def _retry_after(headers: Mapping[str, str]) -> float | None:
             return None
 
 
+def _header_value(headers: Mapping[str, object], name: str) -> str | None:
+    wanted = name.casefold()
+    for key, value in headers.items():
+        if str(key).casefold() == wanted:
+            return str(value)
+    return None
+
+
+def _validate_sec_url(url: str) -> None:
+    parsed = urlparse(url)
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError("SEC URL contains an invalid port") from exc
+    if (
+        parsed.scheme.casefold() != "https"
+        or (parsed.hostname or "").casefold() not in SEC_ALLOWED_HOSTS
+        or port not in {None, 443}
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        raise ValueError("SEC URL is outside the approved HTTPS host allowlist")
+
+
+def _validate_sec_response(
+    response: Any,
+    requested_url: str,
+    *,
+    accepted_content_types: frozenset[str],
+) -> None:
+    _validate_sec_url(requested_url)
+    history = getattr(response, "history", ())
+    if history:
+        raise ValueError("SEC redirects are not allowed")
+    effective_url = str(getattr(response, "url", requested_url) or requested_url)
+    _validate_sec_url(effective_url)
+    if effective_url != requested_url:
+        raise ValueError("SEC response URL differs from the requested URL")
+    status = int(getattr(response, "status_code", 200))
+    if 300 <= status <= 399:
+        raise ValueError("SEC redirects are not allowed")
+    if 200 <= status <= 299:
+        headers = getattr(response, "headers", {})
+        content_type = _header_value(headers, "content-type")
+        media_type = (content_type or "").split(";", 1)[0].strip().casefold()
+        if media_type not in accepted_content_types:
+            raise ValueError(f"SEC response has disallowed Content-Type {media_type!r}")
+
+
 def _response_content(response: Any) -> Iterable[bytes]:
     iterator = getattr(response, "iter_bytes", None)
     if callable(iterator):
@@ -241,6 +296,115 @@ def _response_content(response: Any) -> Iterable[bytes]:
     yield bytes(payload)
 
 
+def _bounded_response_body(response: Any, max_bytes: int) -> bytes:
+    if max_bytes < 1:
+        raise ValueError("SEC response size limit must be positive")
+    headers = getattr(response, "headers", {})
+    declared = _header_value(headers, "content-length")
+    if declared is not None:
+        try:
+            declared_size = int(declared)
+        except ValueError as exc:
+            raise ValueError("SEC response has invalid Content-Length") from exc
+        if declared_size < 0 or declared_size > max_bytes:
+            raise ValueError("SEC response exceeds configured size limit")
+    body = bytearray()
+    for chunk in _response_content(response):
+        if not isinstance(chunk, bytes):
+            chunk = bytes(chunk)
+        if len(body) + len(chunk) > max_bytes:
+            raise ValueError("SEC response exceeds configured size limit")
+        body.extend(chunk)
+    return bytes(body)
+
+
+@contextmanager
+def _response_context(client: Any, url: str, headers: Mapping[str, str]) -> Iterator[Any]:
+    """Use real httpx streaming while keeping small injected fakes supported."""
+
+    stream = getattr(client, "stream", None)
+    if callable(stream):
+        try:
+            context = stream("GET", url, headers=headers, follow_redirects=False)
+        except TypeError as exc:
+            if "follow_redirects" not in str(exc):
+                raise
+            context = stream("GET", url, headers=headers)
+        with context as response:
+            yield response
+        return
+    try:
+        response = client.get(url, headers=headers, follow_redirects=False)
+    except TypeError as exc:
+        if "follow_redirects" not in str(exc):
+            raise
+        response = client.get(url, headers=headers)
+    yield response
+
+
+def _write_response_to_part(
+    response: Any,
+    part_path: Path,
+    *,
+    resume_from: int,
+    max_bytes: int,
+) -> tuple[int, bool]:
+    """Stream one successful response into a bounded resumable part file."""
+
+    status = int(getattr(response, "status_code", 200))
+    response_headers = getattr(response, "headers", {})
+    content_range = _header_value(response_headers, "content-range")
+    append = resume_from > 0 and status == 206
+    expected_total: int | None = None
+    expected_end: int | None = None
+    if append:
+        match = _CONTENT_RANGE_RE.fullmatch((content_range or "").strip())
+        if match is None:
+            raise SECDownloadError("SEC resumed response has invalid Content-Range")
+        start, expected_end, expected_total = (int(value) for value in match.groups())
+        if (
+            start != resume_from
+            or expected_end < start
+            or expected_total <= expected_end
+            or expected_total > max_bytes
+        ):
+            raise SECDownloadError("SEC resumed response range is inconsistent")
+    elif status == 206:
+        raise SECDownloadError("SEC returned a partial response without a resume request")
+    elif content_range is not None:
+        raise SECDownloadError("SEC full response unexpectedly included Content-Range")
+
+    base_size = resume_from if append else 0
+    declared = _header_value(response_headers, "content-length")
+    if declared is not None:
+        try:
+            declared_size = int(declared)
+        except ValueError as exc:
+            raise SECDownloadError("SEC response has invalid Content-Length") from exc
+        if declared_size < 0 or base_size + declared_size > max_bytes:
+            raise SECDownloadError("SEC response exceeds configured size limit")
+        if expected_end is not None and declared_size != expected_end - resume_from + 1:
+            raise SECDownloadError("SEC resumed response length is inconsistent")
+
+    mode = "ab" if append else "wb"
+    received = 0
+    with part_path.open(mode) as stream:
+        for chunk in _response_content(response):
+            if not isinstance(chunk, bytes):
+                chunk = bytes(chunk)
+            if base_size + received + len(chunk) > max_bytes:
+                raise SECDownloadError("SEC response exceeds configured size limit")
+            stream.write(chunk)
+            received += len(chunk)
+        stream.flush()
+        os.fsync(stream.fileno())
+    final_size = base_size + received
+    if expected_end is not None and final_size != expected_end + 1:
+        raise SECDownloadError("SEC resumed response ended before its declared range")
+    complete = expected_total is None or final_size == expected_total
+    return final_size, complete
+
+
 def _request_archive(
     url: str,
     user_agent: str,
@@ -248,35 +412,76 @@ def _request_archive(
     sleeper: Callable[[float], None],
     pacer: RequestPacer,
     max_attempts: int,
-) -> tuple[bytes, bool]:
-    headers = {"User-Agent": user_agent, "Accept": "application/zip"}
+    max_bytes: int,
+    part_path: Path,
+) -> bool:
+    base_headers = {"User-Agent": user_agent, "Accept": "application/zip"}
+    try:
+        _validate_sec_url(url)
+    except ValueError as exc:
+        raise SECDownloadError(str(exc)) from exc
     last_error: Exception | None = None
     for attempt in range(max_attempts):
+        resume_from = part_path.stat().st_size if part_path.is_file() else 0
+        if resume_from > max_bytes:
+            part_path.unlink(missing_ok=True)
+            raise SECDownloadError("SEC partial archive exceeds configured size limit")
+        headers = dict(base_headers)
+        if resume_from:
+            headers["Range"] = f"bytes={resume_from}-"
         pacer.wait()
         try:
-            try:
-                response = client.get(url, headers=headers, follow_redirects=False)
-            except TypeError as exc:
-                # Small deterministic fakes often expose only ``get(url,
-                # headers=...)``.  Keep redirect protection for real httpx
-                # clients while remaining dependency-injection friendly.
-                if "follow_redirects" not in str(exc):
+            with _response_context(client, url, headers) as response:
+                try:
+                    _validate_sec_response(
+                        response,
+                        url,
+                        accepted_content_types=frozenset(
+                            {"application/zip", "application/octet-stream"}
+                        ),
+                    )
+                except ValueError as exc:
+                    raise SECDownloadError(str(exc)) from exc
+                status = int(getattr(response, "status_code", 200))
+                response_headers = getattr(response, "headers", {})
+                retryable = status == 429 or 500 <= status <= 599
+                if retryable and attempt + 1 < max_attempts:
+                    advised = _retry_after(response_headers)
+                    delay = advised if advised is not None else min(2**attempt, 16)
+                    sleeper(min(MAX_RETRY_DELAY_SECONDS, max(0.0, delay)))
+                    continue
+                if status == 416 and resume_from:
+                    part_path.unlink(missing_ok=True)
+                    if attempt + 1 < max_attempts:
+                        continue
+                if status >= 400:
+                    raise SECDownloadError(f"SEC archive request returned HTTP {status}")
+                try:
+                    _size, complete = _write_response_to_part(
+                        response,
+                        part_path,
+                        resume_from=resume_from,
+                        max_bytes=max_bytes,
+                    )
+                    if complete:
+                        return True
+                    if attempt + 1 < max_attempts:
+                        continue
+                    raise SECDownloadError("SEC archive remained incomplete after final attempt")
+                except SECDownloadError:
                     raise
-                response = client.get(url, headers=headers)
-            status = int(getattr(response, "status_code", 200))
-            response_headers = getattr(response, "headers", {})
-            retryable = status == 429 or 500 <= status <= 599
-            if retryable and attempt + 1 < max_attempts:
-                advised = _retry_after(response_headers)
-                delay = advised if advised is not None else min(2**attempt, 16)
-                sleeper(min(MAX_RETRY_DELAY_SECONDS, max(0.0, delay)))
-                continue
-            if status >= 400:
-                raise SECDownloadError(f"SEC archive request returned HTTP {status}")
-            return b"".join(_response_content(response)), True
         except SECDownloadError as exc:
             last_error = exc
-            if attempt + 1 >= max_attempts or "HTTP " not in str(exc):
+            if (
+                "size limit" in str(exc)
+                or "Content-Range" in str(exc)
+                or "range is inconsistent" in str(exc)
+                or "length is inconsistent" in str(exc)
+            ):
+                part_path.unlink(missing_ok=True)
+            if attempt + 1 >= max_attempts or (
+                "HTTP " not in str(exc) and "incomplete" not in str(exc)
+            ):
                 raise
         except (httpx.HTTPError, OSError) as exc:
             last_error = exc
@@ -311,11 +516,14 @@ def _preflight_archive(
     *,
     max_member_bytes: int,
     max_total_bytes: int,
+    max_members: int,
 ) -> list[dict[str, Any]]:
     """Reject unsafe archive metadata before opening any compressed member."""
 
-    if max_member_bytes < 1 or max_total_bytes < 1:
+    if max_member_bytes < 1 or max_total_bytes < 1 or max_members < 1:
         raise ValueError("ZIP size limits must be positive")
+    if len(infos) > max_members:
+        raise UnsafeArchiveError("ZIP member count exceeds configured limit")
     total_compressed = 0
     total_uncompressed = 0
     seen_names: set[str] = set()
@@ -357,6 +565,7 @@ def _archive_members(
     *,
     max_member_bytes: int = MAX_MEMBER_BYTES,
     max_total_bytes: int = MAX_TOTAL_EXTRACTED_BYTES,
+    max_members: int = MAX_ARCHIVE_MEMBERS,
 ) -> list[dict[str, Any]]:
     """Inspect central-directory metadata without decompressing ZIP members."""
 
@@ -365,6 +574,7 @@ def _archive_members(
             archive.infolist(),
             max_member_bytes=max_member_bytes,
             max_total_bytes=max_total_bytes,
+            max_members=max_members,
         )
 
 
@@ -378,6 +588,7 @@ def download_quarter(
     sleeper: Callable[[float], None] = time.sleep,
     pacer: RequestPacer | None = None,
     max_attempts: int = 4,
+    max_download_bytes: int = MAX_ARCHIVE_DOWNLOAD_BYTES,
 ) -> DownloadResult:
     """Download and cache one SEC quarter, returning its content manifest.
 
@@ -390,6 +601,8 @@ def download_quarter(
     user_agent = validate_sec_user_agent(user_agent)
     if max_attempts < 1:
         raise ValueError("max_attempts must be positive")
+    if max_download_bytes < 1:
+        raise ValueError("max_download_bytes must be positive")
     root = Path(cache_dir)
     raw_dir = root / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
@@ -398,7 +611,7 @@ def download_quarter(
     url = archive_url(year, quarter)
 
     existing_hash: str | None = None
-    if path.is_file():
+    if path.is_file() and path.stat().st_size <= max_download_bytes:
         existing_hash = sha256_file(path)
         if manifest_path.is_file():
             try:
@@ -420,25 +633,35 @@ def download_quarter(
             except (OSError, ValueError, TypeError, zipfile.BadZipFile):
                 pass
 
+    part_path = path.with_suffix(".zip.part")
+    own_client = client is None
     if client is None:
         client = httpx.Client(timeout=60.0)
-    response_body, downloaded = _request_archive(
-        url, user_agent, client, sleeper, pacer or _SEC_PACER, max_attempts
-    )
-    digest = sha256_bytes(response_body)
-    temporary = path.with_suffix(".zip.tmp")
-    temporary.write_bytes(response_body)
     try:
-        members = _archive_members(temporary)
+        downloaded = _request_archive(
+            url,
+            user_agent,
+            client,
+            sleeper,
+            pacer or _SEC_PACER,
+            max_attempts,
+            max_download_bytes,
+            part_path,
+        )
+    finally:
+        if own_client:
+            client.close()
+    try:
+        members = _archive_members(part_path)
     except BaseException:
-        temporary.unlink(missing_ok=True)
+        part_path.unlink(missing_ok=True)
         raise
-    os.replace(temporary, path)
-    manifest = make_manifest(year, quarter, url, digest, len(response_body), members)
+    digest = sha256_file(part_path)
+    size_bytes = part_path.stat().st_size
+    os.replace(part_path, path)
+    manifest = make_manifest(year, quarter, url, digest, size_bytes, members)
     _write_json(manifest_path, manifest)
-    return DownloadResult(
-        year, quarter, url, path, digest, len(response_body), manifest_path, downloaded
-    )
+    return DownloadResult(year, quarter, url, path, digest, size_bytes, manifest_path, downloaded)
 
 
 def _safe_member_path(root: Path, member_name: str) -> Path:
@@ -460,11 +683,13 @@ def extract_archive(
     *,
     max_member_bytes: int = MAX_MEMBER_BYTES,
     max_total_bytes: int = MAX_TOTAL_EXTRACTED_BYTES,
+    max_members: int = MAX_ARCHIVE_MEMBERS,
 ) -> Path:
     """Safely extract a ZIP archive and reject traversal, links, and bombs."""
 
     root = Path(destination)
     root.parent.mkdir(parents=True, exist_ok=True)
+    _recover_previous_directory(root)
     backup: Path | None = None
     with zipfile.ZipFile(archive_path) as archive:
         infos = archive.infolist()
@@ -472,6 +697,7 @@ def extract_archive(
             infos,
             max_member_bytes=max_member_bytes,
             max_total_bytes=max_total_bytes,
+            max_members=max_members,
         )
         with tempfile.TemporaryDirectory(
             prefix=f".{root.name}.stage-", dir=root.parent
@@ -518,6 +744,24 @@ def extract_archive(
         elif backup.is_dir():
             shutil.rmtree(backup)
     return root
+
+
+def _recover_previous_directory(destination: Path) -> None:
+    """Recover or clean up UUID-suffixed backups left by an interrupted swap."""
+
+    backups = sorted(destination.parent.glob(f".{destination.name}.previous-*"))
+    if not backups:
+        return
+    if not destination.exists():
+        if len(backups) != 1:
+            raise RuntimeError(f"ambiguous interrupted directory swap for {destination}")
+        os.replace(backups[0], destination)
+        return
+    for backup in backups:
+        if backup.is_symlink() or backup.is_file():
+            backup.unlink()
+        elif backup.is_dir():
+            shutil.rmtree(backup)
 
 
 def _table_files(extracted_dir: Path) -> list[Path]:
@@ -628,6 +872,9 @@ def stage_quarter(
     """Download (if necessary), parse, and write a deterministic partition."""
 
     year, quarter = validate_quarter(year, quarter)
+    partition = Path(staging_dir) / f"year={year:04d}" / f"quarter={quarter}"
+    partition.parent.mkdir(parents=True, exist_ok=True)
+    _recover_previous_directory(partition)
     if archive_path is None:
         if user_agent is None:
             raise ValueError("user_agent is required when downloading an archive")
@@ -656,63 +903,86 @@ def stage_quarter(
             False,
         )
 
-    partition = Path(staging_dir) / f"year={year:04d}" / f"quarter={quarter}"
-    partition.mkdir(parents=True, exist_ok=True)
+    backup: Path | None = None
     with tempfile.TemporaryDirectory(
         prefix=f"sec-{year}q{quarter}-", dir=str(partition.parent)
     ) as temp_name:
-        extracted = extract_archive(archive.path, Path(temp_name) / "tables")
+        temporary_root = Path(temp_name)
+        extracted = extract_archive(archive.path, temporary_root / "tables")
         tables, bad_rows = parse_sec_tables_with_quarantine(extracted)
-        parquet_paths: list[Path] = []
+        staged_partition = temporary_root / "partition"
+        staged_partition.mkdir()
+        parquet_names: list[str] = []
         for table_name in sorted(tables):
-            destination = partition / f"{table_name}.parquet"
-            temporary = destination.with_suffix(".parquet.tmp")
-            tables[table_name].write_parquet(temporary, compression="zstd", statistics=False)
-            os.replace(temporary, destination)
-            parquet_paths.append(destination)
+            name = f"{table_name}.parquet"
+            destination = staged_partition / name
+            tables[table_name].write_parquet(destination, compression="zstd", statistics=False)
+            parquet_names.append(name)
 
-    quarantine_path: Path | None = None
-    if bad_rows:
-        quarantine_path = partition / "quarantine.jsonl"
-        lines = [
-            json.dumps(
-                {
-                    "table": row.table,
-                    "line_number": row.line_number,
-                    "reason": row.reason,
-                    "raw": row.raw,
-                },
-                sort_keys=True,
+        quarantine_name: str | None = None
+        if bad_rows:
+            quarantine_name = "quarantine.jsonl"
+            lines = [
+                json.dumps(
+                    {
+                        "table": row.table,
+                        "line_number": row.line_number,
+                        "reason": row.reason,
+                        "raw": row.raw,
+                    },
+                    sort_keys=True,
+                )
+                for row in bad_rows
+            ]
+            (staged_partition / quarantine_name).write_text(
+                "\n".join(lines) + "\n", encoding="utf-8"
             )
-            for row in bad_rows
-        ]
-        quarantine_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    stage_manifest = {
-        "schema_version": "1.0",
-        "source": "sec",
-        "year": year,
-        "quarter": quarter,
-        "archive_sha256": archive.sha256,
-        "tables": [
-            {
-                "name": path.stem,
-                "path": path.name,
-                "sha256": sha256_file(path),
-                "rows": tables[path.stem].height,
-            }
-            for path in parquet_paths
-        ],
-        "quarantined_rows": len(bad_rows),
-    }
+        parsed_rows = sum(frame.height for frame in tables.values())
+        total_rows = parsed_rows + len(bad_rows)
+        stage_manifest = {
+            "schema_version": "1.0",
+            "source": "sec",
+            "year": year,
+            "quarter": quarter,
+            "archive_sha256": archive.sha256,
+            "tables": [
+                {
+                    "name": Path(name).stem,
+                    "path": name,
+                    "sha256": sha256_file(staged_partition / name),
+                    "rows": tables[Path(name).stem].height,
+                }
+                for name in parquet_names
+            ],
+            "parsed_rows": parsed_rows,
+            "total_rows": total_rows,
+            "parse_success_rate": parsed_rows / total_rows if total_rows else 0.0,
+            "quarantined_rows": len(bad_rows),
+        }
+        _write_json(staged_partition / "manifest.json", stage_manifest)
+
+        if partition.exists():
+            backup = partition.with_name(f".{partition.name}.previous-{uuid.uuid4().hex}")
+            os.replace(partition, backup)
+        try:
+            os.replace(staged_partition, partition)
+        except BaseException:
+            if backup is not None and backup.exists() and not partition.exists():
+                os.replace(backup, partition)
+            raise
+
+    if backup is not None and backup.exists():
+        shutil.rmtree(backup)
+    parquet_paths = tuple(partition / name for name in parquet_names)
+    quarantine_path = partition / quarantine_name if quarantine_name is not None else None
     manifest_path = partition / "manifest.json"
-    _write_json(manifest_path, stage_manifest)
     return StageResult(
         year,
         quarter,
         archive,
         partition,
-        tuple(parquet_paths),
+        parquet_paths,
         quarantine_path,
         len(bad_rows),
         manifest_path,
