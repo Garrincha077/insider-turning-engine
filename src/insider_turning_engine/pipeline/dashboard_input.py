@@ -92,7 +92,11 @@ def _filings(
     grouped: dict[tuple[str, str, str, str], dict[str, Any]] = {}
     for record in records:
         code = record.transaction.code.upper()
-        if code not in {"P", "S"} or record.transaction.value is None:
+        if (
+            code not in {"P", "S"}
+            or record.transaction.value is None
+            or record.security.table_type.value != "NON_DERIVATIVE"
+        ):
             continue
         ticker = ticker_by_cik.get(record.issuer.cik)
         accepted = record.timestamps.accepted_at

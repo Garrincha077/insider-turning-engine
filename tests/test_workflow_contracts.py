@@ -153,7 +153,7 @@ def test_pages_validates_manifest_and_hashes_before_upload() -> None:
     assert "uv run python - <<'PY'" in text
     assert "uv sync --all-groups --frozen" in text
     assert "actions/setup-python@v5" in text
-    assert text.index("Validate atomic dashboard snapshot") < text.index(
+    assert text.index("Validate atomic live snapshot") < text.index(
         "actions/upload-pages-artifact@v3"
     )
     assert "PAGES_BASE_PATH" in text

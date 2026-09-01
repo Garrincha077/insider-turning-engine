@@ -11,6 +11,7 @@ from insider_turning_engine.export.dashboard import (
     DashboardExportError,
     _manifest_digest,
     _validate_manifest,
+    dashboard_experimental_publication_policy,
     dashboard_publication_policy,
     export_dashboard,
     validate_dashboard_directory,
@@ -252,15 +253,19 @@ def test_manifest_schema_exposes_exporter_content_address_contract() -> None:
     )
 
 
-def test_checked_in_sample_is_explicitly_degraded_and_content_addressed() -> None:
+def test_checked_in_live_snapshot_is_explicitly_degraded_and_content_addressed() -> None:
     root = ROOT / "app" / "public" / "data"
     manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
     dashboard = json.loads((root / "dashboard.json").read_text(encoding="utf-8"))
 
     assert manifest["status"] == "DEGRADED"
     assert manifest["quality"]["disposition"] == "DEGRADED"
-    assert "ILLUSTRATIVE_SAMPLE" in manifest["quality"]["issues"]
+    assert "LIVE_EXPERIMENTAL_ROLLING_WINDOW" in manifest["quality"]["issues"]
+    assert manifest["universe"]["issuerCount"] > 0
+    assert manifest["universe"]["activeTransactionCount"] > 0
     assert dashboard["status"] == "EXPERIMENTAL"
+    assert len(dashboard["candidates"]) > 0
+    assert len(dashboard["filings"]) > 0
     for record in manifest["files"]:
         content = (root / record["path"]).read_bytes()
         assert len(content) == record["size"]
@@ -295,6 +300,38 @@ def test_pages_policy_allows_healthy_experimental_but_keeps_alerts_off(
     manifest = validate_dashboard_directory(result.output_dir)
 
     assert dashboard_publication_policy(manifest) == (False, False)
+
+
+def test_live_experimental_policy_requires_real_rows_and_never_allows_alerts(
+    tmp_path: Path,
+) -> None:
+    data = _data()
+    quality = data["quality"]
+    assert isinstance(quality, dict)
+    quality["issues"] = [
+        "LIVE_EXPERIMENTAL_ROLLING_WINDOW",
+        "SCORING_METHODOLOGY_INCOMPLETE",
+    ]
+    data["filings"] = [
+        {
+            "ticker": "ABC",
+            "owner": "Owner",
+            "role": "Director",
+            "side": "BUY",
+            "value": 250_000,
+            "filedAt": "2026-08-31T20:00:00Z",
+            "accession": "0000000001-26-000001",
+        }
+    ]
+    result = export_dashboard(data, tmp_path / "live", run_id="run_1234567890123456")
+    manifest = validate_dashboard_directory(result.output_dir)
+
+    assert manifest["universe"]["activeTransactionCount"] == 1
+    assert dashboard_experimental_publication_policy(manifest) == (True, False)
+
+    manifest["quality"]["benchmarkFresh"] = False
+    manifest["manifestId"] = "mft_" + _manifest_digest(manifest)[:32]
+    assert dashboard_experimental_publication_policy(manifest) == (False, False)
 
 
 def test_degraded_quality_measurements_must_still_be_coherent(tmp_path: Path) -> None:

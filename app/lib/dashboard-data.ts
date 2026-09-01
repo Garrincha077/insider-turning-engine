@@ -44,7 +44,7 @@ export type DashboardData = {
   candidates: Candidate[];
   filings: Filing[];
   backtest: Array<{ horizon: string; fullEngine: number; clusterBuy: number; simpleRatio: number }>;
-  companySeries: Array<{ date: string; price: number; cost: number; mansfield: number }>;
+  companySeries: Array<{ ticker: string; date: string; price: number; cost: number | null; mansfield: number | null }>;
 };
 
 export const sampleDashboardData: DashboardData = {
@@ -82,11 +82,11 @@ export const sampleDashboardData: DashboardData = {
     { horizon: '12M', fullEngine: 13.4, clusterBuy: 8.2, simpleRatio: 4.7 },
   ],
   companySeries: [
-    { date: 'Mar', price: 154, cost: 132, mansfield: -8.2 },
-    { date: 'Apr', price: 138, cost: 128, mansfield: -7.1 },
-    { date: 'May', price: 119, cost: 122, mansfield: -5.4 },
-    { date: 'Jun', price: 103, cost: 117, mansfield: -3.8 },
-    { date: 'Jul', price: 106, cost: 114, mansfield: -1.9 },
-    { date: 'Aug', price: 109, cost: 113, mansfield: -0.4 },
+    { ticker: 'NVDA', date: 'Mar', price: 154, cost: 132, mansfield: -8.2 },
+    { ticker: 'NVDA', date: 'Apr', price: 138, cost: 128, mansfield: -7.1 },
+    { ticker: 'NVDA', date: 'May', price: 119, cost: 122, mansfield: -5.4 },
+    { ticker: 'NVDA', date: 'Jun', price: 103, cost: 117, mansfield: -3.8 },
+    { ticker: 'NVDA', date: 'Jul', price: 106, cost: 114, mansfield: -1.9 },
+    { ticker: 'NVDA', date: 'Aug', price: 109, cost: 113, mansfield: -0.4 },
   ],
 };

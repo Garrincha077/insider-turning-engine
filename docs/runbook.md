@@ -122,8 +122,9 @@ the destination only after files and the manifest validate. Check
 `app/public/data/dashboard.json` and `manifest.json`; the manifest includes
 versions, watermarks, quality, file sizes, and SHA-256 hashes. Treat
 `EXPERIMENTAL` or `STALE` dashboard data as non-validated. The checked-in
-bundle is an illustrative sample: `dashboard.json` is `EXPERIMENTAL`, while
-`manifest.json` is `DEGRADED` with `ILLUSTRATIVE_SAMPLE`.
+bundle is a real-data rolling-window preview: `dashboard.json` is
+`EXPERIMENTAL`, while `manifest.json` is `DEGRADED` with
+`LIVE_EXPERIMENTAL_ROLLING_WINDOW` and provider/methodology caveats.
 
 ## Alerts
 

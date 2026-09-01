@@ -17,6 +17,7 @@ from .stooq import (
     StooqMarketDataProvider,
     StooqProvider,
 )
+from .yahoo_chart import YAHOO_CHART_ROOT, YahooChartProvider
 
 __all__ = [
     "CoverageReport",
@@ -32,6 +33,8 @@ __all__ = [
     "SECTOR_ETFS",
     "STOOQ_SYMBOL_MAP",
     "SUPPORTED_SYMBOLS",
+    "YAHOO_CHART_ROOT",
+    "YahooChartProvider",
     "probe_market_coverage",
     "probe_coverage",
     "probe_50_symbols",

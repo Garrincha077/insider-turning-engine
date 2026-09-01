@@ -2,8 +2,8 @@
 
 This project is research-only and is not investment advice. A score or state is
 an explainable rule output, not a recommendation, probability, or guarantee.
-Do not describe the checked-in sample dashboard or fixture results as live
-validated performance.
+Do not describe the checked-in live experimental dashboard or fixture results
+as validated performance.
 
 ## Caveats required on every report
 
@@ -37,6 +37,9 @@ events, and horizon-level attrition reasons. A zero denominator is
 - Stooq daily data is an anonymous fallback/reference source and may have
   missing sessions, revisions, unadjusted prices, or provider-specific limits.
   The CSV fallback is deterministic but synthetic fixtures are fabricated.
+- The public `LIVE_EXPERIMENTAL` snapshot temporarily uses Yahoo chart data
+  with the adjusted-close ratio applied to OHLC. It is not an approved OOS
+  research input and never authorizes alerts.
 - Adjustments, splits, holidays, and trading calendars affect returns and
   moving features. The report must state the adjustment basis used.
 - No fundamental factor is silently imputed. A null fundamental is excluded

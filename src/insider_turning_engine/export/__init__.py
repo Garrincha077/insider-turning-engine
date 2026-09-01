@@ -3,6 +3,7 @@
 from .dashboard import (
     DashboardExport,
     DashboardExportError,
+    dashboard_experimental_publication_policy,
     dashboard_publication_policy,
     export_dashboard,
     validate_dashboard_directory,
@@ -11,6 +12,7 @@ from .dashboard import (
 __all__ = [
     "DashboardExport",
     "DashboardExportError",
+    "dashboard_experimental_publication_policy",
     "dashboard_publication_policy",
     "export_dashboard",
     "validate_dashboard_directory",

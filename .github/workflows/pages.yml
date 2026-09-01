@@ -2,7 +2,9 @@ name: Deploy dashboard
 
 on:
   push:
-    branches: [main, codex/luna-pages, codex/sol-v1-remediation]
+    branches: [main, codex/sol-v1-remediation]
+  schedule:
+    - cron: "15 3 * * 2-6"
   workflow_dispatch:
 
 permissions:
@@ -13,6 +15,9 @@ permissions:
 concurrency:
   group: pages
   cancel-in-progress: false
+
+env:
+  SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT }}
 
 jobs:
   build:
@@ -26,6 +31,22 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --all-groups --frozen
+      - name: Require an identifying SEC User-Agent
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SEC_USER_AGENT:-}" || {
+            echo "SEC_USER_AGENT repository variable is required"
+            exit 1
+          }
+      - name: Build real-data live experimental snapshot
+        run: >-
+          uv run python -m insider_turning_engine.pipeline.live_experimental
+          --output app/public/data
+          --cache-dir data/cache/live-experimental
+          --lookback-business-days 1
+          --max-symbols 50
+          --execute
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -44,7 +65,7 @@ jobs:
         working-directory: app
       - run: npm run build
         working-directory: app
-      - name: Validate atomic dashboard snapshot or isolated experimental demo
+      - name: Validate atomic live snapshot and publication policy
         shell: bash
         run: |
           test -s app/dist/index.html
@@ -55,6 +76,7 @@ jobs:
           from pathlib import Path
 
           from insider_turning_engine.export import (
+              dashboard_experimental_publication_policy,
               dashboard_publication_policy,
               validate_dashboard_directory,
           )
@@ -63,22 +85,10 @@ jobs:
           publishable, _ = dashboard_publication_policy(manifest)
           if publishable:
               raise SystemExit(0)
-
-          # A static UI demo is not a production research publication.  It is
-          # allowed only for the exact checked-in illustrative fixture, while
-          # live/degraded snapshots remain fail-closed.
-          dashboard = json.loads(Path("app/dist/data/dashboard.json").read_text("utf-8"))
-          quality = manifest.get("quality", {})
-          safe_demo = (
-              manifest.get("status") == "DEGRADED"
-              and dashboard.get("status") == "EXPERIMENTAL"
-              and quality.get("methodologyComplete") is False
-              and quality.get("issues") == ["ILLUSTRATIVE_SAMPLE"]
-              and manifest.get("signals") == []
-          )
-          if not safe_demo:
-              raise SystemExit("dashboard artifact does not satisfy Pages publication policy")
-          print("Deploying isolated EXPERIMENTAL fixture; live signals and alerts remain disabled")
+          experimental, alerts = dashboard_experimental_publication_policy(manifest)
+          if not experimental or alerts:
+              raise SystemExit("live dashboard does not satisfy experimental Pages policy")
+          print("Deploying LIVE_EXPERIMENTAL snapshot; validated alerts remain disabled")
           PY
       - uses: actions/configure-pages@v5
         with:

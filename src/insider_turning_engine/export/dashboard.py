@@ -77,7 +77,7 @@ _ROW_KEYS: dict[str, tuple[str, ...]] = {
     ),
     "filings": ("ticker", "owner", "role", "side", "value", "filedAt", "accession"),
     "backtest": ("horizon", "fullEngine", "clusterBuy", "simpleRatio"),
-    "companySeries": ("date", "price", "cost", "mansfield"),
+    "companySeries": ("ticker", "date", "price", "cost", "mansfield"),
 }
 _OPTIONAL_ROW_KEYS = {"sourceReferences", "sourceReference", "reasonCodes"}
 _STATE_NAMES = {"FALLING", "INSIDER_ACCUMULATION", "BASE_FORMING", "EARLY_TURN", "CONFIRMED_TURN"}
@@ -385,7 +385,7 @@ def _make_manifest(
         "watermarks": watermarks,
         "universe": {
             "issuerCount": len({r["issuerCik"] for r in dashboard["candidates"]}),
-            "activeTransactionCount": 0,
+            "activeTransactionCount": len(dashboard["filings"]),
             "signalCount": len(signal_refs) or len(dashboard["candidates"]),
         },
         "quality": quality,
@@ -644,6 +644,30 @@ def dashboard_publication_policy(manifest: Mapping[str, Any]) -> tuple[bool, boo
         pages_allowed and quality["disposition"] == "PASS" and manifest["status"] == "SUCCEEDED"
     )
     return pages_allowed, alerts_allowed
+
+
+def dashboard_experimental_publication_policy(
+    manifest: Mapping[str, Any],
+) -> tuple[bool, bool]:
+    """Authorize only the real-data live preview, never external alerts."""
+
+    _validate_manifest(manifest)
+    quality = manifest["quality"]
+    universe = manifest["universe"]
+    issues = set(quality["issues"])
+    pages_allowed = (
+        manifest["status"] == "DEGRADED"
+        and quality["canonicalValid"] is True
+        and quality["benchmarkFresh"] is True
+        and quality["parseSuccess"]["result"] == "PASS"
+        and quality["marketCoverage"]["result"] == "PASS"
+        and "LIVE_EXPERIMENTAL_ROLLING_WINDOW" in issues
+        and "SCORING_METHODOLOGY_INCOMPLETE" in issues
+        and universe["issuerCount"] > 0
+        and universe["activeTransactionCount"] > 0
+        and universe["signalCount"] > 0
+    )
+    return pages_allowed, False
 
 
 def _default_quality() -> dict[str, Any]:

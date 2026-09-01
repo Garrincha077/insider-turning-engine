@@ -4,10 +4,11 @@ Insider Turning Engine is a research-only, point-in-time data pipeline for
 normalizing SEC ownership filings, combining qualified insider activity with
 market features, and producing explainable issuer states and alert candidates.
 It is not investment advice, a trading system, or a claim of live validated
-performance. The checked-in dashboard bundle is an illustrative `DEGRADED`
-sample: `dashboard.json` is `EXPERIMENTAL` and its `manifest.json` is
-`DEGRADED` with the `ILLUSTRATIVE_SAMPLE` issue. It is not a live validated
-result.
+performance. The checked-in dashboard bundle is a real-data
+`LIVE_EXPERIMENTAL` snapshot: official SEC ownership filings are combined with
+Yahoo adjusted chart data as a temporary Stooq fallback. Its methodology and
+backtest are not validated, Telegram remains off, and every limitation is
+listed in the content-addressed manifest.
 
 ## Repository map
 

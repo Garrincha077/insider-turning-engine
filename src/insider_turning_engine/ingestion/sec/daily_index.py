@@ -30,6 +30,10 @@ from .incremental import OWNERSHIP_FORMS
 DAILY_INDEX_ROOT = "https://www.sec.gov/Archives/edgar/daily-index"
 ARCHIVES_ROOT = "https://www.sec.gov/Archives"
 _ACCESSION_RE = re.compile(r"\d{10}-\d{2}-\d{6}")
+_ACCESSION_HEADER_RE = re.compile(
+    r"(?:<ACCESSION-NUMBER>\s*|^ACCESSION NUMBER:\s*)(\d{10}-\d{2}-\d{6})",
+    re.IGNORECASE | re.MULTILINE,
+)
 _ACCEPTED_RE = re.compile(r"<ACCEPTANCE-DATETIME>\s*(\d{14})", re.IGNORECASE)
 _ISSUER_RE = re.compile(r"<issuerCik>\s*(\d{1,10})\s*</issuerCik>", re.IGNORECASE)
 _DOCUMENT_RE = re.compile(r"<DOCUMENT>(.*?)</DOCUMENT>", re.IGNORECASE | re.DOTALL)
@@ -101,7 +105,29 @@ def parse_daily_master_index(payload: bytes | str) -> tuple[DailyIndexEntry, ...
         )
     if not in_body:
         raise ValueError("SEC daily master index header terminator is missing")
-    return tuple(sorted(rows, key=lambda row: (row.filing_date, row.accession_number)))
+    # Ownership filings can appear once for the issuer and again for one or
+    # more reporting owners.  The accession is the filing identity; fetching
+    # every index alias wastes requests and duplicates canonical rows.  Prefer
+    # the entry whose CIK matches the accession filer prefix when available,
+    # then use a stable lexical tie-break.
+    selected: dict[str, DailyIndexEntry] = {}
+    for row in rows:
+        current = selected.get(row.accession_number)
+        prefix = row.accession_number.split("-", 1)[0]
+        rank = (row.filer_cik.lstrip("0") != prefix.lstrip("0"), row.filer_cik, row.company_name)
+        if current is None:
+            selected[row.accession_number] = row
+            continue
+        current_rank = (
+            current.filer_cik.lstrip("0") != prefix.lstrip("0"),
+            current.filer_cik,
+            current.company_name,
+        )
+        if rank < current_rank:
+            selected[row.accession_number] = row
+    return tuple(
+        sorted(selected.values(), key=lambda row: (row.filing_date, row.accession_number))
+    )
 
 
 def _field(block: str, name: str) -> str | None:
@@ -124,7 +150,8 @@ def parse_complete_submission(
     if accepted_match is None:
         raise ValueError("complete submission has no acceptance timestamp")
     accepted = datetime.strptime(accepted_match.group(1), "%Y%m%d%H%M%S").replace(tzinfo=UTC)
-    accession_header = _field(text[:100_000], "ACCESSION-NUMBER")
+    accession_match = _ACCESSION_HEADER_RE.search(text[:100_000])
+    accession_header = accession_match.group(1) if accession_match is not None else None
     if accession_header != entry.accession_number:
         raise ValueError("complete submission accession disagrees with daily index")
 
@@ -140,6 +167,13 @@ def parse_complete_submission(
         if PurePosixPath(filename).name != filename or not filename.lower().endswith(".xml"):
             continue
         body = body_match.group(1).strip()
+        # Real EDGAR complete submissions commonly wrap the primary XML in
+        # an SGML ``<XML>`` transport element inside ``<TEXT>``.  The
+        # ownership parser must receive the XML document itself, not that
+        # outer submission wrapper.
+        wrapper = re.fullmatch(r"<XML>\s*(.*?)\s*</XML>", body, re.IGNORECASE | re.DOTALL)
+        if wrapper is not None:
+            body = wrapper.group(1).strip()
         cik_match = _ISSUER_RE.search(body)
         if cik_match is None:
             continue
