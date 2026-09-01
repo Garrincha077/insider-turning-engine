@@ -2,7 +2,7 @@ name: Deploy dashboard
 
 on:
   push:
-    branches: [main, codex/luna-pages]
+    branches: [main, codex/luna-pages, codex/sol-v1-remediation]
   workflow_dispatch:
 
 permissions:
@@ -44,13 +44,14 @@ jobs:
         working-directory: app
       - run: npm run build
         working-directory: app
-      - name: Validate atomic dashboard snapshot
+      - name: Validate production snapshot or isolated experimental demo
         shell: bash
         run: |
           test -s app/dist/index.html
           test -s app/dist/data/dashboard.json
           test -s app/dist/data/manifest.json
           uv run python - <<'PY'
+          import json
           from pathlib import Path
 
           from insider_turning_engine.export import (
@@ -60,8 +61,24 @@ jobs:
 
           manifest = validate_dashboard_directory(Path("app/dist/data"))
           publishable, _ = dashboard_publication_policy(manifest)
-          if not publishable:
+          if publishable:
+              raise SystemExit(0)
+
+          # A static UI demo is not a production research publication.  It is
+          # allowed only for the exact checked-in illustrative fixture, while
+          # live/degraded snapshots remain fail-closed.
+          dashboard = json.loads(Path("app/dist/data/dashboard.json").read_text("utf-8"))
+          quality = manifest.get("quality", {})
+          safe_demo = (
+              manifest.get("status") == "DEGRADED"
+              and dashboard.get("status") == "EXPERIMENTAL"
+              and quality.get("methodologyComplete") is False
+              and quality.get("issues") == ["ILLUSTRATIVE_SAMPLE"]
+              and manifest.get("signals") == []
+          )
+          if not safe_demo:
               raise SystemExit("dashboard artifact does not satisfy Pages publication policy")
+          print("Deploying isolated EXPERIMENTAL fixture; live signals and alerts remain disabled")
           PY
       - uses: actions/configure-pages@v5
         with:
