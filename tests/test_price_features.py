@@ -1,5 +1,6 @@
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from statistics import stdev
 
 import polars as pl
 import pytest
@@ -9,7 +10,10 @@ from insider_turning_engine.features.price import (
     price_features,
     weekly_bars_frame,
 )
-from insider_turning_engine.features.rs import rolling_four_week_slopes
+from insider_turning_engine.features.rs import (
+    relative_strength_features,
+    rolling_four_week_slopes,
+)
 from insider_turning_engine.ingestion.market import DailyBar
 
 
@@ -43,6 +47,15 @@ def test_price_features_are_bounded_and_50d_3m_facts_are_session_based() -> None
     assert latest["ma50"] == pytest.approx(sum(range(120, 170)) / 50)
     assert latest["return_3m"] == pytest.approx(169 / 106 - 1)
     assert latest["close_above_ma50"] is True
+    returns = [((100 + index) / (99 + index)) - 1 for index in range(50, 70)]
+    assert latest["volatility_20d"] == pytest.approx(stdev(returns))
+    assert latest["prior_volatility_20d"] == pytest.approx(
+        stdev([((100 + index) / (99 + index)) - 1 for index in range(30, 50)])
+    )
+    assert latest["median_volume_20d"] == 100
+    assert latest["prior_median_volume_20d"] == 100
+    assert latest["ma20_slope_5d"] == pytest.approx(1)
+    assert latest["signed_volume_ratio_20d"] == pytest.approx(1)
 
     with pytest.raises(ValueError, match="after as_of"):
         price_features(bars, as_of=as_of - timedelta(days=1))
@@ -84,6 +97,38 @@ def test_split_quarantine_nulls_derived_facts() -> None:
     facts = price_features(bars, as_of=bars[-1].date)
     assert facts.get_column("split_quarantine").to_list() == [True] * 4
     assert facts.get_column("return_3m").null_count() == 4
+    for name in (
+        "volatility_20d",
+        "prior_volatility_20d",
+        "median_volume_20d",
+        "prior_median_volume_20d",
+        "ma20_slope_5d",
+        "signed_volume_ratio_20d",
+    ):
+        assert facts.get_column(name).null_count() == 4
+
+
+def test_technical_windows_are_session_based_and_null_until_available() -> None:
+    bars = _bars(count=41)
+    facts = price_features(bars, as_of=bars[-1].date)
+    latest = facts.tail(1).row(0, named=True)
+    assert latest["median_volume_20d"] == 100
+    assert latest["prior_median_volume_20d"] == 100
+    assert latest["volatility_20d"] is not None
+    assert latest["prior_volatility_20d"] is not None
+    assert latest["ma20_slope_5d"] is not None
+    assert latest["signed_volume_ratio_20d"] is not None
+
+    early = price_features(_bars(count=20), as_of=bars[19].date).tail(1).row(0, named=True)
+    assert early["median_volume_20d"] == 100
+    for name in (
+        "volatility_20d",
+        "prior_volatility_20d",
+        "prior_median_volume_20d",
+        "ma20_slope_5d",
+        "signed_volume_ratio_20d",
+    ):
+        assert early[name] is None
 
 
 def test_four_week_slope_has_no_lookahead_and_zero_is_not_positive() -> None:
@@ -106,3 +151,42 @@ def test_four_week_slope_has_no_lookahead_and_zero_is_not_positive() -> None:
     assert slopes[3] == pytest.approx(0)
     assert slopes[4] > 0
     assert result.get_column("ordinary_rs_improving_4w").to_list()[3] is False
+
+
+def test_relative_strength_ranks_only_insider_active_universe() -> None:
+    rows: list[dict[str, object]] = []
+    session = date(2024, 1, 2)
+    index = 0
+    while index < 300:
+        if session.weekday() < 5:
+            for symbol, rate in (("ACME", 0.003), ("BETA", -0.001), ("SPY", 0.001)):
+                close = 100.0 * (1.0 + rate) ** index
+                rows.append(
+                    {
+                        "date": session,
+                        "symbol": symbol,
+                        "open": close,
+                        "high": close,
+                        "low": close,
+                        "close": close,
+                        "adj_close": close,
+                        "volume": 1_000,
+                        "is_adjusted": True,
+                    }
+                )
+            index += 1
+        session += timedelta(days=1)
+    result = relative_strength_features(
+        pl.DataFrame(rows),
+        as_of=rows[-1]["date"],
+        market_symbol="SPY",
+        universe_symbols=["ACME", "BETA"],
+    )
+    latest = {
+        row["symbol"]: row
+        for row in result.sort("date").group_by("symbol").tail(1).to_dicts()
+    }
+    assert set(latest) == {"ACME", "BETA"}
+    assert latest["ACME"]["ordinary_rs_3m"] == pytest.approx(100)
+    assert latest["BETA"]["ordinary_rs_3m"] == pytest.approx(0)
+    assert latest["ACME"]["mansfield_market"] is not None

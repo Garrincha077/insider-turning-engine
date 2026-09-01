@@ -123,6 +123,7 @@ def relative_strength_features(
     sector_by_symbol: Mapping[str, str] | None = None,
     market_bars: BarsInput | None = None,
     sector_bars: BarsInput | None = None,
+    universe_symbols: Sequence[str] | None = None,
 ) -> pl.DataFrame:
     """Build weekly ordinary, Mansfield-market and Mansfield-sector features.
 
@@ -132,11 +133,25 @@ def relative_strength_features(
     ``sector_by_symbol`` maps each candidate to its sector benchmark symbol.
     """
 
-    daily = price_features(bars, as_of=as_of)
-    if daily.is_empty():
-        return daily
-    daily_rs = ordinary_relative_strength(daily, as_of=as_of)
-    weekly = weekly_bars_frame(daily, as_of=as_of)
+    all_daily = price_features(bars, as_of=as_of)
+    if all_daily.is_empty():
+        return all_daily
+    normalized_universe = (
+        sorted({str(symbol).strip().upper() for symbol in universe_symbols})
+        if universe_symbols is not None
+        else None
+    )
+    daily_rs = ordinary_relative_strength(
+        all_daily,
+        as_of=as_of,
+        universe_symbols=normalized_universe,
+    )
+    candidate_daily = (
+        all_daily.filter(pl.col("symbol").is_in(normalized_universe))
+        if normalized_universe is not None
+        else all_daily
+    )
+    weekly = weekly_bars_frame(candidate_daily, as_of=as_of)
     # At a weekly grain, use the last daily cross-sectional rank in that week.
     daily_rs = daily_rs.with_columns(
         (pl.col("date") - pl.duration(days=pl.col("date").dt.weekday() - 1)).alias("week_start")
@@ -149,7 +164,9 @@ def relative_strength_features(
     )
     weekly = weekly.join(ordinary_weekly, on=["symbol", "week_start"], how="left")
     market_frame = (
-        weekly_bars_frame(market_bars, as_of=as_of) if market_bars is not None else weekly
+        weekly_bars_frame(market_bars, as_of=as_of)
+        if market_bars is not None
+        else weekly_bars_frame(all_daily, as_of=as_of)
     )
     market = _mansfield(weekly, market_frame, market_symbol, "mansfield_market")
     result = weekly.join(market, on=["symbol", "date"], how="left")
@@ -157,7 +174,7 @@ def relative_strength_features(
     if sector_bars is not None:
         sector_frame = weekly_bars_frame(sector_bars, as_of=as_of)
     else:
-        sector_frame = weekly
+        sector_frame = weekly_bars_frame(all_daily, as_of=as_of)
     sector_rows: list[pl.DataFrame] = []
     for symbol in result.get_column("symbol").unique().to_list():
         benchmark_symbol = _sector_symbol_for(str(symbol), sector_by_symbol, sector_symbol)

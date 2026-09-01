@@ -263,6 +263,12 @@ def price_features(
         return frame.with_columns(
             pl.lit(False).alias("split_quarantine"),
             pl.lit(None, dtype=pl.String).alias("quarantine_reason"),
+            pl.lit(None, dtype=pl.Float64).alias("volatility_20d"),
+            pl.lit(None, dtype=pl.Float64).alias("prior_volatility_20d"),
+            pl.lit(None, dtype=pl.Float64).alias("median_volume_20d"),
+            pl.lit(None, dtype=pl.Float64).alias("prior_median_volume_20d"),
+            pl.lit(None, dtype=pl.Float64).alias("ma20_slope_5d"),
+            pl.lit(None, dtype=pl.Float64).alias("signed_volume_ratio_20d"),
         )
     frame = (
         frame.with_columns(
@@ -316,6 +322,107 @@ def price_features(
             .alias("close_above_ma50_days_last10"),
         )
     )
+    # Raw facts for the locked base/volume transforms.  Every window is a
+    # session window over each symbol, so weekends and missing sessions do not
+    # silently become observations.  Adjusted closes are used for returns and
+    # signed direction; raw volume remains the traded-volume denominator.
+    frame = frame.with_columns(
+        pl.col("adj_close")
+        .cast(pl.Float64, strict=False)
+        .fill_nan(None)
+        .alias("_technical_adj_close"),
+        pl.col("volume").cast(pl.Float64, strict=False).fill_nan(None).alias("_technical_volume"),
+    ).with_columns(
+        pl.when(
+            (pl.col("_technical_adj_close") > 0)
+            & (pl.col("_technical_adj_close").shift(1).over("symbol") > 0)
+        )
+        .then(
+            pl.col("_technical_adj_close")
+            / pl.col("_technical_adj_close").shift(1).over("symbol")
+            - 1.0
+        )
+        .otherwise(None)
+        .alias("_technical_return"),
+    ).with_columns(
+        pl.col("_technical_return")
+        .rolling_std(window_size=20, min_samples=20)
+        .over("symbol")
+        .alias("volatility_20d"),
+        pl.col("_technical_volume")
+        .rolling_median(window_size=20, min_samples=20)
+        .over("symbol")
+        .alias("median_volume_20d"),
+    ).with_columns(
+        pl.col("volatility_20d")
+        .shift(20)
+        .over("symbol")
+        .alias("prior_volatility_20d"),
+        pl.col("median_volume_20d")
+        .shift(20)
+        .over("symbol")
+        .alias("prior_median_volume_20d"),
+        # OLS slope for x = 0..4: (-2*y0 - y1 + y3 + 2*y4) / 10.
+        (
+            -2.0 * pl.col("ma20").shift(4).over("symbol")
+            - pl.col("ma20").shift(3).over("symbol")
+            + pl.col("ma20").shift(1).over("symbol")
+            + 2.0 * pl.col("ma20")
+        )
+        .truediv(10.0)
+        .alias("ma20_slope_5d"),
+    )
+    frame = frame.with_columns(
+        pl.when(
+            (pl.col("_technical_volume") > 0)
+            & (pl.col("_technical_adj_close") > 0)
+            & (pl.col("_technical_adj_close").shift(1).over("symbol") > 0)
+        )
+        .then(
+            pl.when(
+                pl.col("_technical_adj_close")
+                > pl.col("_technical_adj_close").shift(1).over("symbol")
+            )
+            .then(1.0)
+            .when(
+                pl.col("_technical_adj_close")
+                < pl.col("_technical_adj_close").shift(1).over("symbol")
+            )
+            .then(-1.0)
+            .otherwise(0.0)
+            * pl.col("_technical_volume")
+        )
+        .otherwise(None)
+        .alias("_signed_adjusted_volume"),
+        pl.when(pl.col("_technical_volume") > 0)
+        .then(pl.col("_technical_volume"))
+        .otherwise(None)
+        .alias("_positive_volume"),
+    ).with_columns(
+        (
+            pl.col("_signed_adjusted_volume")
+            .is_not_null()
+            .cast(pl.Int8)
+            .rolling_sum(window_size=20, min_samples=1)
+            .over("symbol")
+        ).alias("_signed_volume_valid_count"),
+        pl.col("_signed_adjusted_volume")
+        .rolling_sum(window_size=20, min_samples=1)
+        .over("symbol")
+        .alias("_signed_volume_numerator"),
+        pl.col("_positive_volume")
+        .rolling_sum(window_size=20, min_samples=1)
+        .over("symbol")
+        .alias("_signed_volume_denominator"),
+    ).with_columns(
+        pl.when(
+            (pl.col("_signed_volume_valid_count") >= 20)
+            & (pl.col("_signed_volume_denominator") > 0)
+        )
+        .then(pl.col("_signed_volume_numerator") / pl.col("_signed_volume_denominator"))
+        .otherwise(None)
+        .alias("signed_volume_ratio_20d")
+    )
     if split_quarantine:
         bad = _split_symbols(frame).with_columns(pl.lit(True).alias("split_quarantine"))
         frame = frame.join(bad, on="symbol", how="left").with_columns(
@@ -338,6 +445,12 @@ def price_features(
             "no_new_52_week_low_20_sessions",
             "close_above_ma50",
             "close_above_ma50_days_last10",
+            "volatility_20d",
+            "prior_volatility_20d",
+            "median_volume_20d",
+            "prior_median_volume_20d",
+            "ma20_slope_5d",
+            "signed_volume_ratio_20d",
         ]
         frame = frame.with_columns(
             [
@@ -350,7 +463,19 @@ def price_features(
             pl.lit(False).alias("split_quarantine"),
             pl.lit(None, dtype=pl.String).alias("quarantine_reason"),
         )
-    return frame
+    return frame.drop(
+        [
+            "_technical_adj_close",
+            "_technical_volume",
+            "_technical_return",
+            "_signed_adjusted_volume",
+            "_positive_volume",
+            "_signed_volume_valid_count",
+            "_signed_volume_numerator",
+            "_signed_volume_denominator",
+        ],
+        strict=False,
+    )
 
 
 def latest_price_facts(

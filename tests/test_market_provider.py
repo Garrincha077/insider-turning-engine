@@ -77,6 +77,51 @@ def test_stooq_rejects_redirect_responses() -> None:
         provider.get_daily_bars("SPY")
 
 
+def test_stooq_disk_cache_is_content_addressed_and_reused(tmp_path) -> None:
+    payload = "Date,Open,High,Low,Close,Volume\n2026-08-03,10,11,9,10.5,100\n"
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(200, text=payload, request=request)
+
+    first = StooqMarketDataProvider(
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+        cache_dir=tmp_path,
+        cache_ttl_seconds=3600,
+    )
+    assert len(first.get_daily_bars("SPY")) == 1
+    first.close()
+    second = StooqMarketDataProvider(
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+        cache_dir=tmp_path,
+        cache_ttl_seconds=3600,
+    )
+    assert len(second.get_daily_bars("SPY")) == 1
+    assert calls == 1
+    manifest = (tmp_path / "stooq" / "spy.manifest.json").read_text(encoding="utf-8")
+    assert "sha256:" in manifest
+
+
+def test_stooq_shards_are_stable_and_one_failure_does_not_abort() -> None:
+    payload = "Date,Open,High,Low,Close,Volume\n2026-08-03,10,11,9,10.5,100\n"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "bad.us" in str(request.url):
+            return httpx.Response(404, request=request)
+        return httpx.Response(200, text=payload, request=request)
+
+    provider = StooqMarketDataProvider(
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+        max_attempts=1,
+    )
+    first = provider.fetch_shard(["SPY", "BAD", "XLF"], shard_index=0, shard_count=2)
+    second = provider.fetch_shard(["XLF", "BAD", "SPY"], shard_index=0, shard_count=2)
+    assert first.bars.keys() == second.bars.keys()
+    assert first.failures.keys() == second.failures.keys()
+
+
 def test_quality_probe_is_offline_and_quarantines_split_gap() -> None:
     bars = [
         DailyBar(

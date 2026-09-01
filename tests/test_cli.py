@@ -1,13 +1,16 @@
 """Smoke tests for the command-line surface and safe dry-run defaults."""
 
+import hashlib
 import json
+import sys
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 
 from typer.testing import CliRunner
 
 from insider_turning_engine.cli import app
+from insider_turning_engine.ingestion.sec import SecPage, SecRawRecord
 from insider_turning_engine.scoring import ScoreEngine
 
 runner = CliRunner()
@@ -59,6 +62,125 @@ def test_fixture_only_daily_run_has_no_network_dependency() -> None:
     assert result.exit_code == 0
     assert '"status": "SUCCEEDED"' in result.stdout
     assert '"marketBars"' in result.stdout
+
+
+def _write_daily_manifest(tmp_path: Path) -> Path:
+    inputs = {}
+    names = ("canonicalTransactions", "marketBars", "identities", "priorState", "qualityEvidence")
+    for name in names:
+        path = tmp_path / f"{name}.json"
+        path.write_text(name, encoding="utf-8")
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        inputs[name] = {"path": path.name, "sha256": f"sha256:{digest}"}
+    manifest = tmp_path / "daily.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schemaVersion": "1.0.0",
+                "runId": "run_daily_cli_test",
+                "asOf": "2026-08-31T20:00:00Z",
+                "outputRoot": "output",
+                "inputs": inputs,
+            }
+        ),
+        encoding="utf-8",
+    )
+    return manifest
+
+
+def test_daily_execute_validates_manifest_and_echoes_pipeline_result(
+    tmp_path: Path, monkeypatch
+) -> None:
+    manifest = _write_daily_manifest(tmp_path)
+    calls: list[Path] = []
+
+    pipeline_package = ModuleType("insider_turning_engine.pipeline")
+    pipeline_module = ModuleType("insider_turning_engine.pipeline.daily")
+
+    def fake_run(path: Path) -> SimpleNamespace:
+        calls.append(path)
+        return SimpleNamespace(
+            as_mapping=lambda: {"run_id": "run_daily_cli_test", "status": "SUCCEEDED"}
+        )
+
+    pipeline_module.run_daily_pipeline = fake_run
+    monkeypatch.setitem(sys.modules, "insider_turning_engine.pipeline", pipeline_package)
+    monkeypatch.setitem(sys.modules, "insider_turning_engine.pipeline.daily", pipeline_module)
+    result = runner.invoke(app, ["daily", "--execute", "--input-manifest", str(manifest)])
+    assert result.exit_code == 0, result.output
+    assert calls == [manifest]
+    assert '"status": "SUCCEEDED"' in result.stdout
+
+
+def test_daily_execute_rejects_invalid_manifest_without_output_creation(tmp_path: Path) -> None:
+    manifest = _write_daily_manifest(tmp_path)
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    payload["inputs"]["marketBars"]["sha256"] = "sha256:" + "0" * 64
+    manifest.write_text(json.dumps(payload), encoding="utf-8")
+    result = runner.invoke(app, ["daily", "--execute", "--input-manifest", str(manifest)])
+    assert result.exit_code != 0
+    assert "hash mismatch" in result.output
+    assert not (tmp_path / "output").exists()
+
+
+def test_daily_fixture_and_execute_are_mutually_exclusive() -> None:
+    result = runner.invoke(app, ["daily", "--fixture-only", "--execute"])
+    assert result.exit_code != 0
+    assert "mutually exclusive" in result.output
+
+
+def test_update_sec_daily_index_uses_global_discovery_without_cursor(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import insider_turning_engine.cli as cli
+
+    payload = (Path(__file__).parent / "fixtures" / "form4_non_derivative.xml").read_bytes()
+    raw = SecRawRecord(
+        provider="sec",
+        provider_record_id="0001234567-26-000001",
+        issuer_cik="0000123456",
+        accession_number="0001234567-26-000001",
+        form_type="4",
+        accepted_at=datetime(2026, 8, 31, 19, tzinfo=UTC),
+        source_url="https://www.sec.gov/Archives/edgar/data/1/ownership.xml",
+        replay_locator="https://www.sec.gov/Archives/edgar/data/1/submission.txt",
+        retrieved_at=datetime(2026, 8, 31, 20, tzinfo=UTC),
+        payload=payload,
+        content_hash="sha256:" + hashlib.sha256(payload).hexdigest(),
+    )
+
+    class FakeDailySource:
+        def __init__(self, *_args, **_kwargs) -> None:
+            self.closed = False
+
+        def fetch_day(self, day: date) -> SecPage:
+            assert day == date(2026, 8, 31)
+            return SecPage((raw,), source_watermark=raw.accepted_at)
+
+        def close(self) -> None:
+            self.closed = True
+
+    monkeypatch.setattr(cli, "SECDailyIndexSource", FakeDailySource)
+    monkeypatch.setenv("SEC_USER_AGENT", "InsiderTurningEngine admin@example.com")
+    output = tmp_path / "sec.json"
+    result = runner.invoke(
+        app,
+        [
+            "update-sec",
+            "--daily-index-date",
+            "2026-08-31",
+            "--run-id",
+            "run_daily_index_20260831",
+            "--output",
+            str(output),
+            "--execute",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    document = json.loads(output.read_text("utf-8"))
+    assert len(document["records"]) == 2
+    assert not document["quarantines"]
+    assert not (tmp_path / "sec.cursor").exists()
 
 
 def test_local_sec_update_carries_explicit_run_lineage_and_requires_aware_time(

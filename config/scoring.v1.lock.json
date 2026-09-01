@@ -31,7 +31,7 @@
     },
     {
       "path": "src/insider_turning_engine/features/price.py",
-      "sha256": "sha256:58da875c1681208241b5e7e320ce9d4fcbf55548a06bc610f8e1b7bd5c9a5330"
+      "sha256": "sha256:6fae1d8c48448fd64cac41bfb5382ec9c027e0785a4803f5956097860a1bcd83"
     },
     {
       "path": "src/insider_turning_engine/features/pulse.py",
@@ -39,7 +39,7 @@
     },
     {
       "path": "src/insider_turning_engine/features/rs.py",
-      "sha256": "sha256:ca21ba8ab7155256d941854b061cb5ab8b7a3729747d6abaa42d0984116685dd"
+      "sha256": "sha256:b8e7e282417c59280025e55d0dfd547f816f2f8f9242eae5315f481238cda4b6"
     },
     {
       "path": "src/insider_turning_engine/features/technical.py",
@@ -48,6 +48,10 @@
     {
       "path": "src/insider_turning_engine/notifications/rules.py",
       "sha256": "sha256:ecc832246d99988a511dad3c739b4dcce7038abeb14ac2fe6db68c00a8fbaae7"
+    },
+    {
+      "path": "src/insider_turning_engine/pipeline/scoring.py",
+      "sha256": "sha256:5c820dee9834050a454043c90c4f40a55ae1d07803e55c66e07b2a2c15877f34"
     },
     {
       "path": "src/insider_turning_engine/scoring/components.py",
@@ -62,6 +66,6 @@
       "sha256": "sha256:6f2684554a1d97f4c800ee2fe97c91cac2a6b8d4819a4d4af34c1221a94f817b"
     }
   ],
-  "methodologyHash": "sha256:397d81b2dbfdca82c36ee8adbbcf0755987ceea95260a9301296baf660533dd4",
+  "methodologyHash": "sha256:53b873f5c374d37a0df7bad9b908d835c52898aae72ca860ecb8444faae9c6c1",
   "componentContractComplete": true
 }

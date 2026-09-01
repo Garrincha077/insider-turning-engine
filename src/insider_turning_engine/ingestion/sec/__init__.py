@@ -11,6 +11,12 @@ from .base import (
     SecResult,
     SecSource,
 )
+from .daily_index import (
+    DailyIndexEntry,
+    SECDailyIndexSource,
+    daily_index_url,
+    parse_daily_master_index,
+)
 from .historical import (
     SEC_ARCHIVE_URL_TEMPLATE,
     archive_url,
@@ -45,6 +51,8 @@ from .parser import (
 
 __all__ = [
     "HistoricalQuarterSource",
+    "DailyIndexEntry",
+    "SECDailyIndexSource",
     "RawSECRecord",
     "SECRecord",
     "SecOutcomeStatus",
@@ -62,6 +70,8 @@ __all__ = [
     "parse_sec_tables",
     "stage_quarter",
     "validate_sec_user_agent",
+    "daily_index_url",
+    "parse_daily_master_index",
     "SECIncrementalAdapter",
     "SECIncrementalSource",
     "SECCompanySubmissionsSource",

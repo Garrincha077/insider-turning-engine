@@ -7,8 +7,9 @@ import os
 import re
 from dataclasses import asdict
 from datetime import UTC, date, datetime
+from importlib import import_module
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 import httpx
 import polars as pl
@@ -29,8 +30,9 @@ from .export.dashboard import (
     export_dashboard as publish_dashboard,
 )
 from .features.price import price_features
-from .ingestion.market import CsvMarketDataProvider
+from .ingestion.market import CsvMarketDataProvider, StooqMarketDataProvider
 from .ingestion.sec import (
+    SECDailyIndexSource,
     SECIncrementalSource,
     SecRawRecord,
     decode_cursor,
@@ -133,6 +135,10 @@ def update_sec(
     accession: Annotated[str | None, typer.Option()] = None,
     source_url: Annotated[str | None, typer.Option()] = None,
     accepted_at: Annotated[str | None, typer.Option(help="ISO SEC acceptance timestamp.")] = None,
+    daily_index_date: Annotated[
+        str | None,
+        typer.Option(help="Official EDGAR daily-index date (YYYY-MM-DD)."),
+    ] = None,
     cik_file: PathOption = None,
     since: Annotated[str | None, typer.Option()] = None,
     through: Annotated[str | None, typer.Option()] = None,
@@ -143,13 +149,17 @@ def update_sec(
 ) -> None:
     """Normalize one fetched ownership XML; scheduled runs use the incremental adapter."""
 
-    if xml is None and (cik_file is None or not execute):
+    selected_modes = sum(value is not None for value in (xml, daily_index_date, cik_file))
+    if selected_modes > 1:
+        raise typer.BadParameter("choose exactly one of --xml, --daily-index-date, or --cik-file")
+    if selected_modes == 0 or (xml is None and not execute):
         _echo(
             {
                 "command": "update-sec",
                 "status": "DRY_RUN",
                 "alternatives": [
                     ["--xml", "--accession", "--source-url"],
+                    ["--daily-index-date", "--execute", "SEC_USER_AGENT"],
                     ["--cik-file", "--execute", "SEC_USER_AGENT"],
                 ],
             }
@@ -182,6 +192,47 @@ def update_sec(
         )
         records.extend(record.canonical_dump() for record in result.records)
         quarantines.extend(item.model_dump(mode="json") for item in result.quarantines)
+    elif daily_index_date is not None:
+        try:
+            index_day = date.fromisoformat(daily_index_date)
+        except ValueError as exc:
+            raise typer.BadParameter("--daily-index-date must be YYYY-MM-DD") from exc
+        user_agent = os.getenv("SEC_USER_AGENT", "").strip()
+        try:
+            user_agent = validate_sec_user_agent(user_agent)
+        except ValueError as exc:
+            raise typer.BadParameter(str(exc)) from exc
+        daily_source = SECDailyIndexSource(
+            user_agent,
+            cache_dir="data/cache/sec-daily-index",
+        )
+        try:
+            page = daily_source.fetch_day(index_day)
+            quarantines.extend(item.model_dump(mode="json") for item in page.quarantines)
+            for raw in page.records:
+                if raw.payload is None:
+                    failures.append(
+                        {
+                            "providerRecordId": raw.provider_record_id,
+                            "status": "permanent-invalid",
+                            "message": "daily-index filing has no ownership XML payload",
+                        }
+                    )
+                    continue
+                parsed = parse_sec_filing(
+                    raw.payload,
+                    {
+                        "accession_number": raw.accession_number,
+                        "source_url": raw.source_url,
+                        "accepted_at": raw.accepted_at,
+                        "observed_at": raw.retrieved_at,
+                        "run_id": resolved_run_id,
+                    },
+                )
+                records.extend(record.canonical_dump() for record in parsed.records)
+                quarantines.extend(item.model_dump(mode="json") for item in parsed.quarantines)
+        finally:
+            daily_source.close()
     else:
         assert cik_file is not None
         user_agent = os.getenv("SEC_USER_AGENT", "").strip()
@@ -198,20 +249,20 @@ def update_sec(
         if not ciks or any(not cik.isdigit() or len(cik) > 10 for cik in ciks):
             raise typer.BadParameter("CIK file must contain one or more 1-10 digit CIKs")
         ciks = list(dict.fromkeys(ciks))
-        source = SECIncrementalSource(
+        incremental_source = SECIncrementalSource(
             ciks,
             user_agent,
             cache_dir="data/cache/sec-incremental",
             run_id=resolved_run_id,
         )
         cursor, recovered_cursor = _recover_cursor(cursor_file)
-        page = source.fetch(cursor, through, since=since)
+        page = incremental_source.fetch(cursor, through, since=since)
         next_cursor = page.next_cursor
         quarantines.extend(item.model_dump(mode="json") for item in page.quarantines)
         for reference in page.records:
-            fetched = source.get(reference.provider_record_id)
+            fetched = incremental_source.get(reference.provider_record_id)
             if isinstance(fetched, SecRawRecord):
-                parsed = source.normalize(fetched)
+                parsed = incremental_source.normalize(fetched)
                 records.extend(record.canonical_dump() for record in parsed.records)
                 quarantines.extend(item.model_dump(mode="json") for item in parsed.quarantines)
             else:
@@ -229,7 +280,7 @@ def update_sec(
     _write_json(output, payload)
     incomplete = bool(quarantines or failures)
     cursor_advanced = False
-    if xml is None and not incomplete and next_cursor and next_cursor != cursor:
+    if cik_file is not None and not incomplete and next_cursor and next_cursor != cursor:
         _write_json(cursor_file, {"cursor": next_cursor})
         cursor_advanced = True
     status = "FAILED" if failures else "QUARANTINED" if quarantines else "SUCCEEDED"
@@ -241,7 +292,9 @@ def update_sec(
             "quarantines": len(quarantines),
             "failures": failures,
             "output": str(output),
-            "cursorRecovered": str(recovered_cursor) if xml is None and recovered_cursor else None,
+            "cursorRecovered": (
+                str(recovered_cursor) if cik_file is not None and recovered_cursor else None
+            ),
             "cursorAdvanced": cursor_advanced,
         }
     )
@@ -252,25 +305,129 @@ def update_sec(
 @app.command("update-market")
 def update_market(
     csv_path: PathOption = None,
+    symbols_file: PathOption = None,
+    benchmark_file: PathOption = None,
+    cache_dir: Annotated[Path, typer.Option()] = Path("data/cache/market"),
+    shard_index: Annotated[int, typer.Option(min=0)] = 0,
+    shard_count: Annotated[int, typer.Option(min=1, max=3)] = 1,
+    execute: Annotated[bool, typer.Option(help="Allow Stooq network requests.")] = False,
     output: Annotated[Path, typer.Option()] = Path("data/staging/market.parquet"),
+    quality_output: Annotated[Path, typer.Option()] = Path("data/staging/market-quality.json"),
     as_of: Annotated[str | None, typer.Option(help="ISO date cutoff.")] = None,
 ) -> None:
-    """Validate the canonical CSV fallback and persist provider-neutral bars."""
+    """Persist provider-neutral bars from CSV fallback or a bounded Stooq shard."""
 
-    if csv_path is None:
-        _echo({"command": "update-market", "status": "DRY_RUN", "requires": ["--csv-path"]})
+    if csv_path is not None and symbols_file is not None:
+        raise typer.BadParameter("choose either --csv-path or --symbols-file")
+    if csv_path is None and symbols_file is None:
+        _echo(
+            {
+                "command": "update-market",
+                "status": "DRY_RUN",
+                "alternatives": [["--csv-path"], ["--symbols-file", "--execute"]],
+            }
+        )
         return
     cutoff = date.fromisoformat(as_of) if as_of else date.today()
-    provider = CsvMarketDataProvider(csv_path, as_of_date=cutoff)
+    failures: dict[str, str] = {}
+    benchmarks: list[str] = []
+    requested: list[str]
+    if csv_path is not None:
+        provider = CsvMarketDataProvider(csv_path, as_of_date=cutoff)
+        bars = list(provider.bars)
+        requested = list(provider.symbols)
+        benchmarks = ["SPY"]
+    else:
+        assert symbols_file is not None
+        if not execute:
+            _echo(
+                {
+                    "command": "update-market",
+                    "status": "DRY_RUN",
+                    "requires": ["--symbols-file", "--execute"],
+                }
+            )
+            return
+
+        def symbols_from(path: Path) -> list[str]:
+            values = [
+                item.strip().upper()
+                for item in path.read_text("utf-8").replace(",", "\n").splitlines()
+                if item.strip() and not item.strip().startswith("#")
+            ]
+            if not values:
+                raise typer.BadParameter(f"symbol file is empty: {path}")
+            return list(dict.fromkeys(values))
+
+        requested = symbols_from(symbols_file)
+        benchmarks = symbols_from(benchmark_file) if benchmark_file is not None else ["SPY"]
+        benchmarks = list(dict.fromkeys(["SPY", *benchmarks]))
+        live = StooqMarketDataProvider(cache_dir=cache_dir)
+        try:
+            batch = live.fetch_shard(
+                requested,
+                shard_index=shard_index,
+                shard_count=shard_count,
+                as_of=cutoff,
+            )
+            fetched = dict(batch.bars)
+            failures.update(batch.failures)
+            for benchmark in benchmarks:
+                try:
+                    fetched[benchmark] = live.get_daily_bars(benchmark, as_of=cutoff)
+                except (RuntimeError, ValueError) as exc:
+                    failures[benchmark] = str(exc)
+            bars = [bar for symbol in sorted(fetched) for bar in fetched[symbol]]
+            requested = [
+                symbol
+                for index, symbol in enumerate(sorted(set(requested)))
+                if index % shard_count == shard_index
+            ]
+        finally:
+            live.close()
+
     output.parent.mkdir(parents=True, exist_ok=True)
-    pl.DataFrame([asdict(bar) for bar in provider.bars]).write_parquet(output)
+    temporary_output = output.with_suffix(output.suffix + ".tmp")
+    pl.DataFrame([asdict(bar) for bar in bars]).write_parquet(temporary_output)
+    os.replace(temporary_output, output)
+    by_symbol: dict[str, list[Any]] = {}
+    for bar in bars:
+        by_symbol.setdefault(bar.symbol, []).append(bar)
+    successful = [symbol for symbol in requested if by_symbol.get(symbol)]
+    coverage = len(successful) / len(requested) if requested else 0.0
+    latest_session = max(
+        (bar.date for symbol in successful for bar in by_symbol[symbol]),
+        default=None,
+    )
+    benchmark_fresh = all(
+        by_symbol.get(symbol)
+        and latest_session is not None
+        and max(bar.date for bar in by_symbol[symbol]) >= latest_session
+        for symbol in benchmarks
+    )
+    quality = {
+        "schemaVersion": "1.0.0",
+        "source": "csv" if csv_path is not None else "stooq",
+        "asOf": cutoff.isoformat(),
+        "requestedSymbols": len(requested),
+        "successfulSymbols": len(successful),
+        "coverage": round(coverage, 6),
+        "coveragePass": bool(requested) and coverage >= 0.90,
+        "benchmarks": benchmarks,
+        "benchmarkFresh": benchmark_fresh,
+        "latestSession": latest_session.isoformat() if latest_session else None,
+        "failures": failures,
+    }
+    _write_json(quality_output, quality)
+    status = "SUCCEEDED" if quality["coveragePass"] and benchmark_fresh else "DEGRADED"
     _echo(
         {
             "command": "update-market",
-            "status": "SUCCEEDED",
-            "symbols": len(provider.symbols),
-            "bars": len(provider.bars),
+            "status": status,
+            "symbols": len(successful),
+            "bars": len(bars),
             "output": str(output),
+            "qualityOutput": str(quality_output),
         }
     )
 
@@ -609,9 +766,15 @@ def send_alerts(
 @app.command("daily")
 def daily(
     fixture_only: Annotated[bool, typer.Option(help="Run without network or alerts.")] = False,
+    execute: Annotated[bool, typer.Option(help="Execute a validated input manifest.")] = False,
+    input_manifest: PathOption = None,
 ) -> None:
     """Run a safe fixture validation or report the scheduled production plan."""
 
+    if fixture_only and execute:
+        raise typer.BadParameter("--fixture-only and --execute are mutually exclusive")
+    if input_manifest is not None and not execute:
+        raise typer.BadParameter("--input-manifest requires --execute")
     started = datetime.now(UTC)
     if fixture_only:
         fixture_root = Path("tests/fixtures")
@@ -647,6 +810,23 @@ def daily(
         )
         if status != "SUCCEEDED":
             raise typer.Exit(1)
+        return
+    if execute:
+        if input_manifest is None:
+            raise typer.BadParameter("--input-manifest is required with --execute")
+        from .domain.daily_manifest import load_daily_input_manifest
+
+        try:
+            load_daily_input_manifest(input_manifest)
+        except ValueError as exc:
+            raise typer.BadParameter(str(exc), param_hint="--input-manifest") from exc
+        pipeline = import_module("insider_turning_engine.pipeline.daily")
+        run_daily_pipeline = cast(Any, pipeline.run_daily_pipeline)
+        result = run_daily_pipeline(input_manifest)
+        mapping = result.as_mapping() if hasattr(result, "as_mapping") else result
+        if not isinstance(mapping, dict):
+            raise typer.BadParameter("daily pipeline result must map to a JSON object")
+        _echo({"command": "daily", **mapping})
         return
     _echo(
         {

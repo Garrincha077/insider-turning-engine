@@ -12,6 +12,7 @@ from .stooq import (
     SECTOR_ETFS,
     STOOQ_SYMBOL_MAP,
     SUPPORTED_SYMBOLS,
+    MarketFetchBatch,
     StooqMarketDataProvider,
     StooqProvider,
 )
@@ -25,6 +26,7 @@ __all__ = [
     "CsvProvider",
     "StooqMarketDataProvider",
     "StooqProvider",
+    "MarketFetchBatch",
     "SECTOR_ETFS",
     "STOOQ_SYMBOL_MAP",
     "SUPPORTED_SYMBOLS",

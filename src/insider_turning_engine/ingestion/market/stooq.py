@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
+import json
+import os
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from pathlib import Path
 from urllib.parse import urlparse
 
 import httpx
@@ -19,6 +24,22 @@ from .base import DailyBar, ProviderHealth
 SECTOR_ETFS = ("XLE", "XLK", "XLV", "XLRE", "XLU", "XLC", "XLB", "XLP", "XLY", "XLI", "XLF")
 SUPPORTED_SYMBOLS = ("SPY", *SECTOR_ETFS)
 STOOQ_SYMBOL_MAP = {symbol: f"{symbol.lower()}.us" for symbol in SUPPORTED_SYMBOLS}
+
+
+@dataclass(frozen=True, slots=True)
+class MarketFetchBatch:
+    """One deterministic market shard with per-symbol failure isolation."""
+
+    bars: dict[str, tuple[DailyBar, ...]]
+    failures: dict[str, str]
+
+    @property
+    def requested(self) -> int:
+        return len(self.bars) + len(self.failures)
+
+    @property
+    def succeeded(self) -> int:
+        return len(self.bars)
 
 
 class StooqMarketDataProvider:
@@ -34,11 +55,13 @@ class StooqMarketDataProvider:
         max_attempts: int = 3,
         timeout: float = 10.0,
         cache_ttl_seconds: float = 300.0,
+        cache_dir: str | Path | None = None,
         sleeper: Callable[[float], None] = time.sleep,
     ) -> None:
         self.client = client or httpx.Client(timeout=timeout, follow_redirects=False)
         self.max_attempts = max(1, max_attempts)
         self.cache_ttl_seconds = max(0.0, cache_ttl_seconds)
+        self.cache_dir = Path(cache_dir) if cache_dir is not None else None
         self._sleeper = sleeper
         self._cache: dict[str, tuple[float, tuple[DailyBar, ...]]] = {}
         self._cache_hits = 0
@@ -89,7 +112,8 @@ class StooqMarketDataProvider:
             bars = cached[1]
         else:
             self._cache_misses += 1
-            bars = self._fetch(key)
+            disk_bars = self._load_disk_cache(key)
+            bars = disk_bars if disk_bars is not None else self._fetch(key)
             self._cache[key] = (now, bars)
         cutoff = as_of or date.today()
         return tuple(
@@ -119,7 +143,10 @@ class StooqMarketDataProvider:
                         response=response,
                     )
                 response.raise_for_status()
-                bars = self._parse(response.text, symbol, response.url.__str__())
+                payload = response.text
+                locator = response.url.__str__()
+                bars = self._parse(payload, symbol, locator)
+                self._write_disk_cache(symbol, payload, locator)
                 self._last_health = ProviderHealth(
                     provider=self.name,
                     available=True,
@@ -152,6 +179,101 @@ class StooqMarketDataProvider:
         raise RuntimeError(
             f"Stooq market fetch failed for {symbol}: {error or 'empty response'}"
         ) from error
+
+    def _disk_paths(self, symbol: str) -> tuple[Path, Path] | None:
+        if self.cache_dir is None:
+            return None
+        safe = symbol.lower().replace(".", "_")
+        root = self.cache_dir / "stooq"
+        return root / f"{safe}.csv", root / f"{safe}.manifest.json"
+
+    def _load_disk_cache(self, symbol: str) -> tuple[DailyBar, ...] | None:
+        paths = self._disk_paths(symbol)
+        if paths is None:
+            return None
+        payload_path, manifest_path = paths
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            payload = payload_path.read_bytes()
+            age = max(0.0, time.time() - payload_path.stat().st_mtime)
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            return None
+        digest = "sha256:" + hashlib.sha256(payload).hexdigest()
+        if (
+            not isinstance(manifest, dict)
+            or manifest.get("schemaVersion") != "1.0.0"
+            or manifest.get("symbol") != symbol
+            or manifest.get("sha256") != digest
+            or manifest.get("sourceUrl") != self._url(symbol)
+            or age > self.cache_ttl_seconds
+        ):
+            return None
+        try:
+            bars = self._parse(payload.decode("utf-8"), symbol, str(manifest["sourceUrl"]))
+        except (UnicodeError, ValueError):
+            return None
+        self._cache_hits += 1
+        return bars
+
+    def _write_disk_cache(self, symbol: str, payload: str, locator: str) -> None:
+        paths = self._disk_paths(symbol)
+        if paths is None:
+            return
+        payload_path, manifest_path = paths
+        payload_path.parent.mkdir(parents=True, exist_ok=True)
+        content = payload.encode("utf-8")
+        manifest = {
+            "schemaVersion": "1.0.0",
+            "symbol": symbol,
+            "sourceUrl": locator,
+            "sha256": "sha256:" + hashlib.sha256(content).hexdigest(),
+        }
+        for path, value in (
+            (payload_path, content),
+            (
+                manifest_path,
+                (json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n").encode(),
+            ),
+        ):
+            temporary = path.with_suffix(path.suffix + ".tmp")
+            with temporary.open("wb") as stream:
+                stream.write(value)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, path)
+
+    def fetch_shard(
+        self,
+        symbols: list[str] | tuple[str, ...],
+        *,
+        shard_index: int = 0,
+        shard_count: int = 1,
+        start: date | None = None,
+        end: date | None = None,
+        as_of: date | None = None,
+    ) -> MarketFetchBatch:
+        """Fetch a stable lexical shard while retaining individual failures."""
+
+        if shard_count < 1 or not 0 <= shard_index < shard_count:
+            raise ValueError("invalid shard_index/shard_count")
+        selected = tuple(
+            symbol
+            for index, symbol in enumerate(sorted({item.strip().upper() for item in symbols}))
+            if index % shard_count == shard_index
+        )
+        bars: dict[str, tuple[DailyBar, ...]] = {}
+        failures: dict[str, str] = {}
+        for symbol in selected:
+            try:
+                bars[symbol] = self.get_daily_bars(
+                    symbol,
+                    start=start,
+                    end=end,
+                    as_of=as_of,
+                )
+            except (RuntimeError, ValueError) as exc:
+                failures[symbol] = str(exc)
+        return MarketFetchBatch(bars, failures)
 
     @staticmethod
     def _parse(payload: str, symbol: str, locator: str) -> tuple[DailyBar, ...]:
@@ -211,3 +333,5 @@ class StooqMarketDataProvider:
 
 
 StooqProvider = StooqMarketDataProvider
+
+__all__ = ["MarketFetchBatch", "StooqMarketDataProvider", "StooqProvider"]
