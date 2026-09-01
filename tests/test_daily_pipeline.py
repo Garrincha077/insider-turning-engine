@@ -8,6 +8,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 
+from insider_turning_engine.export.dashboard import export_dashboard, validate_dashboard_directory
 from insider_turning_engine.ingestion.sec.parser import parse_sec_xml
 from insider_turning_engine.pipeline.daily import DailyPipelineError, run_daily_pipeline
 
@@ -118,6 +119,71 @@ def test_daily_pipeline_replay_is_byte_identical_and_holds_missing_components(
     assert first.signals[0]["total_score"] is None
     assert "STALE_DATA_HOLD" in first.signals[0]["reason_codes"]
     assert first.alerts == ()
+
+
+def test_daily_pipeline_dashboard_input_is_exporter_ready_when_blocked(
+    tmp_path: Path,
+) -> None:
+    manifest = _manifest(tmp_path)
+    result = run_daily_pipeline(manifest)
+    source = result.output_root / "snapshots" / result.run_id / "warehouse" / "dashboard-input.json"
+    dashboard_input = json.loads(source.read_text(encoding="utf-8"))
+
+    exported = export_dashboard(
+        dashboard_input,
+        tmp_path / "dashboard",
+        run_id=result.run_id,
+        as_of="2026-08-31T20:00:00Z",
+        chunk_by_ticker=True,
+    )
+    published = validate_dashboard_directory(exported.output_dir)
+
+    assert published["status"] == "DEGRADED"
+    assert published["quality"]["disposition"] == "BLOCKED"
+    assert published["signals"] == []
+
+
+def test_daily_pipeline_rejects_spoofed_pass_backtest_lineage(tmp_path: Path) -> None:
+    manifest_path = _manifest(tmp_path)
+    report_path = tmp_path / "backtest-report.json"
+    _write_json(
+        report_path,
+        {
+            "evaluationStage": "sealed-oos",
+            "scoreVersion": "scoring.v1",
+            "formalReport": {
+                "gate": {
+                    "status": "PASS",
+                    "observed_eligible_oos_outcomes": 200,
+                },
+                "scoring_provenance": {
+                    "score_version": "scoring.v1",
+                    "score_config_hash": "sha256:" + "0" * 64,
+                    "methodology_hash": "sha256:" + "0" * 64,
+                    "methodology_status": "FROZEN",
+                },
+            },
+        },
+    )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["inputs"]["backtestReport"] = {
+        "path": report_path.name,
+        "sha256": _digest(report_path),
+    }
+    _write_json(manifest_path, manifest)
+
+    result = run_daily_pipeline(manifest_path)
+    quality_path = (
+        result.output_root
+        / "snapshots"
+        / result.run_id
+        / "quality"
+        / "quality.json"
+    )
+    quality = json.loads(quality_path.read_text(encoding="utf-8"))
+    assert quality["backtestGate"] is None
+    assert quality["backtestLineageValid"] is False
+    assert "BACKTEST_LINEAGE_OR_SAMPLE_INVALID" in quality["issues"]
 
 
 def test_daily_pipeline_rejects_future_knowledge_before_writing(

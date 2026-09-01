@@ -26,6 +26,7 @@ from insider_turning_engine.features.price import latest_price_facts, price_feat
 from insider_turning_engine.features.rs import relative_strength_features
 from insider_turning_engine.features.technical import Observation, midrank_percentile
 from insider_turning_engine.normalization.amendments import resolve_amendments
+from insider_turning_engine.pipeline.dashboard_input import build_dashboard_input
 from insider_turning_engine.pipeline.scoring import DailyScoringError, assemble_daily_scores
 from insider_turning_engine.scoring import ScoreEngine
 
@@ -142,6 +143,35 @@ def _read_rows(path: Path) -> list[dict[str, Any]]:
             raise DailyPipelineError(f"JSONL row at {path}:{number} must be an object")
         jsonl_rows.append(dict(row))
     return jsonl_rows
+
+
+def _read_object(path: Path, *, label: str) -> dict[str, Any]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise DailyPipelineError(f"{label} is unreadable or invalid JSON") from exc
+    if not isinstance(value, Mapping):
+        raise DailyPipelineError(f"{label} must be a JSON object")
+    return dict(value)
+
+
+def _measurement(numerator: int, denominator: int, threshold: float) -> dict[str, Any]:
+    if numerator < 0 or denominator < 0 or numerator > denominator:
+        raise DailyPipelineError("quality evidence contains invalid measurement counts")
+    rate = numerator / denominator if denominator else None
+    return {
+        "numerator": numerator,
+        "denominator": denominator,
+        "rate": rate,
+        "threshold": threshold,
+        "result": (
+            "PASS"
+            if rate is not None and rate >= threshold
+            else "FAIL"
+            if rate is not None
+            else "NOT_EVALUATED"
+        ),
+    }
 
 
 def _read_sec_batch(path: Path) -> list[dict[str, Any]]:
@@ -616,14 +646,13 @@ def run_daily_pipeline(manifest_path: Path) -> DailyRunResult:
 
     quality_path = _artifact_path(inputs, "qualityEvidence", required=True)
     assert quality_path is not None
-    quality_rows = _read_rows(quality_path)
-    if quality_path.read_text(encoding="utf-8").strip() and not quality_rows:
-        try:
-            quality_value = json.loads(quality_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as exc:
-            raise DailyPipelineError("quality evidence is invalid JSON") from exc
-        if not isinstance(quality_value, Mapping):
-            raise DailyPipelineError("quality evidence must be a JSON object")
+    quality_evidence = _read_object(quality_path, label="quality evidence")
+    evidence_run_id = quality_evidence.get("runId")
+    if evidence_run_id is not None and evidence_run_id != run_id:
+        raise DailyPipelineError("quality evidence runId does not match manifest")
+    evidence_as_of = quality_evidence.get("asOf")
+    if evidence_as_of is not None and _as_utc(evidence_as_of, name="quality asOf") != as_of:
+        raise DailyPipelineError("quality evidence asOf does not match manifest")
 
     batch_path = _artifact_path(inputs, "secBatch", "sec_batch", "sec", "batch")
     batch_records: list[CanonicalTransaction] = []
@@ -708,12 +737,122 @@ def run_daily_pipeline(manifest_path: Path) -> DailyRunResult:
         and facts["date"] >= latest_candidate_session
         for symbol in required_benchmarks
     )
+    sec_evidence = quality_evidence.get("sec", {})
+    market_evidence = quality_evidence.get("market", {})
+    core_evidence = quality_evidence.get("coreBranchCoverage", {})
+    if not isinstance(sec_evidence, Mapping) or not isinstance(market_evidence, Mapping):
+        raise DailyPipelineError("quality evidence sec and market fields must be objects")
+
+    def evidence_count(source: Mapping[str, Any], name: str, default: int = 0) -> int:
+        value = source.get(name, default)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise DailyPipelineError(f"quality evidence {name} must be a non-negative integer")
+        return value
+
+    sec_records = evidence_count(sec_evidence, "recordCount", len(batch_records))
+    sec_quarantines = evidence_count(sec_evidence, "quarantineCount")
+    sec_failures = evidence_count(sec_evidence, "failureCount")
+    if "recordCount" in sec_evidence and sec_records != len(canonical_history):
+        raise DailyPipelineError(
+            "quality evidence SEC recordCount does not match canonical history"
+        )
+    parse_measurement = _measurement(
+        sec_records,
+        sec_records + sec_quarantines + sec_failures,
+        0.995,
+    )
+    coverage_measurement = _measurement(len(priced_issuers), len(mapped_issuers), 0.90)
+    if isinstance(core_evidence, Mapping):
+        core_numerator = (
+            0
+            if core_evidence.get("numerator") is None
+            else evidence_count(core_evidence, "numerator")
+        )
+        core_denominator = (
+            0
+            if core_evidence.get("denominator") is None
+            else evidence_count(core_evidence, "denominator")
+        )
+    else:
+        core_numerator = core_denominator = 0
+    core_measurement = _measurement(core_numerator, core_denominator, 0.85)
+    evidence_benchmark_fresh = market_evidence.get("benchmarkFresh")
+    if evidence_benchmark_fresh is not None and not isinstance(evidence_benchmark_fresh, bool):
+        raise DailyPipelineError("quality evidence benchmarkFresh must be boolean")
+    benchmark_fresh = benchmark_fresh and evidence_benchmark_fresh is not False
+
+    backtest_path = _artifact_path(inputs, "backtestReport")
+    backtest_gate = None
+    backtest_lineage_valid = False
+    backtest_observed_outcomes = 0
+    if backtest_path is not None:
+        backtest_report = _read_object(backtest_path, label="backtest report")
+        formal = backtest_report.get("formalReport", {})
+        if isinstance(formal, Mapping):
+            gate = formal.get("gate")
+            provenance = formal.get("scoring_provenance")
+            if isinstance(gate, Mapping) and isinstance(provenance, Mapping):
+                raw_observed = gate.get("observed_eligible_oos_outcomes", 0)
+                if (
+                    isinstance(raw_observed, bool)
+                    or not isinstance(raw_observed, int)
+                    or raw_observed < 0
+                ):
+                    raise DailyPipelineError(
+                        "backtest observed eligible outcomes must be a non-negative integer"
+                    )
+                backtest_observed_outcomes = raw_observed
+                backtest_lineage_valid = (
+                    backtest_report.get("evaluationStage") == "sealed-oos"
+                    and backtest_report.get("scoreVersion") == engine.score_version
+                    and provenance.get("score_version") == engine.score_version
+                    and provenance.get("score_config_hash") == engine.score_config_hash
+                    and provenance.get("methodology_hash") == engine.methodology_hash
+                    and provenance.get("methodology_status") == "FROZEN"
+                    and backtest_observed_outcomes >= 200
+                )
+                if backtest_lineage_valid:
+                    backtest_gate = gate.get("status")
+
+    issues: list[str] = []
+    if parse_measurement["result"] != "PASS":
+        issues.append("SEC_PARSE_QUALITY_FAILED")
+    if coverage_measurement["result"] != "PASS":
+        issues.append("MARKET_COVERAGE_FAILED")
+    if core_measurement["result"] != "PASS":
+        issues.append("CORE_BRANCH_COVERAGE_NOT_VERIFIED")
+    if not benchmark_fresh:
+        issues.append("STALE_OR_MISSING_BENCHMARK")
+    if not engine.methodology_complete:
+        issues.append("SCORING_METHODOLOGY_INCOMPLETE")
+    if backtest_path is not None and not backtest_lineage_valid:
+        issues.append("BACKTEST_LINEAGE_OR_SAMPLE_INVALID")
+    if backtest_gate != "PASS":
+        issues.append("BACKTEST_GATE_NOT_PASS")
+    operational_pass = (
+        parse_measurement["result"] == "PASS"
+        and coverage_measurement["result"] == "PASS"
+        and core_measurement["result"] == "PASS"
+        and benchmark_fresh
+    )
+    release_pass = operational_pass and engine.methodology_complete and backtest_gate == "PASS"
+    disposition = "PASS" if release_pass else "DEGRADED" if operational_pass else "BLOCKED"
+    export_quality = {
+        "disposition": disposition,
+        "canonicalValid": sec_quarantines == 0 and sec_failures == 0,
+        "methodologyComplete": engine.methodology_complete,
+        "benchmarkFresh": benchmark_fresh,
+        "parseSuccess": parse_measurement,
+        "marketCoverage": coverage_measurement,
+        "coreBranchCoverage": core_measurement,
+        "issues": sorted(set(issues)),
+    }
     quality = {
         "schemaVersion": "1.0.0",
         "runId": run_id,
         "asOf": as_of,
         "canonicalValid": True,
-        "quarantineCount": 0,
+        "quarantineCount": sec_quarantines,
         "effectiveTransactionCount": len(effective_records) if effective_records else len(flat),
         "insiderActiveIssuerCount": len(issuers),
         "mappedIssuerCount": len(mapped_issuers),
@@ -724,15 +863,19 @@ def run_daily_pipeline(manifest_path: Path) -> DailyRunResult:
         "marketFeatureError": market_error,
         "methodologyComplete": engine.methodology_complete,
         "methodologyStatus": engine.methodology_status,
-        "publishEligible": False,
+        "backtestGate": backtest_gate,
+        "backtestObservedEligibleOutcomes": backtest_observed_outcomes,
+        "backtestLineageValid": backtest_lineage_valid,
+        "disposition": disposition,
+        "issues": sorted(set(issues)),
     }
     alert_quality = {
         "canonical_valid": True,
         "stale_benchmark": not benchmark_fresh,
-        "parse_success_rate": 1.0,
+        "parse_success_rate": parse_measurement["rate"] or 0.0,
         "market_data_coverage_rate": market_coverage,
-        "core_branch_coverage_rate": 0.0,
-        "quality_gate_passed": False,
+        "core_branch_coverage_rate": core_measurement["rate"] or 0.0,
+        "quality_gate_passed": release_pass,
     }
     active = set(issuers)
     effective_for_scoring: list[Any] = (
@@ -767,19 +910,23 @@ def run_daily_pipeline(manifest_path: Path) -> DailyRunResult:
     effective_output = (
         [record.canonical_dump() for record in effective_records] if effective_records else flat
     )
+    dashboard_input = build_dashboard_input(
+        run_id=run_id,
+        as_of=as_of,
+        records=effective_records,
+        identity_rows=identity_rows,
+        ticker_by_cik=identity,
+        sector_by_ticker=sector_by_ticker,
+        scoring_context=scoring_context,
+        components=components_output,
+        signals=signals,
+        quality=export_quality,
+        score_version=engine.score_version,
+    )
     artifacts = {
         "components/components.json": _canonical_json(components_output),
         "warehouse/signals.json": _canonical_json(signals),
-        "warehouse/dashboard-input.json": _canonical_json(
-            {
-                "runId": run_id,
-                "asOf": as_of,
-                "scoreVersion": engine.score_version,
-                "methodologyHash": engine.methodology_hash,
-                "configHash": engine.score_config_hash,
-                "signals": signals,
-            }
-        ),
+        "warehouse/dashboard-input.json": _canonical_json(dashboard_input),
         "alerts/candidates.json": _canonical_json(alerts),
         "state/prior-state.json": _canonical_json(next_state),
         "state/prior-scores.json": _canonical_json(next_scores),

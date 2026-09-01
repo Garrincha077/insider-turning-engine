@@ -18,14 +18,9 @@ jobs:
       - run: uv sync --all-groups --frozen
       - run: uv run ruff check src tests
       - run: uv run mypy src
-      - run: uv run pytest
-      - name: Enforce 85% branch coverage on core decision modules
+      - name: Run the suite and enforce 85% branch coverage on core decision modules
         run: >-
           uv run pytest
-          tests/test_scoring_state.py
-          tests/test_amendments.py
-          tests/test_opportunistic_divergence.py
-          tests/test_backtest_engine.py
           --cov=insider_turning_engine.scoring
           --cov=insider_turning_engine.normalization.amendments
           --cov=insider_turning_engine.features.cluster

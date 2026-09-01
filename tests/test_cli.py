@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import re
 import sys
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -14,6 +15,7 @@ from insider_turning_engine.ingestion.sec import SecPage, SecRawRecord
 from insider_turning_engine.scoring import ScoreEngine
 
 runner = CliRunner()
+_ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 COMMANDS = (
     "backfill-sec",
     "update-sec",
@@ -416,7 +418,7 @@ def test_send_alerts_execute_requires_pass_manifest(tmp_path, monkeypatch) -> No
         ["send-alerts", "--candidates", str(candidates), "--execute"],
     )
     assert missing.exit_code != 0
-    assert "--manifest is required" in missing.output
+    assert "--manifest is required" in _ANSI.sub("", missing.output)
 
     sample_manifest = Path(__file__).parents[1] / "app" / "public" / "data" / "manifest.json"
     degraded = runner.invoke(
@@ -431,7 +433,7 @@ def test_send_alerts_execute_requires_pass_manifest(tmp_path, monkeypatch) -> No
         ],
     )
     assert degraded.exit_code != 0
-    assert "PASS publication manifest" in degraded.output
+    assert "PASS publication manifest" in _ANSI.sub("", degraded.output)
 
 
 def test_update_sec_does_not_advance_cursor_after_fetch_failure(tmp_path, monkeypatch) -> None:

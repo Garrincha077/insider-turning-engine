@@ -15,10 +15,10 @@ export type Candidate = {
   divergence: number;
   turn: number;
   cluster: number;
-  marketRs: number;
-  sectorRs: number;
-  insiderCost: number;
-  currentPrice: number;
+  marketRs: number | null;
+  sectorRs: number | null;
+  insiderCost: number | null;
+  currentPrice: number | null;
   state: EngineState;
   reasons: string[];
 };
@@ -38,9 +38,9 @@ export type DashboardData = {
   scoreVersion: string;
   generatedAt: string;
   status: 'VALIDATED' | 'EXPERIMENTAL' | 'STALE';
-  marketPulse: number;
-  pulsePercentile: number;
-  pulseHistory: Array<{ date: string; market: number; technology: number; financials: number }>;
+  marketPulse: number | null;
+  pulsePercentile: number | null;
+  pulseHistory: Array<{ date: string; market: number | null; technology: number | null; financials: number | null }>;
   candidates: Candidate[];
   filings: Filing[];
   backtest: Array<{ horizon: string; fullEngine: number; clusterBuy: number; simpleRatio: number }>;

@@ -1,5 +1,6 @@
 import json
 import math
+from datetime import date, datetime
 from pathlib import Path
 
 import pytest
@@ -81,6 +82,52 @@ def test_score_rejects_missing_future_like_and_non_finite_inputs() -> None:
             volume_accumulation=50,
             cost_basis_reclaim=50,
         )
+
+
+@pytest.mark.parametrize(
+    ("value", "message"),
+    [
+        (True, "required"),
+        ("not-a-number", "numeric"),
+        (-0.1, "within 0..100"),
+        (100.1, "within 0..100"),
+    ],
+)
+def test_score_rejects_non_numeric_boolean_and_out_of_range_values(
+    value: object, message: str
+) -> None:
+    engine = ScoreEngine()
+    with pytest.raises(ScoreValidationError, match=message):
+        engine.company_insider(
+            conviction=value,
+            cluster=50,
+            opportunistic=50,
+            net_buying_absence_sales=50,
+        )
+
+
+def test_score_rejects_unknown_models_components_and_naive_as_of() -> None:
+    with pytest.raises(ScoreValidationError, match="timezone-aware"):
+        ScoreEngine(as_of=datetime(2026, 8, 1))
+    engine = ScoreEngine(as_of=date(2026, 8, 1), run_id="run_score_contract_20260801")
+    with pytest.raises(ScoreValidationError, match="unknown score model"):
+        engine.score("not-a-model", {})
+    with pytest.raises(ScoreValidationError, match="unknown company_insider components"):
+        engine.company_insider(
+            conviction=50,
+            cluster=50,
+            opportunistic=50,
+            net_buying_absence_sales=50,
+            extra=50,
+        )
+    result = engine.divergence(
+        price_weakness=50,
+        insider_activity_percentile=60,
+        acceleration_cluster=70,
+        absence_relevant_sales=80,
+    )
+    assert result.as_of == "2026-08-01"
+    assert result.run_id == "run_score_contract_20260801"
 
 
 def test_state_machine_promotes_one_state_at_a_time_and_confirms() -> None:
