@@ -9,6 +9,7 @@ from .quality import (
     probe_market_coverage,
 )
 from .stooq import (
+    MAX_SHARD_COUNT,
     SECTOR_ETFS,
     STOOQ_SYMBOL_MAP,
     SUPPORTED_SYMBOLS,
@@ -27,6 +28,7 @@ __all__ = [
     "StooqMarketDataProvider",
     "StooqProvider",
     "MarketFetchBatch",
+    "MAX_SHARD_COUNT",
     "SECTOR_ETFS",
     "STOOQ_SYMBOL_MAP",
     "SUPPORTED_SYMBOLS",

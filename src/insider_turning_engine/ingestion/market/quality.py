@@ -41,8 +41,6 @@ def probe_market_coverage(
     """
 
     requested = tuple(dict.fromkeys(symbol.strip().upper() for symbol in symbols if symbol.strip()))
-    if len(requested) > 50:
-        raise ValueError("the market quality probe accepts at most 50 symbols")
     grouped = _rows_by_symbol(bars)
     cutoff = as_of or date.today()
     covered: list[str] = []
@@ -108,6 +106,9 @@ def probe_50_symbols(
 ) -> CoverageReport:
     """Run the offline quality probe for a universe of up to 50 symbols."""
 
+    requested = tuple(symbol for symbol in symbols if symbol.strip())
+    if len(dict.fromkeys(symbol.strip().upper() for symbol in requested)) > 50:
+        raise ValueError("the 50-symbol market quality probe accepts at most 50 symbols")
     return probe_market_coverage(bars, symbols, **kwargs)  # type: ignore[arg-type]
 
 

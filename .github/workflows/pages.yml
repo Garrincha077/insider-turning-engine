@@ -44,7 +44,7 @@ jobs:
         working-directory: app
       - run: npm run build
         working-directory: app
-      - name: Validate production snapshot or isolated experimental demo
+      - name: Validate atomic dashboard snapshot or isolated experimental demo
         shell: bash
         run: |
           test -s app/dist/index.html

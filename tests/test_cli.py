@@ -64,6 +64,51 @@ def test_fixture_only_daily_run_has_no_network_dependency() -> None:
     assert '"marketBars"' in result.stdout
 
 
+def test_update_market_accepts_parquet_fallback_and_emits_benchmark_evidence(
+    tmp_path: Path,
+) -> None:
+    first_output = tmp_path / "market.parquet"
+    first_quality = tmp_path / "quality.json"
+    first = runner.invoke(
+        app,
+        [
+            "update-market",
+            "--csv-path",
+            "tests/fixtures/daily_market.csv",
+            "--as-of",
+            "2026-08-14",
+            "--output",
+            str(first_output),
+            "--quality-output",
+            str(first_quality),
+        ],
+    )
+    assert first.exit_code == 0, first.output
+
+    second_output = tmp_path / "market-roundtrip.parquet"
+    second_quality = tmp_path / "quality-roundtrip.json"
+    second = runner.invoke(
+        app,
+        [
+            "update-market",
+            "--csv-path",
+            str(first_output),
+            "--as-of",
+            "2026-08-14",
+            "--output",
+            str(second_output),
+            "--quality-output",
+            str(second_quality),
+        ],
+    )
+    assert second.exit_code == 0, second.output
+    quality = json.loads(second_quality.read_text(encoding="utf-8"))
+    assert quality["source"] == "parquet"
+    assert quality["benchmarkFresh"] is True
+    assert quality["benchmarkEvidence"]["SPY"]["latestSession"] == "2026-08-14"
+    assert quality["qualityFlags"]["ACME"] == ["covered"]
+
+
 def _write_daily_manifest(tmp_path: Path) -> Path:
     inputs = {}
     names = ("canonicalTransactions", "marketBars", "identities", "priorState", "qualityEvidence")

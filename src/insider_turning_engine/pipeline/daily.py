@@ -144,6 +144,37 @@ def _read_rows(path: Path) -> list[dict[str, Any]]:
     return jsonl_rows
 
 
+def _read_sec_batch(path: Path) -> list[dict[str, Any]]:
+    """Read a canonical SEC batch and reject an incomplete producer envelope.
+
+    ``update-sec`` deliberately persists records together with its quarantine
+    and failure evidence.  Treating that object as a transaction row would
+    hide partial ingestion from the canonical commit boundary, so the daily
+    consumer validates the envelope before it exposes the record list.
+    """
+
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise DailyPipelineError("SEC batch is unreadable or invalid JSON") from exc
+    rows: Any
+    if isinstance(value, list):
+        rows = value
+    elif isinstance(value, Mapping):
+        failures = value.get("failures", [])
+        quarantines = value.get("quarantines", [])
+        if not isinstance(failures, list) or not isinstance(quarantines, list):
+            raise DailyPipelineError("SEC batch evidence must be arrays")
+        if failures or quarantines:
+            raise DailyPipelineError("SEC batch contains ingestion or quarantine errors")
+        rows = value.get("records")
+    else:
+        rows = None
+    if not isinstance(rows, list) or any(not isinstance(row, Mapping) for row in rows):
+        raise DailyPipelineError("SEC batch records must be an array of objects")
+    return [dict(cast(Mapping[str, Any], row)) for row in rows]
+
+
 def _canonical_records(
     rows: Iterable[Mapping[str, Any]],
 ) -> tuple[list[CanonicalTransaction], list[dict[str, Any]]]:
@@ -597,7 +628,7 @@ def run_daily_pipeline(manifest_path: Path) -> DailyRunResult:
     batch_path = _artifact_path(inputs, "secBatch", "sec_batch", "sec", "batch")
     batch_records: list[CanonicalTransaction] = []
     if batch_path is not None:
-        batch_raw = _read_rows(batch_path)
+        batch_raw = _read_sec_batch(batch_path)
         batch_records, batch_flat = _canonical_records(batch_raw)
         _reject_future_rows(batch_flat, as_of=as_of, source="SEC batch")
         if len(batch_records) != len(batch_raw):

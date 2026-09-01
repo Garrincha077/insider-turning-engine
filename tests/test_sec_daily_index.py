@@ -82,6 +82,13 @@ def test_source_retains_partial_failure_without_advancing_past_valid_record() ->
 
 def test_daily_index_cache_is_content_addressed_and_replayable(tmp_path) -> None:
     requests: list[str] = []
+    retrieved = iter(
+        (
+            datetime(2026, 9, 1, 0, 0, tzinfo=UTC),
+            datetime(2026, 9, 1, 0, 1, tzinfo=UTC),
+            datetime(2026, 9, 1, 0, 2, tzinfo=UTC),
+        )
+    )
 
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request.url.path)
@@ -93,11 +100,13 @@ def test_daily_index_cache_is_content_addressed_and_replayable(tmp_path) -> None
         client=httpx.Client(transport=httpx.MockTransport(handler)),
         cache_dir=tmp_path,
         sleeper=lambda _delay: None,
+        clock=lambda: next(retrieved),
     )
     first = source.fetch_day(date(2026, 8, 31))
     count = len(requests)
     second = source.fetch_day(date(2026, 8, 31))
     assert len(first.records) == len(second.records) == 1
+    assert first.records == second.records
     assert len(requests) == count
 
     manifest = next((tmp_path / "daily-index").glob("*.manifest.json"))

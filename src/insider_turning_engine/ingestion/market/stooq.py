@@ -7,6 +7,7 @@ import hashlib
 import io
 import json
 import os
+import tempfile
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -24,6 +25,7 @@ from .base import DailyBar, ProviderHealth
 SECTOR_ETFS = ("XLE", "XLK", "XLV", "XLRE", "XLU", "XLC", "XLB", "XLP", "XLY", "XLI", "XLF")
 SUPPORTED_SYMBOLS = ("SPY", *SECTOR_ETFS)
 STOOQ_SYMBOL_MAP = {symbol: f"{symbol.lower()}.us" for symbol in SUPPORTED_SYMBOLS}
+MAX_SHARD_COUNT = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,6 +206,7 @@ class StooqMarketDataProvider:
             or manifest.get("schemaVersion") != "1.0.0"
             or manifest.get("symbol") != symbol
             or manifest.get("sha256") != digest
+            or manifest.get("byteLength") != len(payload)
             or manifest.get("sourceUrl") != self._url(symbol)
             or age > self.cache_ttl_seconds
         ):
@@ -227,20 +230,35 @@ class StooqMarketDataProvider:
             "symbol": symbol,
             "sourceUrl": locator,
             "sha256": "sha256:" + hashlib.sha256(content).hexdigest(),
+            "byteLength": len(content),
+            "fetchedAt": datetime.now(UTC).isoformat(),
         }
-        for path, value in (
-            (payload_path, content),
-            (
-                manifest_path,
-                (json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n").encode(),
-            ),
-        ):
-            temporary = path.with_suffix(path.suffix + ".tmp")
-            with temporary.open("wb") as stream:
-                stream.write(value)
-                stream.flush()
-                os.fsync(stream.fileno())
-            os.replace(temporary, path)
+        manifest_content = (
+            json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n"
+        ).encode()
+
+        # Use unique same-directory temporary files so concurrent refreshes do
+        # not clobber each other's ``.tmp`` file.  The checksum in the
+        # manifest makes a crash between the two replaces fail closed: a
+        # mixed data/metadata pair is ignored on the next read.
+        for path, value in ((payload_path, content), (manifest_path, manifest_content)):
+            temporary_name: str | None = None
+            try:
+                with tempfile.NamedTemporaryFile(
+                    mode="wb", dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", delete=False
+                ) as stream:
+                    temporary_name = stream.name
+                    stream.write(value)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                os.replace(temporary_name, path)
+                temporary_name = None
+            finally:
+                if temporary_name is not None:
+                    try:
+                        os.unlink(temporary_name)
+                    except FileNotFoundError:
+                        pass
 
     def fetch_shard(
         self,
@@ -254,8 +272,15 @@ class StooqMarketDataProvider:
     ) -> MarketFetchBatch:
         """Fetch a stable lexical shard while retaining individual failures."""
 
-        if shard_count < 1 or not 0 <= shard_index < shard_count:
-            raise ValueError("invalid shard_index/shard_count")
+        if (
+            shard_count < 1
+            or shard_count > MAX_SHARD_COUNT
+            or not 0 <= shard_index < shard_count
+        ):
+            raise ValueError(
+                "invalid shard_index/shard_count; "
+                f"shard_count must be between 1 and {MAX_SHARD_COUNT}"
+            )
         selected = tuple(
             symbol
             for index, symbol in enumerate(sorted({item.strip().upper() for item in symbols}))
@@ -283,12 +308,16 @@ class StooqMarketDataProvider:
         if not required.issubset(fields):
             raise ValueError("Stooq response missing daily OHLCV columns")
         parsed: list[DailyBar] = []
+        seen_dates: set[date] = set()
         for row in reader:
             normalized = {
                 str(key).strip().lower(): value for key, value in row.items() if key is not None
             }
             try:
                 day = date.fromisoformat(str(normalized["date"]).strip())
+                if day in seen_dates:
+                    raise ValueError(f"duplicate Stooq daily row for {symbol} on {day}")
+                seen_dates.add(day)
                 volume = int(Decimal(str(normalized["volume"]).strip()))
                 open_price = Decimal(str(normalized["open"]).strip())
                 high = Decimal(str(normalized["high"]).strip())
@@ -334,4 +363,4 @@ class StooqMarketDataProvider:
 
 StooqProvider = StooqMarketDataProvider
 
-__all__ = ["MarketFetchBatch", "StooqMarketDataProvider", "StooqProvider"]
+__all__ = ["MAX_SHARD_COUNT", "MarketFetchBatch", "StooqMarketDataProvider", "StooqProvider"]

@@ -30,7 +30,11 @@ from .export.dashboard import (
     export_dashboard as publish_dashboard,
 )
 from .features.price import price_features
-from .ingestion.market import CsvMarketDataProvider, StooqMarketDataProvider
+from .ingestion.market import (
+    CsvMarketDataProvider,
+    StooqMarketDataProvider,
+    probe_market_coverage,
+)
 from .ingestion.sec import (
     SECDailyIndexSource,
     SECIncrementalSource,
@@ -332,11 +336,57 @@ def update_market(
     failures: dict[str, str] = {}
     benchmarks: list[str] = []
     requested: list[str]
+
+    def symbols_from(path: Path) -> list[str]:
+        values = [
+            item.strip().upper()
+            for item in path.read_text("utf-8").replace(",", "\n").splitlines()
+            if item.strip() and not item.strip().startswith("#")
+        ]
+        if not values:
+            raise typer.BadParameter(f"symbol file is empty: {path}")
+        return list(dict.fromkeys(values))
+
     if csv_path is not None:
-        provider = CsvMarketDataProvider(csv_path, as_of_date=cutoff)
+        if csv_path.suffix.lower() in {".parquet", ".pq"}:
+            # A prior canonical market artifact is a valid offline fallback.
+            # Normalize through the CSV provider so both paths enforce the
+            # same point-in-time and economic row validation.
+            frame = pl.read_parquet(csv_path)
+            if "date" in frame.columns:
+                frame = frame.with_columns(pl.col("date").cast(pl.Date))
+            # Avoid materializing provider metadata (notably timezone-aware
+            # ``available_at`` values) through Polars' Python exporter.  The
+            # canonical provider reconstructs those fields deterministically.
+            columns = [
+                name
+                for name in (
+                    "date",
+                    "ticker",
+                    "symbol",
+                    "open",
+                    "high",
+                    "low",
+                    "close",
+                    "adj_close",
+                    "volume",
+                    "adjusted",
+                    "is_adjusted",
+                    "adjustment_basis",
+                    "split_factor",
+                )
+                if name in frame.columns
+            ]
+            frame = frame.select(columns)
+            provider = CsvMarketDataProvider(frame.to_dicts(), as_of_date=cutoff)
+            source_name = "parquet"
+        else:
+            provider = CsvMarketDataProvider(csv_path, as_of_date=cutoff)
+            source_name = "csv"
         bars = list(provider.bars)
         requested = list(provider.symbols)
-        benchmarks = ["SPY"]
+        benchmarks = symbols_from(benchmark_file) if benchmark_file is not None else []
+        benchmarks = list(dict.fromkeys(["SPY", *benchmarks]))
     else:
         assert symbols_file is not None
         if not execute:
@@ -349,19 +399,10 @@ def update_market(
             )
             return
 
-        def symbols_from(path: Path) -> list[str]:
-            values = [
-                item.strip().upper()
-                for item in path.read_text("utf-8").replace(",", "\n").splitlines()
-                if item.strip() and not item.strip().startswith("#")
-            ]
-            if not values:
-                raise typer.BadParameter(f"symbol file is empty: {path}")
-            return list(dict.fromkeys(values))
-
         requested = symbols_from(symbols_file)
         benchmarks = symbols_from(benchmark_file) if benchmark_file is not None else ["SPY"]
         benchmarks = list(dict.fromkeys(["SPY", *benchmarks]))
+        source_name = "stooq"
         live = StooqMarketDataProvider(cache_dir=cache_dir)
         try:
             batch = live.fetch_shard(
@@ -393,30 +434,71 @@ def update_market(
     by_symbol: dict[str, list[Any]] = {}
     for bar in bars:
         by_symbol.setdefault(bar.symbol, []).append(bar)
-    successful = [symbol for symbol in requested if by_symbol.get(symbol)]
-    coverage = len(successful) / len(requested) if requested else 0.0
+    report = probe_market_coverage(bars, requested, as_of=cutoff)
+    successful = list(report.covered_symbols)
+    coverage = report.coverage_rate
     latest_session = max(
         (bar.date for symbol in successful for bar in by_symbol[symbol]),
         default=None,
     )
-    benchmark_fresh = all(
-        by_symbol.get(symbol)
-        and latest_session is not None
-        and max(bar.date for bar in by_symbol[symbol]) >= latest_session
-        for symbol in benchmarks
-    )
+    benchmark_evidence: dict[str, dict[str, Any]] = {}
+    for symbol in benchmarks:
+        symbol_bars = by_symbol.get(symbol, [])
+        latest = max((bar.date for bar in symbol_bars if bar.date <= cutoff), default=None)
+        age_days = (cutoff - latest).days if latest is not None else None
+        fresh = bool(
+            symbol_bars
+            and latest is not None
+            and latest_session is not None
+            and latest >= latest_session
+            and age_days is not None
+            and age_days <= 3
+        )
+        benchmark_evidence[symbol] = {
+            "covered": bool(symbol_bars),
+            "latestSession": latest.isoformat() if latest else None,
+            "ageDays": age_days,
+            "fresh": fresh,
+            "rows": len(symbol_bars),
+        }
+    benchmark_fresh = all(item["fresh"] for item in benchmark_evidence.values())
+    quality_flags = {
+        symbol: list(report.reasons.get(symbol, ("covered",)))
+        for symbol in report.requested_symbols
+    }
+    for symbol, evidence in benchmark_evidence.items():
+        if not evidence["covered"]:
+            quality_flags[symbol] = ["missing_benchmark"]
+        elif not evidence["fresh"]:
+            quality_flags[symbol] = ["stale_benchmark"]
     quality = {
         "schemaVersion": "1.0.0",
-        "source": "csv" if csv_path is not None else "stooq",
+        "source": source_name,
         "asOf": cutoff.isoformat(),
         "requestedSymbols": len(requested),
+        "requestedSymbolNames": list(report.requested_symbols),
         "successfulSymbols": len(successful),
+        "coverageNumerator": len(successful),
+        "coverageDenominator": len(requested),
         "coverage": round(coverage, 6),
-        "coveragePass": bool(requested) and coverage >= 0.90,
+        "coveragePass": bool(requested) and report.is_acceptable,
+        "quarantinedSymbols": list(report.quarantined_symbols),
+        "staleSymbols": list(report.stale_symbols),
+        "qualityFlags": quality_flags,
         "benchmarks": benchmarks,
+        "benchmarkCoverage": {
+            "covered": sum(1 for item in benchmark_evidence.values() if item["covered"]),
+            "requested": len(benchmark_evidence),
+        },
+        "benchmarkEvidence": benchmark_evidence,
         "benchmarkFresh": benchmark_fresh,
         "latestSession": latest_session.isoformat() if latest_session else None,
         "failures": failures,
+        "provenance": {
+            "provider": source_name,
+            "asOf": cutoff.isoformat(),
+            "barCount": len(bars),
+        },
     }
     _write_json(quality_output, quality)
     status = "SUCCEEDED" if quality["coveragePass"] and benchmark_fresh else "DEGRADED"

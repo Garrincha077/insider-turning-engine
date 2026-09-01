@@ -69,7 +69,11 @@ def _manifest(
         inputs["canonicalTransactions"] = ("canonical.json", [])
         inputs["secBatch"] = (
             "sec-batch.json",
-            [record.canonical_dump() for record in parsed.records],
+            {
+                "records": [record.canonical_dump() for record in parsed.records],
+                "quarantines": [],
+                "failures": [],
+            },
         )
     elif sec_batch:
         inputs["secBatch"] = ("sec-batch.json", [transaction])
@@ -134,6 +138,20 @@ def test_sec_batch_error_never_creates_commit_marker(
     with pytest.raises(DailyPipelineError, match="model-valid canonical"):
         run_daily_pipeline(manifest)
     assert not (tmp_path / "output" / "staging" / "sec-batch-committed.sha256").exists()
+
+
+def test_sec_batch_envelope_with_failure_is_rejected_before_output(tmp_path: Path) -> None:
+    manifest = _manifest(tmp_path, valid_sec_batch=True)
+    payload = json.loads((tmp_path / "sec-batch.json").read_text(encoding="utf-8"))
+    payload["failures"] = [{"providerRecordId": "bad", "message": "partial"}]
+    _write_json(tmp_path / "sec-batch.json", payload)
+    manifest_payload = json.loads(manifest.read_text(encoding="utf-8"))
+    manifest_payload["inputs"]["secBatch"]["sha256"] = _digest(tmp_path / "sec-batch.json")
+    _write_json(manifest, manifest_payload)
+
+    with pytest.raises(DailyPipelineError, match="ingestion or quarantine errors"):
+        run_daily_pipeline(manifest)
+    assert not (tmp_path / "output").exists()
 
 
 def test_valid_sec_batch_is_durably_merged_before_commit_marker(tmp_path: Path) -> None:

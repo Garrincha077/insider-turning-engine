@@ -236,7 +236,7 @@ class SECDailyIndexSource:
         target = self.cache_dir / "daily-index" / name
         return target, target.with_suffix(target.suffix + ".manifest.json")
 
-    def _cached(self, name: str, *, maximum_bytes: int) -> bytes | None:
+    def _cached(self, name: str, *, maximum_bytes: int) -> tuple[bytes, datetime] | None:
         paths = self._cache_paths(name)
         if paths is None:
             return None
@@ -247,16 +247,24 @@ class SECDailyIndexSource:
         except (OSError, json.JSONDecodeError):
             return None
         digest = "sha256:" + hashlib.sha256(payload).hexdigest()
+        retrieved_at = manifest.get("retrievedAt") if isinstance(manifest, dict) else None
         if (
             len(payload) > maximum_bytes
             or not isinstance(manifest, dict)
-            or manifest.get("schemaVersion") != "1.0.0"
+            or manifest.get("schemaVersion") != "1.1.0"
             or manifest.get("sha256") != digest
+            or not isinstance(retrieved_at, str)
         ):
             return None
-        return payload
+        try:
+            cached_at = datetime.fromisoformat(retrieved_at)
+        except ValueError:
+            return None
+        if cached_at.tzinfo is None:
+            return None
+        return payload, cached_at.astimezone(UTC)
 
-    def _cache(self, name: str, payload: bytes) -> None:
+    def _cache(self, name: str, payload: bytes, *, retrieved_at: datetime) -> None:
         paths = self._cache_paths(name)
         if paths is None:
             return
@@ -265,8 +273,9 @@ class SECDailyIndexSource:
         metadata = (
             json.dumps(
                 {
-                    "schemaVersion": "1.0.0",
+                    "schemaVersion": "1.1.0",
                     "sha256": "sha256:" + hashlib.sha256(payload).hexdigest(),
+                    "retrievedAt": retrieved_at.astimezone(UTC).isoformat(),
                 },
                 sort_keys=True,
                 separators=(",", ":"),
@@ -284,10 +293,12 @@ class SECDailyIndexSource:
     def fetch_day(self, day: date) -> SecPage:
         index_url = daily_index_url(day)
         index_name = f"master.{day:%Y%m%d}.idx"
-        index_payload = self._cached(index_name, maximum_bytes=25 * 1024 * 1024)
-        if index_payload is None:
+        cached_index = self._cached(index_name, maximum_bytes=25 * 1024 * 1024)
+        if cached_index is None:
             index_payload = self._get(index_url, maximum_bytes=25 * 1024 * 1024)
-            self._cache(index_name, index_payload)
+            self._cache(index_name, index_payload, retrieved_at=self.clock())
+        else:
+            index_payload, _index_retrieved_at = cached_index
         index_hash = "sha256:" + hashlib.sha256(index_payload).hexdigest()
         entries = parse_daily_master_index(index_payload)
         records: list[SecRawRecord] = []
@@ -295,21 +306,24 @@ class SECDailyIndexSource:
         for entry in entries:
             try:
                 submission_name = f"{entry.accession_number}.txt"
-                submission = self._cached(
+                cached_submission = self._cached(
                     submission_name,
                     maximum_bytes=25 * 1024 * 1024,
                 )
-                if submission is None:
+                if cached_submission is None:
                     submission = self._get(
                         entry.submission_url,
                         maximum_bytes=25 * 1024 * 1024,
                     )
-                    self._cache(submission_name, submission)
+                    retrieved_at = self.clock()
+                    self._cache(submission_name, submission, retrieved_at=retrieved_at)
+                else:
+                    submission, retrieved_at = cached_submission
                 records.append(
                     parse_complete_submission(
                         submission,
                         entry,
-                        retrieved_at=self.clock(),
+                        retrieved_at=retrieved_at,
                         index_url=index_url,
                         index_hash=index_hash,
                     )

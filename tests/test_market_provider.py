@@ -8,6 +8,7 @@ from insider_turning_engine.ingestion.market import (
     CsvMarketDataProvider,
     DailyBar,
     StooqMarketDataProvider,
+    probe_50_symbols,
     probe_market_coverage,
 )
 
@@ -120,6 +121,21 @@ def test_stooq_shards_are_stable_and_one_failure_does_not_abort() -> None:
     second = provider.fetch_shard(["XLF", "BAD", "SPY"], shard_index=0, shard_count=2)
     assert first.bars.keys() == second.bars.keys()
     assert first.failures.keys() == second.failures.keys()
+
+
+def test_stooq_rejects_more_than_three_shards() -> None:
+    provider = StooqMarketDataProvider(max_attempts=1)
+    with pytest.raises(ValueError, match="between 1 and 3"):
+        provider.fetch_shard(["SPY"], shard_count=4)
+    provider.close()
+
+
+def test_full_coverage_probe_is_not_limited_to_the_50_symbol_sample() -> None:
+    symbols = [f"S{index}" for index in range(51)]
+    report = probe_market_coverage([], symbols, as_of=date(2026, 8, 4))
+    assert len(report.requested_symbols) == 51
+    with pytest.raises(ValueError, match="at most 50"):
+        probe_50_symbols([], symbols, as_of=date(2026, 8, 4))
 
 
 def test_quality_probe_is_offline_and_quarantines_split_gap() -> None:
