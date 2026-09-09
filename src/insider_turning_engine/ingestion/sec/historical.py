@@ -24,15 +24,16 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
+from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import httpx
 import polars as pl
 
-SEC_ARCHIVE_URL_TEMPLATE = (
-    "https://www.sec.gov/files/dera/data/insider-transactions-data-sets/{year}q{quarter}.zip"
+SEC_CATALOG_URL = (
+    "https://www.sec.gov/data-research/sec-markets-data/insider-transactions-data-sets"
 )
 MIN_YEAR = 2006
 MAX_RETRY_DELAY_SECONDS = 60.0
@@ -133,11 +134,98 @@ def validate_quarter(year: int, quarter: int) -> tuple[int, int]:
     return year, quarter
 
 
-def archive_url(year: int, quarter: int) -> str:
-    """Return the official SEC bulk archive URL for a quarter."""
+def archive_url(year: int, quarter: int, catalog: Mapping[tuple[int, int], str]) -> str:
+    """Resolve a published quarter; SEC archive directories vary over time."""
 
     year, quarter = validate_quarter(year, quarter)
-    return SEC_ARCHIVE_URL_TEMPLATE.format(year=year, quarter=quarter)
+    try:
+        url = catalog[year, quarter]
+    except KeyError as exc:
+        message = f"SEC catalog has no published archive for {year}Q{quarter}"
+        raise SECDownloadError(message) from exc
+    _validate_archive_url(url, year, quarter)
+    return url
+
+
+def _validate_archive_url(url: str, year: int, quarter: int) -> None:
+    _validate_sec_url(url)
+    parsed = urlparse(url)
+    if (
+        parsed.query or parsed.fragment
+        or not re.fullmatch(
+            rf"/files/[a-zA-Z0-9/_-]+/insider-transactions-data-sets/{year}q{quarter}_form345\.zip",
+            parsed.path,
+        )
+    ):
+        raise ValueError("SEC archive URL does not match its dataset quarter")
+
+
+class _CatalogParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.quarters: dict[tuple[int, int], str] = {}
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag != "a":
+            return
+        href = dict(attrs).get("href") or ""
+        match = re.search(r"/(\d{4})q([1-4])_form345\.zip(?:[?#].*)?$", href)
+        if match is None:
+            return
+        period = validate_quarter(int(match[1]), int(match[2]))
+        url = urljoin(SEC_CATALOG_URL, href)
+        _validate_archive_url(url, *period)
+        if period in self.quarters and self.quarters[period] != url:
+            raise ValueError("SEC catalog contains conflicting URLs for one quarter")
+        self.quarters[period] = url
+
+
+def parse_quarter_catalog(html: str) -> dict[tuple[int, int], str]:
+    parser = _CatalogParser()
+    parser.feed(html)
+    if not parser.quarters:
+        raise SECDownloadError("SEC catalog contains no quarterly archives")
+    return dict(sorted(parser.quarters.items()))
+
+
+def fetch_quarter_catalog(
+    user_agent: str, *, client: Any | None = None,
+    sleeper: Callable[[float], None] = time.sleep, pacer: RequestPacer | None = None,
+) -> dict[tuple[int, int], str]:
+    """Fetch the bounded official catalog with the same SEC transport controls."""
+    user_agent = validate_sec_user_agent(user_agent)
+    own_client = client is None
+    if client is None:
+        client = httpx.Client(timeout=60.0)
+    try:
+        for attempt in range(4):
+            delay = min(2.0 ** attempt, MAX_RETRY_DELAY_SECONDS)
+            (pacer or _SEC_PACER).wait()
+            try:
+                with _response_context(
+                    client, SEC_CATALOG_URL, {"User-Agent": user_agent, "Accept": "text/html"}
+                ) as response:
+                    _validate_sec_response(
+                        response, SEC_CATALOG_URL,
+                        accepted_content_types=frozenset({"text/html"}),
+                    )
+                    status = int(response.status_code)
+                    if status == 200:
+                        body = _bounded_response_body(response, 4 * 1024 * 1024)
+                        return parse_quarter_catalog(body.decode("utf-8"))
+                    if status != 429 and status < 500:
+                        raise SECDownloadError(f"SEC catalog HTTP {status}")
+                    advised = _retry_after(response.headers)
+                    if advised is not None:
+                        delay = min(MAX_RETRY_DELAY_SECONDS, max(0.0, advised))
+            except (httpx.TransportError, OSError):
+                pass
+            if attempt < 3:
+                sleeper(delay)
+        raise SECDownloadError("SEC catalog failed after 4 attempts")
+    finally:
+        if own_client:
+            client.close()
 
 
 def list_quarters(start_year: int = MIN_YEAR, end_year: int | None = None) -> list[tuple[int, int]]:
@@ -589,6 +677,7 @@ def download_quarter(
     pacer: RequestPacer | None = None,
     max_attempts: int = 4,
     max_download_bytes: int = MAX_ARCHIVE_DOWNLOAD_BYTES,
+    catalog: Mapping[tuple[int, int], str] | None = None,
 ) -> DownloadResult:
     """Download and cache one SEC quarter, returning its content manifest.
 
@@ -608,7 +697,9 @@ def download_quarter(
     raw_dir.mkdir(parents=True, exist_ok=True)
     path = raw_dir / f"{year}q{quarter}.zip"
     manifest_path = raw_dir / f"{year}q{quarter}.manifest.json"
-    url = archive_url(year, quarter)
+    if catalog is None:
+        catalog = fetch_quarter_catalog(user_agent, client=client, sleeper=sleeper, pacer=pacer)
+    url = archive_url(year, quarter, catalog)
 
     existing_hash: str | None = None
     if path.is_file() and path.stat().st_size <= max_download_bytes:
@@ -868,6 +959,7 @@ def stage_quarter(
     client: Any | None = None,
     sleeper: Callable[[float], None] = time.sleep,
     pacer: RequestPacer | None = None,
+    catalog: Mapping[tuple[int, int], str] | None = None,
 ) -> StageResult:
     """Download (if necessary), parse, and write a deterministic partition."""
 
@@ -886,6 +978,7 @@ def stage_quarter(
             client=client,
             sleeper=sleeper,
             pacer=pacer,
+            catalog=catalog,
         )
     else:
         path = Path(archive_path)
@@ -895,7 +988,7 @@ def stage_quarter(
         archive = DownloadResult(
             year,
             quarter,
-            archive_url(year, quarter),
+            path.resolve().as_uri(),
             path,
             digest,
             path.stat().st_size,
@@ -1019,7 +1112,9 @@ __all__ = [
     "QuarantinedRow",
     "RequestPacer",
     "SECDownloadError",
-    "SEC_ARCHIVE_URL_TEMPLATE",
+    "SEC_CATALOG_URL",
+    "fetch_quarter_catalog",
+    "parse_quarter_catalog",
     "StageResult",
     "UnsafeArchiveError",
     "archive_url",

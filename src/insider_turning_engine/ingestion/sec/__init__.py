@@ -18,7 +18,7 @@ from .daily_index import (
     parse_daily_master_index,
 )
 from .historical import (
-    SEC_ARCHIVE_URL_TEMPLATE,
+    SEC_CATALOG_URL,
     archive_url,
     download_quarter,
     extract_archive,
@@ -77,7 +77,7 @@ __all__ = [
     "SecRawRecord",
     "SecResult",
     "SecSource",
-    "SEC_ARCHIVE_URL_TEMPLATE",
+    "SEC_CATALOG_URL",
     "archive_url",
     "download_quarter",
     "extract_archive",

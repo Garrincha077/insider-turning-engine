@@ -67,8 +67,19 @@ class _InterruptedResponse(_Response):
         raise OSError("connection interrupted")
 
 
+@pytest.fixture(autouse=True)
+def catalog_fixture(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(historical, "fetch_quarter_catalog", lambda *a, **kw: {
+        (year, quarter): (
+            "https://www.sec.gov/files/structureddata/data/insider-transactions-data-sets/"
+            f"{year}q{quarter}_form345.zip"
+        ) for year in range(2006, 2027) for quarter in range(1, 5)
+    })
+
+
 def test_period_url_and_enumeration() -> None:
-    assert archive_url(2006, 1).endswith("/2006q1.zip")
+    catalog = historical.fetch_quarter_catalog("test contact@example.com")
+    assert archive_url(2006, 1, catalog).endswith("/2006q1_form345.zip")
     assert list_quarters(2006, 2007) == [
         (2006, 1),
         (2006, 2),
@@ -80,9 +91,9 @@ def test_period_url_and_enumeration() -> None:
         (2007, 4),
     ]
     with pytest.raises(ValueError):
-        archive_url(2005, 1)
+        archive_url(2005, 1, catalog)
     with pytest.raises(ValueError):
-        archive_url(2024, 5)
+        archive_url(2024, 5, catalog)
 
 
 def test_download_retries_and_is_cache_idempotent(tmp_path: Path) -> None:

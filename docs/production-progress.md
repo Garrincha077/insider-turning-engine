@@ -10,6 +10,11 @@ cooldowns, secret-free public settings, and separate delivery-test history.
 
 Before activating signals:
 
+Historical acquisition now has a catalog-backed, resumable range importer and
+fail-closed table-integrity validation. Five real quarters have been verified
+locally; this is not complete canonical history. See [SEC history](sec-history.md)
+for exact evidence, commands, limitations and the next enrichment boundary.
+
 - Materialize canonical SEC history from 2006 and a complete trailing 365-day
   insider-active universe. The preview window is not that universe.
 - Replace current-identity and SPY-sector proxies with evidenced temporal mapping.

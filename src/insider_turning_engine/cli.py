@@ -204,6 +204,60 @@ def backfill_sec(
     )
 
 
+@app.command("backfill-sec-history")
+def backfill_sec_history(
+    start_year: Annotated[int, typer.Option(min=2006)] = 2006,
+    start_quarter: Annotated[int, typer.Option(min=1, max=4)] = 1,
+    end_year: Annotated[int | None, typer.Option(min=2006)] = None,
+    end_quarter: Annotated[int | None, typer.Option(min=1, max=4)] = None,
+    cache_dir: Annotated[Path, typer.Option()] = Path("data/cache/sec"),
+    staging_dir: Annotated[Path, typer.Option()] = Path("data/staging/sec"),
+    execute: Annotated[bool, typer.Option()] = False,
+) -> None:
+    """Resume official completed-quarter staging (not canonical signal history)."""
+    from .ingestion.sec.history import backfill_history, last_completed_quarter, quarter_range
+
+    if (end_year is None) != (end_quarter is None):
+        raise typer.BadParameter("supply both --end-year and --end-quarter")
+    end = ((end_year, end_quarter) if end_year is not None and end_quarter is not None
+           else last_completed_quarter(datetime.now(UTC).date()))
+    try:
+        periods = quarter_range((start_year, start_quarter), end)
+        if end > last_completed_quarter(datetime.now(UTC).date()):
+            raise ValueError("cannot backfill an incomplete quarter")
+        if not execute:
+            _echo({"status": "DRY_RUN", "quarters": periods, "canonicalReady": False})
+            return
+        user_agent = validate_sec_user_agent(os.getenv("SEC_USER_AGENT", ""))
+        report = backfill_history(
+            cache_dir=cache_dir, staging_dir=staging_dir, user_agent=user_agent,
+            start=(start_year, start_quarter), end=end,
+            progress=lambda message: typer.echo(message, err=True),
+        )
+    except (ValueError, RuntimeError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    _echo(report)
+    if report["status"] != "STAGED":
+        raise typer.Exit(1)
+
+
+@app.command("inventory-sec-activity")
+def inventory_sec_activity(
+    as_of: Annotated[str, typer.Option(help="Conservative availability date, YYYY-MM-DD.")],
+    staging_dir: Annotated[Path, typer.Option()] = Path("data/staging/sec"),
+    output: Annotated[Path, typer.Option()] = Path("data/staging/sec/activity-inventory.json"),
+) -> None:
+    """Inspect 365-day acquisition candidates; never produces scores or enables alerts."""
+    from .ingestion.sec.history import activity_inventory
+
+    try:
+        report = activity_inventory(staging_dir, as_of=date.fromisoformat(as_of))
+    except (ValueError, OSError, KeyError, TypeError, pl.exceptions.PolarsError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    _write_json(output, report)
+    _echo({key: value for key, value in report.items() if key != "candidateIssuerCiks"})
+
+
 @app.command("update-sec")
 def update_sec(
     xml: PathOption = None,
