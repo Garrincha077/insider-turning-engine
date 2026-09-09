@@ -12,7 +12,7 @@ def test_restore_preserves_published_dates_and_run_id(tmp_path: Path) -> None:
     source = Path("app/public/data")
 
     def handler(request: httpx.Request) -> httpx.Response:
-        path = str(request.url).removeprefix(PUBLIC_DATA)
+        path = str(request.url).split("?", 1)[0].removeprefix(PUBLIC_DATA)
         return httpx.Response(200, content=(source / path).read_bytes())
 
     with httpx.Client(transport=httpx.MockTransport(handler)) as client:
@@ -28,7 +28,7 @@ def test_corrupt_remote_does_not_replace_existing_output(tmp_path: Path) -> None
     (tmp_path / "sentinel").write_text("previous publication")
 
     def handler(request: httpx.Request) -> httpx.Response:
-        if str(request.url).endswith("manifest.json"):
+        if request.url.path.endswith("manifest.json"):
             return httpx.Response(200, content=Path("app/public/data/manifest.json").read_bytes())
         return httpx.Response(200, content=b"invalid")
 

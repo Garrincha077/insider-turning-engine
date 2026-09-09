@@ -9,6 +9,7 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path, PurePosixPath
 from urllib.parse import quote
+from uuid import uuid4
 
 import httpx
 
@@ -20,8 +21,13 @@ PUBLIC_DATA = "https://garrincha077.github.io/insider-turning-engine/data/"
 def restore_publication(output: Path, client: httpx.Client) -> None:
     """Download to scratch, validate fully, then atomically replace the output."""
 
+    cache_key = uuid4().hex
+
     def download(path: str, limit: int) -> bytes:
-        with client.stream("GET", PUBLIC_DATA + quote(path, safe="/")) as response:
+        with client.stream(
+            "GET", PUBLIC_DATA + quote(path, safe="/"),
+            params={"publication-check": cache_key}, headers={"Cache-Control": "no-cache"},
+        ) as response:
             response.raise_for_status()
             payload = bytearray()
             for block in response.iter_bytes():
