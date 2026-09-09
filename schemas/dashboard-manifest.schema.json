@@ -384,6 +384,7 @@
             "SIGNAL_INDEX",
             "ALERT_INDEX",
             "QUALITY_REPORT",
+            "SETTINGS_STATUS",
             "OTHER"
           ]
         },

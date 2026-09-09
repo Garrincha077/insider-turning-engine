@@ -157,3 +157,15 @@ def test_pages_validates_manifest_and_hashes_before_upload() -> None:
         "actions/upload-pages-artifact@v3"
     )
     assert "PAGES_BASE_PATH" in text
+    assert "--max-symbols 50" not in text
+    assert "require_settings=True" in text
+    assert text.index("npm run test:e2e") < text.index("actions/upload-pages-artifact@v3")
+
+
+def test_delivery_workflow_is_explicit_main_only_and_rejects_reruns() -> None:
+    workflow, text = _workflow(ROOT / ".github/workflows/test-alert-delivery.yml")
+    assert workflow["permissions"] == {"contents": "read"}
+    assert "github.ref == 'refs/heads/main'" in text
+    assert "inputs.execute && github.run_attempt == 1" in text
+    assert "environment: production" in text
+    assert "default: false" in text

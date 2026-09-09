@@ -82,6 +82,14 @@ class SQLiteOutbox:
                 error TEXT,
                 provider_id TEXT
             );
+            CREATE TABLE IF NOT EXISTS delivery_tests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                channel TEXT NOT NULL,
+                status TEXT NOT NULL,
+                recorded_at TEXT NOT NULL,
+                error TEXT,
+                provider_id TEXT
+            );
             """
         )
 
@@ -198,6 +206,32 @@ class SQLiteOutbox:
         query += " ORDER BY id"
         return tuple(self._db.execute(query, args).fetchall())
 
+    def test_history(self) -> tuple[sqlite3.Row, ...]:
+        return tuple(self._db.execute("SELECT * FROM delivery_tests ORDER BY id").fetchall())
+
+    def record_delivery_test(
+        self,
+        channel: str,
+        result: SendResult,
+        *,
+        at: datetime | None = None,
+    ) -> None:
+        if result.status not in {
+            DeliveryStatus.SENT,
+            DeliveryStatus.FAILED,
+            DeliveryStatus.UNCERTAIN,
+        }:
+            raise ValueError("test result must be SENT, FAILED, or UNCERTAIN")
+        point = at or datetime.now(UTC)
+        with self._lock:
+            self._db.execute(
+                """INSERT INTO delivery_tests
+                   (channel, status, recorded_at, error, provider_id)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (channel, result.status.value, _iso(point), result.error, result.provider_id),
+            )
+            self._db.commit()
+
     def _latest_sent(
         self, candidate: AlertCandidate, channel: str, at: datetime
     ) -> sqlite3.Row | None:
@@ -208,9 +242,10 @@ class SQLiteOutbox:
                  ON c.idempotency_key = d.idempotency_key
                WHERE c.issuer_cik = ? AND c.alert_type = ?
                  AND d.status = 'SENT'
+                 AND d.channel = ?
                  AND d.attempted_at >= ?
                ORDER BY d.attempted_at DESC LIMIT 1""",
-            (candidate.issuer_cik, candidate.alert_type.value, cutoff),
+            (candidate.issuer_cik, candidate.alert_type.value, channel, cutoff),
         ).fetchone()
         return cast(sqlite3.Row | None, row)
 

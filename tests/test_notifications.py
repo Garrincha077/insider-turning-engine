@@ -1,3 +1,4 @@
+import json
 import math
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -8,12 +9,17 @@ from insider_turning_engine.notifications import (
     AlertCandidate,
     AlertType,
     DeliveryStatus,
+    EmailHTTPChannel,
     NotificationPreview,
     SendResult,
     SQLiteOutbox,
+    TelegramHTTPChannel,
     assess_quality_gates,
+    build_settings_status,
     evaluate_alert_rules,
+    format_email_html,
     format_telegram_html,
+    load_notification_policy,
 )
 
 
@@ -77,6 +83,90 @@ def test_quality_suppression_is_global_and_html_escapes() -> None:
     )[0]
     assert "INSUFFICIENT_MARKET_DATA_COVERAGE_RATE" in candidate.suppression_reasons
     assert "&lt;X&gt;" in format_telegram_html(candidate)
+
+
+def test_email_channel_is_deterministic_escaped_and_idempotent() -> None:
+    captured: dict[str, object] = {}
+
+    def transport(url, payload, headers):
+        captured.update({"url": url, "payload": payload, "headers": headers})
+        return {"status_code": 200, "json": {"id": "email-1"}}
+
+    candidate = AlertCandidate(
+        "0000000001",
+        AlertType.TURNING,
+        "snap_email",
+        80,
+        ticker="<X>",
+        reasons=("a < b",),
+    )
+    channel = EmailHTTPChannel("secret", "from@example.com", "to@example.com", transport)
+    preview = channel.preview(candidate)
+    assert "&lt;X&gt;" in format_email_html(candidate)
+    assert "a &lt; b" in preview.text
+    result = channel.send(preview)
+    assert result == SendResult.sent("email-1")
+    assert captured["url"] == "https://api.resend.com/emails"
+    assert captured["headers"]["Idempotency-Key"] == candidate.idempotency_key
+
+
+def test_public_settings_status_never_contains_secrets_or_full_recipient() -> None:
+    policy = load_notification_policy()
+    status = build_settings_status(
+        policy,
+        environment="production",
+        alerts_allowed=False,
+        blocking_reasons=("BACKTEST_NOT_RUN",),
+        secrets={
+            "TELEGRAM_BOT_TOKEN": "bot-secret",
+            "TELEGRAM_CHAT_ID": "123456789",
+            "EMAIL_API_KEY": "email-secret",
+            "ALERT_EMAIL_FROM": "alerts@example.com",
+            "ALERT_EMAIL_TO": "luis@example.com",
+        },
+    )
+    encoded = json.dumps(status)
+    assert "bot-secret" not in encoded
+    assert "email-secret" not in encoded
+    assert "123456789" not in encoded
+    assert "luis@example.com" not in encoded
+    assert status["channels"]["telegram"]["recipientMasked"] == "••••6789"
+    assert status["channels"]["email"]["recipientMasked"] == "l•••@example.com"
+
+
+@pytest.mark.parametrize("body", [{}, {"id": None}, {"ok": True, "result": {}}])
+def test_success_without_provider_receipt_is_uncertain(body) -> None:
+    candidate = AlertCandidate("0000000001", AlertType.TURNING, "snap_receipt", 80)
+    channels = [
+        TelegramHTTPChannel("secret", "12345", lambda *_: {"json": body}),
+        EmailHTTPChannel("secret", "from@example.com", "to@example.com",
+                         lambda *_: {"json": body}),
+    ]
+    for channel in channels:
+        assert channel.send(channel.preview(candidate)).status == DeliveryStatus.UNCERTAIN
+
+
+def test_cooldown_is_independent_for_each_channel() -> None:
+    first, second = FakeChannel(), FakeChannel()
+    first.name, second.name = "telegram", "email"
+    candidate = AlertCandidate("0000000001", AlertType.TURNING, "snap_channels", 80)
+    ledger = SQLiteOutbox()
+    try:
+        assert ledger.deliver(candidate, first) == DeliveryStatus.SENT
+        assert ledger.deliver(candidate, second) == DeliveryStatus.SENT
+        assert first.sent == second.sent == 1
+    finally:
+        ledger.close()
+
+
+def test_settings_cannot_enable_missing_channels_or_disabled_policy() -> None:
+    status = build_settings_status(
+        load_notification_policy(), environment="production", alerts_allowed=True,
+        blocking_reasons=(), secrets={},
+    )
+    assert not status["alertsAllowed"]
+    assert "DELIVERY_DISABLED_BY_POLICY" in status["blockingReasons"]
+    assert "TELEGRAM_SECRETS_MISSING" in status["blockingReasons"]
 
 
 def test_missing_or_stale_benchmark_fails_closed() -> None:
@@ -249,6 +339,19 @@ def test_outbox_checkpoint_survives_process_restart(tmp_path: Path) -> None:
         assert second.history(candidate.idempotency_key)[-1]["status"] == DeliveryStatus.SENT.value
     finally:
         second.close()
+
+
+def test_delivery_tests_are_durable_but_do_not_claim_signal_cooldown(tmp_path: Path) -> None:
+    path = tmp_path / "alerts.sqlite"
+    ledger = SQLiteOutbox(path)
+    try:
+        ledger.record_delivery_test("telegram", SendResult.sent("test-1"))
+        candidate = AlertCandidate("0000000001", AlertType.TURNING, "snap_after_test", 80)
+        channel = FakeChannel()
+        assert ledger.deliver(candidate, channel) == DeliveryStatus.SENT
+        assert ledger.test_history()[0]["provider_id"] == "test-1"
+    finally:
+        ledger.close()
 
 
 def test_restart_after_durable_claim_is_uncertain_and_never_sends(tmp_path: Path) -> None:

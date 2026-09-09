@@ -167,6 +167,8 @@ class NotificationPreview:
     text: str
     content_type: str = "text/plain"
     parse_mode: str | None = None
+    subject: str | None = None
+    alternative_text: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

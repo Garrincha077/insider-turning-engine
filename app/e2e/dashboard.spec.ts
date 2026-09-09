@@ -24,7 +24,30 @@ test('dashboard loads without an error overlay and exposes every analysis view',
   await expect(page.getByText('Forward excess returns vs SPY')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Validation gate' })).toBeVisible();
 
+  for (const name of ['Turning Stocks', 'Divergence', 'Smart Buys', 'Clusters', 'Cost Basis', 'Live SEC Tape', 'Company Lab', 'System Health', 'Data Coverage', 'Settings']) {
+    await page.getByRole('button', { name, exact: true }).first().click();
+    await expect(page.getByRole('heading', { name, exact: true }).first()).toBeVisible();
+  }
+  await expect(page.getByText('Configured', { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Open GitHub Environment settings' })).toBeVisible();
+  await page.getByRole('button', { name: 'Alerts', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Actionable alerts blocked' })).toBeVisible();
+
   expect(consoleErrors).toEqual([]);
+});
+
+test('unavailable manifest does not fall back to sample data', async ({ page }) => {
+  await page.route('**/data/manifest.json', (route) => route.fulfill({ status: 503, body: '' }));
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Dashboard snapshot unavailable' })).toBeVisible();
+  await expect(page.getByPlaceholder('Ticker or company')).toHaveCount(0);
+});
+
+test('corrupted snapshot is rejected before rendering', async ({ page }) => {
+  await page.route('**/data/dashboard.json', (route) => route.fulfill({ json: { candidates: [] } }));
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Dashboard snapshot unavailable' })).toBeVisible();
+  await expect(page.getByText(/integrity mismatch/)).toBeVisible();
 });
 
 test('radar search filters candidates', async ({ page }) => {

@@ -35,10 +35,14 @@ class YahooChartProvider:
         client: httpx.Client | None = None,
         cache_dir: str | Path | None = None,
         max_bytes: int = 5 * 1024 * 1024,
+        cache_ttl_seconds: int = 86400,
     ) -> None:
         self.client = client or httpx.Client(timeout=45.0, follow_redirects=False)
         self.cache_dir = Path(cache_dir) if cache_dir is not None else None
         self.max_bytes = max_bytes
+        if cache_ttl_seconds < 0:
+            raise ValueError("cache TTL must be nonnegative")
+        self.cache_ttl_seconds = cache_ttl_seconds
 
     @staticmethod
     def _symbol(value: str) -> tuple[str, str]:
@@ -82,6 +86,15 @@ class YahooChartProvider:
             or manifest.get("sha256") != digest
             or manifest.get("byteLength") != len(payload)
         ):
+            return None
+        try:
+            fetched_at = datetime.fromisoformat(manifest["fetchedAt"])
+            age = (datetime.now(UTC) - fetched_at).total_seconds()
+        except (KeyError, TypeError, ValueError):
+            return None
+        if not 0 <= age < self.cache_ttl_seconds:
+            return None
+        if len(payload) > self.max_bytes:
             return None
         return payload
 

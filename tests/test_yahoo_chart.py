@@ -97,3 +97,22 @@ def test_yahoo_chart_rejects_redirects() -> None:
             raise AssertionError("redirect should be rejected")
     finally:
         provider.close()
+
+
+def test_yahoo_cache_with_zero_ttl_is_always_refetched(tmp_path) -> None:
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(200, content=_payload(), request=request)
+
+    provider = YahooChartProvider(
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+        cache_dir=tmp_path, cache_ttl_seconds=0,
+    )
+    try:
+        provider.fetch_daily("ABC")
+        provider.fetch_daily("ABC")
+        assert len(calls) == 2
+    finally:
+        provider.close()

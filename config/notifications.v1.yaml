@@ -1,0 +1,19 @@
+schemaVersion: "1.0.0"
+
+# This is the reviewed production kill switch. Quality gates and missing
+# credentials still block delivery when it is true. Keep false until the
+# frozen methodology and sealed OOS gate have both passed.
+deliveryEnabled: false
+
+channels:
+  telegram: true
+  email: true
+
+minimumSeverity: WATCH
+alertTypes:
+  - MAJOR_INSIDER_BUY
+  - STEALTH_ACCUMULATION
+  - TURNING
+cooldownDays: 14
+timezone: Europe/Zagreb
+quietHours: null

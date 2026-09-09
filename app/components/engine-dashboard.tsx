@@ -8,10 +8,13 @@ import {
   DatabaseZap,
   FlaskConical,
   Gauge,
+  HeartPulse,
   LineChart,
   Radar,
   Search,
+  Settings2,
   ShieldCheck,
+  ShieldAlert,
   ShoppingCart,
   Target,
   TrendingUp,
@@ -33,6 +36,12 @@ import {
 
 import { Badge } from '@/components/ui/badge';
 import { EChart } from '@/components/echart';
+import {
+  AlertCenterView,
+  DataCoverageView,
+  SettingsView,
+  SystemHealthView,
+} from '@/components/operations-views';
 import { Input } from '@/components/ui/input';
 import {
   Table,
@@ -45,8 +54,9 @@ import {
 import {
   type Candidate,
   type DashboardData,
-  sampleDashboardData,
 } from '@/lib/dashboard-data';
+import { type PublicationManifest, type SettingsStatus } from '@/lib/operations-data';
+import { loadPublication } from '@/lib/load-publication';
 
 const views = [
   { id: 'radar', label: 'Radar', icon: Radar },
@@ -59,6 +69,10 @@ const views = [
   { id: 'live-sec-tape', label: 'Live SEC Tape', icon: DatabaseZap },
   { id: 'company-lab', label: 'Company Lab', icon: Building2 },
   { id: 'backtest-lab', label: 'Backtest Lab', icon: FlaskConical },
+  { id: 'system-health', label: 'System Health', icon: HeartPulse },
+  { id: 'data-coverage', label: 'Data Coverage', icon: ShieldAlert },
+  { id: 'alert-center', label: 'Alert Center', icon: BellRing },
+  { id: 'settings', label: 'Settings', icon: Settings2 },
 ] as const;
 
 type ViewId = (typeof views)[number]['id'];
@@ -86,31 +100,50 @@ const candidateColumns = candidateColumn.columns([
 
 export function EngineDashboard() {
   const [view, setView] = useState<ViewId>('radar');
-  const [data, setData] = useState(sampleDashboardData);
-  const [source, setSource] = useState<'snapshot' | 'sample'>('sample');
-  const [selectedTicker, setSelectedTicker] = useState('NVDA');
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [manifest, setManifest] = useState<PublicationManifest | null>(null);
+  const [settings, setSettings] = useState<SettingsStatus | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [selectedTicker, setSelectedTicker] = useState('');
+  const [clockNow, setClockNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClockNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     document.documentElement.dataset.hydrated = 'true';
-    fetch(`${import.meta.env.BASE_URL}data/dashboard.json`, { cache: 'no-store' })
-      .then((response) => {
-        if (!response.ok) throw new Error('Snapshot unavailable');
-        return response.json() as Promise<DashboardData>;
-      })
-      .then((snapshot) => {
+    const controller = new AbortController();
+    loadPublication(controller.signal)
+      .then(({ data: snapshot, manifest: publication, settings: settingsStatus }) => {
         if (!Array.isArray(snapshot.candidates) || !snapshot.schemaVersion) {
           throw new Error('Invalid dashboard snapshot');
         }
+        if (!publication.quality || !settingsStatus.channels) {
+          throw new Error('Operational status is incomplete');
+        }
         setData(snapshot);
-        setSource('snapshot');
+        setManifest(publication);
+        setSettings(settingsStatus);
         setSelectedTicker(snapshot.candidates[0]?.ticker ?? '');
       })
-      .catch(() => setSource('sample'));
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setLoadError(error instanceof Error ? error.message : 'Snapshot unavailable');
+      });
+    return () => controller.abort();
   }, []);
+
+  if (loadError) return <SnapshotError message={loadError} />;
+  if (!data || !manifest || !settings) return <SnapshotLoading />;
 
   const selected = data.candidates.find((candidate) => candidate.ticker === selectedTicker) ?? data.candidates[0];
   const title = views.find((item) => item.id === view)?.label ?? 'Radar';
-  const validated = source === 'snapshot' && data.status === 'VALIDATED';
+  const ageDays = (clockNow - Date.parse(data.generatedAt)) / 86_400_000;
+  const stale = ageDays > 4 || data.status === 'STALE';
+  const validated = !stale && data.status === 'VALIDATED' && manifest.quality.disposition === 'PASS';
+  const effectiveSettings = stale ? { ...settings, alertsAllowed: false, blockingReasons: [...settings.blockingReasons, 'SNAPSHOT_STALE'] } : settings;
 
   return (
     <main className="min-h-screen bg-background text-foreground">
@@ -121,11 +154,11 @@ export function EngineDashboard() {
             <div className="min-w-0"><p className="truncate text-sm font-semibold tracking-tight">Insider Turning Engine</p><p className="truncate text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Market intelligence · Daily close</p></div>
           </button>
           <div className="hidden items-center gap-6 text-xs text-muted-foreground md:flex">
-            <span className="flex items-center gap-2"><DatabaseZap className="size-3.5 text-sky-300" /> {source === 'snapshot' ? 'Snapshot loaded' : 'Sample dataset'}</span>
+            <span className="flex items-center gap-2"><DatabaseZap className="size-3.5 text-sky-300" /> Snapshot loaded</span>
             <span className="flex items-center gap-2"><ShieldCheck className={`size-3.5 ${validated ? 'text-emerald-300' : 'text-amber-300'}`} /> {validated ? 'Quality gates passed' : 'Experimental · not validated'}</span>
             <span className="font-mono">{new Date(data.generatedAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }).toUpperCase()}</span>
           </div>
-          <button onClick={() => setView('live-sec-tape')} className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-3 text-xs font-medium transition hover:border-emerald-400/40 hover:bg-accent"><BellRing className="size-3.5 text-amber-300" /> Alerts</button>
+          <button onClick={() => setView('alert-center')} className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-3 text-xs font-medium transition hover:border-emerald-400/40 hover:bg-accent"><BellRing className={`size-3.5 ${settings.alertsAllowed ? 'text-emerald-300' : 'text-amber-300'}`} /> Alerts</button>
         </div>
         <div className="scrollbar-none flex gap-1 overflow-x-auto border-t border-border/50 px-3 py-2 xl:hidden">
           {views.map((item) => <NavButton key={item.id} item={item} active={view === item.id} onClick={() => setView(item.id)} compact />)}
@@ -153,7 +186,7 @@ export function EngineDashboard() {
             <Badge className="h-7 border border-amber-300/25 bg-amber-300/10 px-3 text-amber-200">{data.status} · {data.scoreVersion}</Badge>
           </div>
 
-          {source === 'snapshot' && data.status === 'EXPERIMENTAL' && <div className="rounded-lg border border-amber-300/20 bg-amber-300/8 px-4 py-3 text-xs leading-5 text-amber-100">Live experimental snapshot: official SEC ownership filings with a rolling window and Yahoo adjusted chart data as a temporary market fallback. Scores are research candidates, not validated signals or investment advice.</div>}
+          {data.status === 'EXPERIMENTAL' && <div className="rounded-lg border border-amber-300/20 bg-amber-300/8 px-4 py-3 text-xs leading-5 text-amber-100">Live experimental snapshot: official SEC ownership filings with a rolling window and Yahoo adjusted chart data as a temporary market fallback. Scores are research candidates, not validated signals or investment advice.</div>}
 
           {view === 'radar' && <RadarView data={data} selected={selected} onSelect={setSelectedTicker} onOpenLab={() => setView('company-lab')} />}
           {view === 'market-pulse' && <MarketPulseView data={data} />}
@@ -165,6 +198,11 @@ export function EngineDashboard() {
           {view === 'live-sec-tape' && <SecTapeView data={data} />}
           {view === 'company-lab' && selected && <CompanyLab data={data} candidate={selected} onTicker={setSelectedTicker} />}
           {view === 'backtest-lab' && <BacktestLab data={data} />}
+          {view === 'system-health' && <SystemHealthView manifest={manifest} />}
+          {view === 'data-coverage' && <DataCoverageView manifest={manifest} />}
+          {stale && <output className="block rounded-lg border border-rose-300/30 p-4 text-sm text-rose-200">Snapshot is {Math.floor(ageDays)} days old. Data through {manifest.watermarks.marketSessionThrough ?? 'unknown session'}; alert readiness is suspended.</output>}
+          {view === 'alert-center' && <AlertCenterView settings={effectiveSettings} />}
+          {view === 'settings' && <SettingsView settings={settings} />}
         </section>
       </div>
     </main>
@@ -180,7 +218,7 @@ function RadarView({ data, selected, onSelect, onOpenLab }: { data: DashboardDat
   return <>
     <PulseCards data={data} />
     <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_340px]">
-      <CandidateTable candidates={data.candidates.slice(0, 5)} selectedTicker={selected?.ticker} onSelect={onSelect} />
+      <CandidateTable candidates={data.candidates} selectedTicker={selected?.ticker} onSelect={onSelect} />
       {selected ? <ReasonPanel candidate={selected} onOpen={onOpenLab} /> : <EmptyState message="No issuer has a complete, point-in-time score for this snapshot." />}
     </div>
   </>;
@@ -271,6 +309,10 @@ function BacktestLab({ data }: { data: DashboardData }) {
   return <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_330px]"><Panel title="Forward excess returns vs SPY" subtitle="No synthetic results are shown">{data.backtest.length === 0 ? <EmptyState message="The sealed OOS backtest has not been run. Live scores remain experimental." /> : <EChart option={option} style={{ height: 410 }} />}</Panel><Panel title="Validation gate" subtitle="Sealed OOS: 2023–latest"><div className="space-y-4 text-xs text-slate-300"><Metric label="OOS events" value="— / 200" /><Metric label="Primary horizon" value="6M" /><Metric label="Current outcome" value="NOT RUN" accent /><p className="rounded-lg border border-amber-300/20 bg-amber-300/8 p-3 leading-5 text-amber-100">Telegram remains off until the point-in-time backtest meets the formal PASS criteria.</p></div></Panel></div>;
 }
 
+function SnapshotLoading() { return <main className="grid min-h-screen place-items-center bg-background p-6 text-foreground"><div className="rounded-xl border border-border bg-card p-8 text-center"><Radar className="mx-auto size-8 animate-pulse text-emerald-300" /><h1 className="mt-4 text-lg font-semibold">Loading validated snapshot</h1><p className="mt-2 text-xs text-muted-foreground">Checking dashboard, manifest, hashes, and operational settings.</p></div></main>; }
+function SnapshotError({ message }: { message: string }) { return <main className="grid min-h-screen place-items-center bg-background p-6 text-foreground"><div className="max-w-lg rounded-xl border border-rose-400/25 bg-card p-8 text-center"><ShieldAlert className="mx-auto size-8 text-rose-300" /><h1 className="mt-4 text-lg font-semibold">Dashboard snapshot unavailable</h1><p className="mt-3 text-sm leading-6 text-muted-foreground">The app will not substitute sample or stale data. The previous atomic Pages deployment may be incomplete or its contract no longer matches this UI.</p><p className="mt-4 rounded-lg bg-background/60 p-3 font-mono text-xs text-rose-200">{message}</p></div></main>; }
+
+
 function Panel({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) { return <section className="overflow-hidden rounded-xl border border-border bg-card"><div className="border-b border-border px-5 py-4"><h2 className="text-sm font-semibold">{title}</h2><p className="mt-1 text-xs text-muted-foreground">{subtitle}</p></div><div className="p-5">{children}</div></section>; }
 function EmptyState({ message }: { message: string }) { return <div className="grid min-h-36 place-items-center rounded-xl border border-dashed border-border bg-card/50 p-6 text-center text-xs leading-5 text-muted-foreground">{message}</div>; }
 function Metric({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) { return <div className="flex items-center justify-between border-b border-border pb-3"><span className="text-muted-foreground">{label}</span><span className={`font-mono font-semibold ${accent ? 'text-amber-200' : 'text-slate-100'}`}>{value}</span></div>; }
@@ -280,5 +322,5 @@ function signed(value: number | null) { return value === null ? '—' : `${value
 function formatMetric(value: number | null) { return value === null ? '—' : value.toFixed(1); }
 function costReturn(candidate: Candidate) { return candidate.currentPrice === null || candidate.insiderCost === null || candidate.insiderCost <= 0 ? null : (candidate.currentPrice / candidate.insiderCost - 1) * 100; }
 function compactMoney(value: number) { return value >= 1_000_000 ? `${(value / 1_000_000).toFixed(1)}M` : `${Math.round(value / 1_000)}K`; }
-function viewDescription(view: ViewId) { const descriptions: Record<ViewId, string> = { radar: '', 'market-pulse': 'Market-wide and sector-wide insider activity, normalized against point-in-time history.', 'turning-stocks': 'Candidates advancing through the price/volume state machine.', divergence: 'The strongest gaps between weak price action and qualified insider accumulation.', 'smart-buys': 'Individual purchases with the highest estimated information content.', clusters: 'Independent insiders buying the same issuer inside a compact window.', 'cost-basis': 'Where current price sits relative to qualified insider purchase costs.', 'live-sec-tape': 'The newest normalized filings that survived classification and quality checks.', 'company-lab': 'A single-issuer view of price, insider cost basis, RS, scores, and reasons.', 'backtest-lab': 'Forward-return evidence, simple benchmarks, and the sealed validation gate.' }; return descriptions[view]; }
+function viewDescription(view: ViewId) { const descriptions: Record<ViewId, string> = { radar: '', 'market-pulse': 'Market-wide and sector-wide insider activity, normalized against point-in-time history.', 'turning-stocks': 'Candidates advancing through the price/volume state machine.', divergence: 'The strongest gaps between weak price action and qualified insider accumulation.', 'smart-buys': 'Individual purchases with the highest estimated information content.', clusters: 'Independent insiders buying the same issuer inside a compact window.', 'cost-basis': 'Where current price sits relative to qualified insider purchase costs.', 'live-sec-tape': 'The newest normalized filings that survived classification and quality checks.', 'company-lab': 'A single-issuer view of price, insider cost basis, RS, scores, and reasons.', 'backtest-lab': 'Forward-return evidence, simple benchmarks, and the sealed validation gate.', 'system-health': 'Fail-closed production checks, methodology status, and current release blockers.', 'data-coverage': 'Observed source coverage, quality denominators, and immutable data watermarks.', 'alert-center': 'Channel health, delivery readiness, and global suppression reasons.', settings: 'Read-only production policy and secure GitHub secret-configuration status.' }; return descriptions[view]; }
 function darkChart(option: Record<string, unknown>) { return { backgroundColor: 'transparent', textStyle: { color: '#cbd5e1', fontFamily: 'var(--font-geist-mono)' }, grid: { left: 45, right: 35, top: 48, bottom: 32 }, xAxis: { axisLine: { lineStyle: { color: '#334155' } }, axisLabel: { color: '#8093a7' }, splitLine: { show: false } }, yAxis: { axisLine: { show: false }, axisLabel: { color: '#8093a7' }, splitLine: { lineStyle: { color: '#263446' } } }, ...option }; }

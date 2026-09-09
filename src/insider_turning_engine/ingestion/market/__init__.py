@@ -8,6 +8,7 @@ from .quality import (
     probe_coverage,
     probe_market_coverage,
 )
+from .redundant import RedundantEODProvider
 from .stooq import (
     MAX_SHARD_COUNT,
     SECTOR_ETFS,
@@ -24,6 +25,7 @@ __all__ = [
     "DailyBar",
     "MarketDataProvider",
     "ProviderHealth",
+    "RedundantEODProvider",
     "CsvMarketDataProvider",
     "CsvProvider",
     "StooqMarketDataProvider",

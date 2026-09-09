@@ -5,7 +5,8 @@ from __future__ import annotations
 import json
 import os
 import re
-from dataclasses import asdict
+from collections.abc import Mapping
+from dataclasses import asdict, replace
 from datetime import UTC, date, datetime
 from importlib import import_module
 from pathlib import Path
@@ -24,6 +25,7 @@ from .backtest import (
 )
 from .export.dashboard import (
     DashboardExportError,
+    dashboard_publication_policy,
     validate_dashboard_directory,
 )
 from .export.dashboard import (
@@ -44,7 +46,21 @@ from .ingestion.sec import (
     stage_quarter,
     validate_sec_user_agent,
 )
-from .notifications import AlertCandidate, SQLiteOutbox, TelegramHTTPChannel, format_plain
+from .notifications import (
+    AlertCandidate,
+    AlertType,
+    EmailHTTPChannel,
+    NotificationPolicy,
+    NotificationPolicyError,
+    Severity,
+    SQLiteOutbox,
+    TelegramHTTPChannel,
+    build_settings_status,
+    format_plain,
+    load_notification_policy,
+    preview_email_html,
+    preview_telegram_html,
+)
 from .scoring import ScoreEngine
 
 app = typer.Typer(
@@ -52,9 +68,64 @@ app = typer.Typer(
     help="Build point-in-time insider-turning research snapshots.",
     no_args_is_help=True,
     add_completion=False,
+    pretty_exceptions_show_locals=False,
 )
 
 PathOption = Annotated[Path | None, typer.Option()]
+
+
+def _channel_names(value: str, policy: NotificationPolicy | None = None) -> tuple[str, ...]:
+    normalized = value.strip().lower()
+    if normalized not in {"telegram", "email", "all"}:
+        raise typer.BadParameter("--channel must be telegram, email, or all")
+    selected = ("telegram", "email") if normalized == "all" else (normalized,)
+    if policy is None:
+        return selected
+    if normalized == "all":
+        if not policy.enabled_channels:
+            raise typer.BadParameter("no notification channels are enabled")
+        return policy.enabled_channels
+    disabled = [name for name in selected if name not in policy.enabled_channels]
+    if disabled:
+        raise typer.BadParameter(
+            "requested channels are disabled by notification policy: " + ", ".join(disabled)
+        )
+    return selected
+
+
+def _telegram_channel() -> TelegramHTTPChannel:
+    token = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
+    if not token or not chat_id:
+        raise typer.BadParameter("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are required")
+
+    def transport(url: str, payload: Any) -> httpx.Response:
+        return httpx.post(url, data=payload, timeout=20.0)
+
+    return TelegramHTTPChannel(token, chat_id, transport)
+
+
+def _email_channel() -> EmailHTTPChannel:
+    api_key = os.getenv("EMAIL_API_KEY", "")
+    sender = os.getenv("ALERT_EMAIL_FROM", "")
+    recipient = os.getenv("ALERT_EMAIL_TO", "")
+    if not api_key or not sender or not recipient:
+        raise typer.BadParameter(
+            "EMAIL_API_KEY, ALERT_EMAIL_FROM, and ALERT_EMAIL_TO are required"
+        )
+
+    def transport(
+        url: str, payload: Mapping[str, Any], headers: Mapping[str, str]
+    ) -> httpx.Response:
+        return httpx.post(url, json=payload, headers=headers, timeout=20.0)
+
+    return EmailHTTPChannel(api_key, sender, recipient, transport)
+
+
+def _configured_channels(
+    names: tuple[str, ...],
+) -> tuple[TelegramHTTPChannel | EmailHTTPChannel, ...]:
+    return tuple(_telegram_channel() if name == "telegram" else _email_channel() for name in names)
 
 
 def _echo(value: dict[str, Any]) -> None:
@@ -757,6 +828,10 @@ def send_alerts(
     execute: Annotated[bool, typer.Option(help="Enable external delivery.")] = False,
     outbox: Annotated[Path, typer.Option()] = Path("data/state/alerts.sqlite"),
     manifest: PathOption = None,
+    channel: Annotated[str, typer.Option(help="telegram, email, or all")] = "all",
+    policy_path: Annotated[Path, typer.Option("--policy")] = Path(
+        "config/notifications.v1.yaml"
+    ),
 ) -> None:
     """Preview alert delivery unless external sending is explicitly enabled."""
 
@@ -770,6 +845,11 @@ def send_alerts(
             }
         )
         return
+    try:
+        policy = load_notification_policy(policy_path)
+    except NotificationPolicyError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    selected_names = _channel_names(channel, policy)
     raw = json.loads(candidates.read_text("utf-8"))
     if not isinstance(raw, list):
         raise typer.BadParameter("candidates must be a JSON array")
@@ -796,13 +876,25 @@ def send_alerts(
         ]
         if mismatched:
             raise typer.BadParameter("every alert candidate must reference the PASS manifest runId")
-    alerts = [AlertCandidate.from_mapping(row) for row in raw]
+    point = datetime.now(UTC)
+    alerts = []
+    for row in raw:
+        candidate = AlertCandidate.from_mapping(row)
+        policy_reasons = policy.suppression_reasons(candidate, at=point)
+        alerts.append(
+            replace(
+                candidate,
+                suppression_reasons=tuple(
+                    dict.fromkeys((*candidate.suppression_reasons, *policy_reasons))
+                ),
+            )
+        )
     if not execute:
         # Preview is deliberately side-effect free with respect to providers,
         # but candidates still belong in the durable audit ledger so a run
         # without Telegram credentials does not silently discard them.
         outbox.parent.mkdir(parents=True, exist_ok=True)
-        ledger = SQLiteOutbox(outbox)
+        ledger = SQLiteOutbox(outbox, cooldown_days=policy.cooldown_days)
         try:
             for item in alerts:
                 ledger.put_candidate(item)
@@ -813,21 +905,16 @@ def send_alerts(
                 "command": "send-alerts",
                 "status": "DRY_RUN",
                 "previews": [format_plain(item) for item in alerts],
+                "channels": list(selected_names),
                 "qualityGated": True,
             }
         )
         return
-    token = os.getenv("TELEGRAM_BOT_TOKEN", "")
-    chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
-    if not token or not chat_id:
-        raise typer.BadParameter("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are required")
-
-    def transport(url: str, payload: Any) -> httpx.Response:
-        return httpx.post(url, data=payload, timeout=20.0)
-
+    if not policy.delivery_enabled:
+        raise typer.BadParameter("external delivery is disabled by notification policy")
+    channels = _configured_channels(selected_names)
     outbox.parent.mkdir(parents=True, exist_ok=True)
-    ledger = SQLiteOutbox(outbox)
-    channel = TelegramHTTPChannel(token, chat_id, transport)
+    ledger = SQLiteOutbox(outbox, cooldown_days=policy.cooldown_days)
     try:
         if ledger.recovered_path is not None:
             _echo(
@@ -839,10 +926,133 @@ def send_alerts(
                 }
             )
             raise typer.Exit(code=1)
-        statuses = [ledger.deliver(item, channel).value for item in alerts]
+        statuses = [
+            {
+                "candidate": item.idempotency_key,
+                "channel": configured.name,
+                "status": ledger.deliver(item, configured, at=point).value,
+            }
+            for item in alerts
+            for configured in channels
+        ]
     finally:
         ledger.close()
-    _echo({"command": "send-alerts", "status": "SUCCEEDED", "deliveries": statuses})
+    failed = any(item["status"] in {"FAILED", "UNCERTAIN"} for item in statuses)
+    _echo({"command": "send-alerts", "status": "FAILED" if failed else "SUCCEEDED",
+           "deliveries": statuses})
+    if failed:
+        raise typer.Exit(code=1)
+
+
+@app.command("test-alert-delivery")
+def test_alert_delivery(
+    channel: Annotated[str, typer.Option(help="telegram, email, or all")] = "all",
+    execute: Annotated[bool, typer.Option(help="Send a clearly labeled test message.")] = False,
+    outbox: Annotated[Path, typer.Option()] = Path("data/state/alerts.sqlite"),
+) -> None:
+    """Preview or explicitly send a delivery test outside signal cooldown state."""
+
+    selected_names = _channel_names(channel)
+    point = datetime.now(UTC)
+    candidate = AlertCandidate(
+        issuer_cik="0000000000",
+        alert_type=AlertType.TURNING,
+        trigger_snapshot_id=f"test_{point:%Y%m%dT%H%M%S%fZ}",
+        score=0,
+        severity=Severity.INFO,
+        ticker="TEST",
+        state="FALLING",
+        reasons=("DELIVERY_TEST_ONLY", "NO_MARKET_SIGNAL"),
+        created_at=point,
+    )
+    if not execute:
+        previews = {
+            "telegram": preview_telegram_html(candidate).text,
+            "email": preview_email_html(candidate).alternative_text,
+        }
+        _echo(
+            {
+                "command": "test-alert-delivery",
+                "status": "DRY_RUN",
+                "channels": list(selected_names),
+                "previews": {name: previews[name] for name in selected_names},
+            }
+        )
+        return
+    channels = _configured_channels(selected_names)
+    outbox.parent.mkdir(parents=True, exist_ok=True)
+    ledger = SQLiteOutbox(outbox)
+    results: list[dict[str, str | None]] = []
+    failed = False
+    try:
+        for configured in channels:
+            preview = configured.preview(candidate)
+            result = configured.send(preview)
+            configured.record_result(candidate, result)
+            ledger.record_delivery_test(configured.name, result, at=point)
+            results.append(
+                {
+                    "channel": configured.name,
+                    "status": result.status.value,
+                    "providerId": result.provider_id,
+                    "error": result.error,
+                }
+            )
+            failed = failed or result.status.value != "SENT"
+    finally:
+        ledger.close()
+    _echo(
+        {
+            "command": "test-alert-delivery",
+            "status": "FAILED" if failed else "SUCCEEDED",
+            "deliveries": results,
+        }
+    )
+    if failed:
+        raise typer.Exit(code=1)
+
+
+@app.command("export-settings-status")
+def export_settings_status(
+    manifest: Annotated[Path, typer.Option()],
+    output: Annotated[Path, typer.Option()] = Path("data/settings-status.json"),
+    outbox: Annotated[Path, typer.Option()] = Path("data/state/alerts.sqlite"),
+    policy_path: Annotated[Path, typer.Option("--policy")] = Path(
+        "config/notifications.v1.yaml"
+    ),
+    environment: Annotated[str, typer.Option()] = "production",
+) -> None:
+    """Export a public settings projection without exposing credential values."""
+
+    try:
+        publication = validate_dashboard_directory(manifest.parent)
+        _, alerts_allowed = dashboard_publication_policy(publication)
+        policy = load_notification_policy(policy_path)
+    except (DashboardExportError, NotificationPolicyError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    reasons = list(publication["quality"]["issues"])
+    if not policy.delivery_enabled:
+        reasons.append("DELIVERY_DISABLED_BY_POLICY")
+    outbox.parent.mkdir(parents=True, exist_ok=True)
+    ledger = SQLiteOutbox(outbox, cooldown_days=policy.cooldown_days)
+    try:
+        delivery_history = [dict(row) for row in ledger.history()]
+        test_history = [dict(row) for row in ledger.test_history()]
+        if ledger.recovered_path is not None:
+            reasons.append("OUTBOX_CORRUPTION_RECOVERED")
+    finally:
+        ledger.close()
+    status = build_settings_status(
+        policy,
+        environment=environment,
+        alerts_allowed=alerts_allowed and policy.delivery_enabled,
+        blocking_reasons=reasons,
+        secrets=os.environ,
+        delivery_history=delivery_history,
+        test_history=test_history,
+    )
+    _write_json(output, status)
+    _echo({"command": "export-settings-status", "status": "SUCCEEDED", "output": str(output)})
 
 
 @app.command("daily")

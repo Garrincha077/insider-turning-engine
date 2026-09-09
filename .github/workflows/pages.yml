@@ -6,6 +6,11 @@ on:
   schedule:
     - cron: "15 3 * * 2-6"
   workflow_dispatch:
+    inputs:
+      refresh_data:
+        description: Refresh the experimental SEC/market snapshot (otherwise preserve source dates)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -22,6 +27,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -32,6 +38,7 @@ jobs:
           enable-cache: true
       - run: uv sync --all-groups --frozen
       - name: Require an identifying SEC User-Agent
+        if: github.event_name == 'schedule' || inputs.refresh_data == true
         shell: bash
         run: |
           set -euo pipefail
@@ -40,13 +47,30 @@ jobs:
             exit 1
           }
       - name: Build real-data live experimental snapshot
+        if: github.event_name == 'schedule' || inputs.refresh_data == true
         run: >-
           uv run python -m insider_turning_engine.pipeline.live_experimental
           --output app/public/data
           --cache-dir data/cache/live-experimental
           --lookback-business-days 1
-          --max-symbols 50
+          --max-symbols 0
           --execute
+      - name: Export masked operational settings
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          EMAIL_API_KEY: ${{ secrets.EMAIL_API_KEY }}
+          ALERT_EMAIL_FROM: ${{ secrets.ALERT_EMAIL_FROM }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+        run: >-
+          uv run insider-turning export-settings-status
+          --manifest app/public/data/manifest.json
+          --output work/settings-status.json
+          --outbox work/alerts.sqlite --environment production
+      - name: Attach status atomically without changing source timestamps
+        run: >-
+          uv run python -m insider_turning_engine.export.settings
+          --directory app/public/data --settings work/settings-status.json
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -63,6 +87,14 @@ jobs:
           fi
       - run: npm ci
         working-directory: app
+      - run: npm run lint && npm run typecheck
+        working-directory: app
+      - run: npx playwright install --with-deps chromium
+        working-directory: app
+      - run: npm run test:e2e
+        working-directory: app
+        env:
+          PAGES_BASE_PATH: ''
       - run: npm run build
         working-directory: app
       - name: Validate atomic live snapshot and publication policy
@@ -81,7 +113,7 @@ jobs:
               validate_dashboard_directory,
           )
 
-          manifest = validate_dashboard_directory(Path("app/dist/data"))
+          manifest = validate_dashboard_directory(Path("app/dist/data"), require_settings=True)
           publishable, _ = dashboard_publication_policy(manifest)
           if publishable:
               raise SystemExit(0)

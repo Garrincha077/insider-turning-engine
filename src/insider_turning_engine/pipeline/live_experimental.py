@@ -23,7 +23,12 @@ from insider_turning_engine.domain.models import CanonicalTransaction, TableType
 from insider_turning_engine.export import export_dashboard
 from insider_turning_engine.features.price import price_features
 from insider_turning_engine.features.rs import relative_strength_features
-from insider_turning_engine.ingestion.market import DailyBar, YahooChartProvider
+from insider_turning_engine.ingestion.market import (
+    DailyBar,
+    RedundantEODProvider,
+    StooqMarketDataProvider,
+    YahooChartProvider,
+)
 from insider_turning_engine.ingestion.sec import (
     SECCompanyTickerSource,
     SECDailyIndexSource,
@@ -31,6 +36,7 @@ from insider_turning_engine.ingestion.sec import (
 )
 from insider_turning_engine.ingestion.sec.historical import validate_sec_user_agent
 from insider_turning_engine.normalization.amendments import resolve_amendments
+from insider_turning_engine.notifications import build_settings_status, load_notification_policy
 from insider_turning_engine.pipeline.daily import _technical_contexts
 from insider_turning_engine.pipeline.dashboard_input import build_dashboard_input
 from insider_turning_engine.pipeline.scoring import assemble_daily_scores
@@ -100,8 +106,8 @@ def _select_issuers(
     as_of: datetime,
     max_symbols: int,
 ) -> tuple[dict[str, str], list[dict[str, Any]]]:
-    if max_symbols < 5 or max_symbols > 100:
-        raise ValueError("max_symbols must be between 5 and 100")
+    if max_symbols < 0:
+        raise ValueError("max_symbols must be zero (all) or a positive integer")
     current = {(row.cik, row.ticker): row for row in identity_rows}
     dollars: defaultdict[str, float] = defaultdict(float)
     tickers: dict[str, str] = {}
@@ -114,7 +120,9 @@ def _select_issuers(
             continue
         dollars[record.issuer.cik] += float(record.transaction.value or 0)
         tickers[record.issuer.cik] = ticker
-    selected_ciks = sorted(dollars, key=lambda cik: (-dollars[cik], cik))[:max_symbols]
+    selected_ciks = sorted(dollars, key=lambda cik: (-dollars[cik], cik))
+    if max_symbols:
+        selected_ciks = selected_ciks[:max_symbols]
     ticker_by_cik = {cik: tickers[cik] for cik in selected_ciks}
     selected_identities: list[dict[str, Any]] = []
     for cik, ticker in ticker_by_cik.items():
@@ -194,8 +202,17 @@ def _fetch_sec_records(
 
 def _fetch_market(
     symbols: Iterable[str], *, cache_dir: Path
-) -> tuple[dict[str, tuple[DailyBar, ...]], dict[str, str]]:
-    provider = YahooChartProvider(cache_dir=cache_dir)
+) -> tuple[dict[str, tuple[DailyBar, ...]], dict[str, str], dict[str, str], set[str]]:
+    provider = RedundantEODProvider(
+        (
+            StooqMarketDataProvider(
+                cache_dir=cache_dir,
+                max_attempts=1,
+                cache_ttl_seconds=86_400,
+            ),
+            YahooChartProvider(cache_dir=cache_dir),
+        )
+    )
     bars: dict[str, tuple[DailyBar, ...]] = {}
     failures: dict[str, str] = {}
     try:
@@ -206,7 +223,7 @@ def _fetch_market(
                 failures[symbol] = str(exc)[:300]
     finally:
         provider.close()
-    return bars, failures
+    return bars, failures, dict(provider.selected_provider), set(provider.cross_validated_symbols)
 
 
 def _company_series(
@@ -295,7 +312,7 @@ def generate_live_experimental_dashboard(
         raise RuntimeError("live SEC window has no exchange-mapped common-stock purchases")
 
     requested_symbols = {*ticker_by_cik.values(), "SPY"}
-    fetched_market, market_failures = _fetch_market(
+    fetched_market, market_failures, market_sources, cross_validated = _fetch_market(
         requested_symbols, cache_dir=root / "market"
     )
     market = {
@@ -356,8 +373,11 @@ def generate_live_experimental_dashboard(
         "LIVE_EXPERIMENTAL_ROLLING_WINDOW",
         "SCORING_METHODOLOGY_INCOMPLETE",
         "SECTOR_RS_PROXY_SPY",
-        "YAHOO_MARKET_DATA_FALLBACK",
     }
+    if any(source == "yahoo-chart-experimental" for source in market_sources.values()):
+        issues.add("YAHOO_MARKET_DATA_FALLBACK")
+    if set(market_sources) != cross_validated:
+        issues.add("MARKET_SINGLE_SOURCE_ONLY")
     if sec_quarantines:
         issues.add("SEC_QUARANTINE_ROWS_EXCLUDED")
     if amendment_quarantines:
@@ -409,6 +429,15 @@ def generate_live_experimental_dashboard(
         "marketSessionThrough": latest_market.isoformat(),
         "fundamentalsAvailableThrough": None,
     }
+    policy = load_notification_policy()
+    dashboard["settingsStatus"] = build_settings_status(
+        policy,
+        environment=os.environ.get("DASHBOARD_ENVIRONMENT", "production"),
+        alerts_allowed=False,
+        blocking_reasons=sorted({*issues, "QUALITY_GATE_NOT_PASS"}),
+        secrets=os.environ,
+        generated_at=point,
+    )
     export_dashboard(
         dashboard,
         output_dir,
@@ -434,7 +463,7 @@ def main() -> None:
     parser.add_argument("--output", type=Path, default=Path("app/public/data"))
     parser.add_argument("--cache-dir", type=Path, default=Path("data/cache/live-experimental"))
     parser.add_argument("--lookback-business-days", type=int, default=5)
-    parser.add_argument("--max-symbols", type=int, default=40)
+    parser.add_argument("--max-symbols", type=int, default=0)
     parser.add_argument("--execute", action="store_true")
     args = parser.parse_args()
     if not args.execute:

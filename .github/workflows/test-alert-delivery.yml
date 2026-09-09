@@ -1,0 +1,62 @@
+name: Test alert delivery
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Delivery channel
+        type: choice
+        options: [all, telegram, email]
+        default: all
+      execute:
+        description: Send a TEST message to configured recipients (no signal cooldown)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: notification-delivery
+  cancel-in-progress: false
+
+jobs:
+  test:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - name: Preview without credentials or provider calls
+        env:
+          CHANNEL: ${{ inputs.channel }}
+        run: uv run insider-turning test-alert-delivery --channel "$CHANNEL"
+      - name: Explicit test delivery
+        if: inputs.execute && github.run_attempt == 1
+        env:
+          CHANNEL: ${{ inputs.channel }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          EMAIL_API_KEY: ${{ secrets.EMAIL_API_KEY }}
+          ALERT_EMAIL_FROM: ${{ secrets.ALERT_EMAIL_FROM }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+        run: >-
+          uv run insider-turning test-alert-delivery --channel "$CHANNEL"
+          --execute --outbox work/delivery-tests.sqlite
+      - name: Refuse automatic redelivery on workflow reruns
+        if: inputs.execute && github.run_attempt != 1
+        run: |
+          echo 'Delivery on reruns is blocked. Inspect the original result before a new dispatch.'
+          exit 1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: delivery-test-ledger-${{ github.run_id }}-${{ github.run_attempt }}
+          path: work/delivery-tests.sqlite
+          if-no-files-found: ignore
+          retention-days: 30

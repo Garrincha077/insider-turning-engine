@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://insider-turning.local/schemas/settings-status.schema.json",
+  "title": "Public notification settings status",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "generatedAt",
+    "environment",
+    "alertsAllowed",
+    "blockingReasons",
+    "policy",
+    "channels"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "environment": { "enum": ["local", "staging", "production"] },
+    "alertsAllowed": { "type": "boolean" },
+    "blockingReasons": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,63}$" }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "deliveryEnabled",
+        "minimumSeverity",
+        "alertTypes",
+        "cooldownDays",
+        "timezone",
+        "quietHours"
+      ],
+      "properties": {
+        "deliveryEnabled": { "type": "boolean" },
+        "minimumSeverity": { "enum": ["INFO", "WATCH", "HIGH", "CRITICAL"] },
+        "alertTypes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": ["MAJOR_INSIDER_BUY", "STEALTH_ACCUMULATION", "TURNING"]
+          }
+        },
+        "cooldownDays": { "type": "integer", "minimum": 1, "maximum": 90 },
+        "timezone": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "quietHours": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["start", "end"],
+              "properties": {
+                "start": { "type": "string", "pattern": "^[0-2][0-9]:[0-5][0-9]$" },
+                "end": { "type": "string", "pattern": "^[0-2][0-9]:[0-5][0-9]$" }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "channels": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["telegram", "email"],
+      "properties": {
+        "telegram": { "$ref": "#/$defs/channel" },
+        "email": { "$ref": "#/$defs/channel" }
+      }
+    }
+  },
+  "$defs": {
+    "channel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "configured",
+        "recipientMasked",
+        "lastTestAt",
+        "lastSuccessAt",
+        "failureCount"
+      ],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "configured": { "type": "boolean" },
+        "recipientMasked": { "type": ["string", "null"], "maxLength": 120 },
+        "lastTestAt": { "type": ["string", "null"], "format": "date-time" },
+        "lastSuccessAt": { "type": ["string", "null"], "format": "date-time" },
+        "failureCount": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

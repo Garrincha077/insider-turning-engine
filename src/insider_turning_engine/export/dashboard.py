@@ -148,6 +148,13 @@ def export_dashboard(
     try:
         _write_bytes(temporary / "dashboard.json", dashboard_bytes)
         files: list[dict[str, Any]] = [_file_record(temporary, "dashboard.json")]
+        settings_status = data.get("settingsStatus") or _default_settings_status(generated)
+        if not isinstance(settings_status, Mapping):
+            raise DashboardExportError("settingsStatus must be an object")
+        settings_status = cast(dict[str, Any], _json_ready(dict(settings_status)))
+        _validate_settings_status(settings_status)
+        _write_bytes(temporary / "settings-status.json", _canonical_bytes(settings_status))
+        files.append(_file_record(temporary, "settings-status.json"))
 
         if chunk_by_ticker:
             tickers = sorted(
@@ -171,6 +178,17 @@ def export_dashboard(
             for record in files
             if record["path"] == "dashboard.json" or record["path"].startswith("signals/")
         ]
+        settings_record = next(
+            record for record in files if record["path"] == "settings-status.json"
+        )
+        artifacts.append(
+            {
+                "kind": "SETTINGS_STATUS",
+                "uri": "settings-status.json",
+                "contentHash": f"sha256:{settings_record['sha256']}",
+                "mediaType": "application/json",
+            }
+        )
         manifest = _make_manifest(
             data,
             dashboard,
@@ -212,6 +230,48 @@ def _make_dashboard(
     for key in ("pulseHistory", "candidates", "filings", "backtest", "companySeries"):
         value[key] = _rows(data.get(key, []), key)
     return cast(dict[str, Any], _json_ready(value))
+
+
+def _default_settings_status(generated_at: str) -> dict[str, Any]:
+    channel = {
+        "enabled": False,
+        "configured": False,
+        "recipientMasked": None,
+        "lastTestAt": None,
+        "lastSuccessAt": None,
+        "failureCount": 0,
+    }
+    return {
+        "schemaVersion": "1.0.0",
+        "generatedAt": generated_at,
+        "environment": "local",
+        "alertsAllowed": False,
+        "blockingReasons": ["SETTINGS_STATUS_NOT_PROVIDED"],
+        "policy": {
+            "deliveryEnabled": False,
+            "minimumSeverity": "WATCH",
+            "alertTypes": ["MAJOR_INSIDER_BUY", "STEALTH_ACCUMULATION", "TURNING"],
+            "cooldownDays": 14,
+            "timezone": "Europe/Zagreb",
+            "quietHours": None,
+        },
+        "channels": {"telegram": dict(channel), "email": dict(channel)},
+    }
+
+
+def _validate_settings_status(value: Mapping[str, Any]) -> None:
+    _assert_finite(value)
+    _validate_schema(value, "settings-status.schema.json", "settings status")
+    if value["alertsAllowed"]:
+        enabled = [item for item in value["channels"].values() if item["enabled"]]
+        if (
+            value["environment"] != "production"
+            or not value["policy"]["deliveryEnabled"]
+            or value["blockingReasons"]
+            or not enabled
+            or any(not item["configured"] for item in enabled)
+        ):
+            raise DashboardExportError("settings readiness is inconsistent")
 
 
 def _rows(value: Any, field: str) -> list[dict[str, Any]]:
@@ -548,7 +608,9 @@ def _validate_manifest(value: Mapping[str, Any]) -> None:
     _assert_finite(value)
 
 
-def validate_dashboard_directory(directory: str | os.PathLike[str]) -> Mapping[str, Any]:
+def validate_dashboard_directory(
+    directory: str | os.PathLike[str], *, require_settings: bool = False
+) -> Mapping[str, Any]:
     """Validate one complete, closed-world dashboard publication directory."""
 
     root = Path(directory).resolve()
@@ -613,6 +675,20 @@ def validate_dashboard_directory(directory: str | os.PathLike[str]) -> Mapping[s
         raise DashboardExportError("dashboard and manifest score versions disagree")
     if (dashboard["status"] == "VALIDATED") != (manifest["status"] == "SUCCEEDED"):
         raise DashboardExportError("dashboard and manifest publication status disagree")
+    settings_path = root / "settings-status.json"
+    if "settings-status.json" not in expected_paths and require_settings:
+        raise DashboardExportError("manifest must reference settings-status.json")
+    if "settings-status.json" not in expected_paths:
+        return manifest  # Historical v1 snapshots predate the settings extension.
+    settings_status = json.loads(settings_path.read_text(encoding="utf-8"))
+    if not isinstance(settings_status, Mapping):
+        raise DashboardExportError("settings-status.json must contain an object")
+    _validate_settings_status(settings_status)
+    if settings_status["alertsAllowed"] and (
+        manifest["status"] != "SUCCEEDED"
+        or manifest["quality"]["disposition"] != "PASS"
+    ):
+        raise DashboardExportError("settings cannot enable alerts for a non-PASS snapshot")
     return manifest
 
 

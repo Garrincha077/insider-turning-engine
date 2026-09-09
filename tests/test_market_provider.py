@@ -7,6 +7,7 @@ import pytest
 from insider_turning_engine.ingestion.market import (
     CsvMarketDataProvider,
     DailyBar,
+    RedundantEODProvider,
     StooqMarketDataProvider,
     probe_50_symbols,
     probe_market_coverage,
@@ -164,3 +165,44 @@ def test_quality_probe_is_offline_and_quarantines_split_gap() -> None:
     assert report.missing_symbols == ("XLF",)
     assert report.split_discontinuity_symbols == ("SPY",)
     assert report.quarantined_symbols == ("SPY",)
+
+
+class _FakeEOD:
+    def __init__(self, name: str, close: str | None) -> None:
+        self.name = name
+        self.close_value = close
+
+    def fetch_daily(self, symbol: str):
+        if self.close_value is None:
+            raise RuntimeError("unavailable")
+        value = Decimal(self.close_value)
+        return (
+            DailyBar(
+                date=date(2026, 8, 31),
+                symbol=symbol,
+                open=value,
+                high=value,
+                low=value,
+                close=value,
+                adj_close=value,
+                volume=1,
+                provider=self.name,
+            ),
+        )
+
+    def close(self) -> None:
+        return None
+
+
+def test_redundant_eod_uses_fallback_and_records_single_source() -> None:
+    provider = RedundantEODProvider((_FakeEOD("primary", None), _FakeEOD("fallback", "10")))
+    rows = provider.fetch_daily("ACME")
+    assert rows[0].provider == "fallback"
+    assert provider.selected_provider["ACME"] == "fallback"
+    assert "ACME" not in provider.cross_validated_symbols
+
+
+def test_redundant_eod_quarantines_material_provider_disagreement() -> None:
+    provider = RedundantEODProvider((_FakeEOD("primary", "10"), _FakeEOD("fallback", "20")))
+    with pytest.raises(RuntimeError, match="adjusted close mismatch"):
+        provider.fetch_daily("ACME")
