@@ -49,7 +49,9 @@ they do not queue a deferred message.
 no reserve-model history is deleted. Production environment secrets are restricted
 to `main`, while `codex/*` uses staging. Pages deployment validates hashes and runs
 desktop/mobile smoke tests before artifact upload. Push/manual UI builds preserve
-source timestamps; scheduled or explicit `refresh_data` builds fetch real preview
+source timestamps by restoring and hash-validating the published bundle (restore
+failure blocks deployment instead of falling back to older committed data).
+Only `main` can deploy public Pages. Scheduled or explicit `refresh_data` builds fetch real preview
 data without the former 50-symbol cap. The rolling preview still uses one SEC
 business day; removing the cap does not create a full historical universe.
 

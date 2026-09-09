@@ -2,7 +2,7 @@ name: Deploy dashboard
 
 on:
   push:
-    branches: [main, codex/sol-v1-remediation]
+    branches: [main]
   schedule:
     - cron: "15 3 * * 2-6"
   workflow_dispatch:
@@ -37,6 +37,11 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --all-groups --frozen
+      - name: Preserve published data for UI-only deploys
+        if: github.event_name != 'schedule' && inputs.refresh_data != true
+        run: >-
+          uv run python -m insider_turning_engine.export.restore
+          --output app/public/data
       - name: Require an identifying SEC User-Agent
         if: github.event_name == 'schedule' || inputs.refresh_data == true
         shell: bash
@@ -130,6 +135,7 @@ jobs:
           path: app/dist
 
   deploy:
+    if: github.ref == 'refs/heads/main'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
