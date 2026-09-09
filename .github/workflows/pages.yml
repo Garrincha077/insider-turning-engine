@@ -60,6 +60,8 @@ jobs:
           --lookback-business-days 1
           --max-symbols 0
           --execute
+      - name: Restore durable delivery history
+        run: uv run python -m insider_turning_engine.notifications.state_store restore
       - name: Export masked operational settings
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}

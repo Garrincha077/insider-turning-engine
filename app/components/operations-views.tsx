@@ -72,6 +72,12 @@ export function AlertCenterView({ settings }: { settings: SettingsStatus }) {
     <Panel title="Suppression reasons" subtitle="No blocked candidate is silently discarded">
       {settings.blockingReasons.length === 0 ? <SuccessMessage text="No global alert suppression is active." /> : <ReasonList reasons={settings.blockingReasons} />}
     </Panel>
+    <Panel title="Delivery history" subtitle="Durable state ledger · latest 100 entries · SENT means provider acceptance">
+      {!settings.deliveryHistory?.length ? <p className="text-xs text-muted-foreground">No recorded deliveries or tests.</p> :
+        <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr><th className="p-2">Time (UTC)</th><th className="p-2">Channel</th><th className="p-2">Kind</th><th className="p-2">Result</th></tr></thead>
+          <tbody>{settings.deliveryHistory.map((row, index) => <tr key={`${row.at}-${row.channel}-${index}`} className="border-t border-border"><td className="p-2">{formatInstant(row.at)}</td><td className="p-2">{row.channel}</td><td className="p-2">{row.kind}</td><td className="p-2">{row.status}</td></tr>)}</tbody>
+        </table></div>}
+    </Panel>
   </div>;
 }
 
@@ -82,6 +88,8 @@ export function SettingsView({ settings }: { settings: SettingsStatus }) {
       <div className="grid gap-4 md:grid-cols-2"><ChannelCard name="telegram" status={settings.channels.telegram} /><ChannelCard name="email" status={settings.channels.email} /></div>
       <a href={setupUrl} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center gap-2 rounded-lg border border-emerald-400/25 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-400/15">Open GitHub Environment settings <ExternalLink className="size-3.5" /></a>
       <p className="mt-3 text-[11px] leading-5 text-muted-foreground">Required secrets: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, EMAIL_API_KEY, ALERT_EMAIL_FROM, and ALERT_EMAIL_TO. Values are never emitted into Pages data.</p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">{Object.entries(settings.channels).map(([name, channel]) => <div key={name} className="rounded-lg border border-border p-3 text-xs"><p className="font-semibold capitalize">{name} delivery test: {channel.lastTestStatus ?? 'NOT TESTED'}</p><p className="mt-1 text-muted-foreground">Failed or uncertain tests: {channel.testFailureCount ?? 0}. Configuration alone does not confirm delivery.</p></div>)}</div>
+      <a className="mt-4 inline-block text-xs text-emerald-200 underline" href="https://github.com/Garrincha077/insider-turning-engine/actions/workflows/test-alert-delivery.yml" target="_blank" rel="noreferrer">Open delivery test workflow</a>
     </Panel>
     <Panel title="Alert policy" subtitle={`Versioned configuration · ${settings.environment}`}>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><PolicyMetric label="Delivery switch" value={settings.policy.deliveryEnabled ? 'ENABLED' : 'OFF'} /><PolicyMetric label="Minimum severity" value={settings.policy.minimumSeverity} /><PolicyMetric label="Cooldown" value={`${settings.policy.cooldownDays} days`} /><PolicyMetric label="Timezone" value={settings.policy.timezone} /></div>

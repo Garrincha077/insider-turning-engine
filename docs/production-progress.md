@@ -36,8 +36,11 @@ adding it to the intended chat. No token or recipient is accepted by the public 
 
 `insider-turning test-alert-delivery --channel all` previews without network access.
 Add `--execute` for an explicit test to configured recipients. Tests do not enter
-the signal cooldown. The test workflow retains the ledger as a run artifact;
-its history is not yet automatically merged into the production state branch.
+the signal cooldown. The test workflow persists an UNCERTAIN intent in the orphan
+state branch before contacting providers, then persists the result. A lost runner
+leaves unconfirmed evidence, never a fabricated success. Workflow reruns cannot
+send again; an owner must inspect the outcome before a new explicit test dispatch.
+The ledger is also retained as a run artifact for recovery.
 
 The emergency switch is `deliveryEnabled: false`. Channel selection and severity
 filtering do not change frozen score weights. Quiet hours suppress that snapshot;
@@ -55,11 +58,15 @@ Only `main` can deploy public Pages. Scheduled or explicit `refresh_data` builds
 data without the former 50-symbol cap. The rolling preview still uses one SEC
 business day; removing the cap does not create a full historical universe.
 
-Settings builds currently use an empty local delivery ledger, so historical
-delivery fields are not yet connected to persistent state. Do not interpret
-`Never` as proof no delivery has ever occurred. The delivery-test ledger is
-available separately in workflow artifacts. `SENT` means provider acceptance,
-not confirmation that an email reached the recipient's inbox.
+Settings restores the state-branch SQLite ledger before projection. Last test
+result and test failure count are separate from signal delivery success/failures;
+Alert Center exposes the latest 100 recipient-free ledger entries. History is
+updated on the next Pages build, not immediately after a delivery. Legacy tests
+that predate state persistence may exist only in workflow artifacts. `SENT` means
+provider acceptance, not confirmation that an email reached the recipient's inbox.
+State writes preserve all other allow-listed files and reject concurrent updates.
+The test workflow shares the daily state-writer concurrency lock. This closes
+delivery-test durability, not the remaining production signal-outbox release gate.
 
 Current release verification: Python suite, strict mypy, Ruff, frontend lint,
 typecheck/build, and desktop/mobile Playwright smoke including missing/tampered

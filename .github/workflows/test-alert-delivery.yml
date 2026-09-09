@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: notification-delivery
+  group: daily-research-pipeline
   cancel-in-progress: false
 
 jobs:
@@ -25,6 +25,8 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -32,11 +34,23 @@ jobs:
           python-version: '3.12'
       - uses: astral-sh/setup-uv@v5
       - run: uv sync --frozen
+      - name: Restore durable delivery ledger
+        run: uv run python -m insider_turning_engine.notifications.state_store restore
       - name: Preview without credentials or provider calls
         env:
           CHANNEL: ${{ inputs.channel }}
         run: uv run insider-turning test-alert-delivery --channel "$CHANNEL"
+      - name: Persist test intent before contacting providers
+        id: intent
+        if: inputs.execute && github.run_attempt == 1
+        env:
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          uv run insider-turning test-alert-delivery --channel "$CHANNEL" --prepare \
+            --test-id "gh_${GITHUB_RUN_ID}" --outbox work/alerts.sqlite
+          uv run python -m insider_turning_engine.notifications.state_store persist
       - name: Explicit test delivery
+        id: delivery
         if: inputs.execute && github.run_attempt == 1
         env:
           CHANNEL: ${{ inputs.channel }}
@@ -47,7 +61,10 @@ jobs:
           ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
         run: >-
           uv run insider-turning test-alert-delivery --channel "$CHANNEL"
-          --execute --outbox work/delivery-tests.sqlite
+          --execute --test-id "gh_${GITHUB_RUN_ID}" --outbox work/alerts.sqlite
+      - name: Persist delivery result even after a failed test
+        if: always() && steps.intent.outcome == 'success'
+        run: uv run python -m insider_turning_engine.notifications.state_store persist
       - name: Refuse automatic redelivery on workflow reruns
         if: inputs.execute && github.run_attempt != 1
         run: |
@@ -57,6 +74,6 @@ jobs:
         if: always()
         with:
           name: delivery-test-ledger-${{ github.run_id }}-${{ github.run_attempt }}
-          path: work/delivery-tests.sqlite
+          path: work/alerts.sqlite
           if-no-files-found: ignore
           retention-days: 30

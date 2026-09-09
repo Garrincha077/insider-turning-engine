@@ -949,10 +949,24 @@ def test_alert_delivery(
     channel: Annotated[str, typer.Option(help="telegram, email, or all")] = "all",
     execute: Annotated[bool, typer.Option(help="Send a clearly labeled test message.")] = False,
     outbox: Annotated[Path, typer.Option()] = Path("data/state/alerts.sqlite"),
+    prepare: Annotated[bool, typer.Option(help="Persist a test intent without sending.")] = False,
+    test_id: Annotated[str | None, typer.Option()] = None,
 ) -> None:
     """Preview or explicitly send a delivery test outside signal cooldown state."""
 
     selected_names = _channel_names(channel)
+    if prepare and (execute or not test_id):
+        raise typer.BadParameter("--prepare requires --test-id and forbids --execute")
+    if prepare:
+        outbox.parent.mkdir(parents=True, exist_ok=True)
+        ledger = SQLiteOutbox(outbox)
+        try:
+            for name in selected_names:
+                ledger.prepare_delivery_test(str(test_id), name)
+        finally:
+            ledger.close()
+        _echo({"command": "test-alert-delivery", "status": "PREPARED"})
+        return
     point = datetime.now(UTC)
     candidate = AlertCandidate(
         issuer_cik="0000000000",
@@ -986,10 +1000,12 @@ def test_alert_delivery(
     failed = False
     try:
         for configured in channels:
+            if test_id is not None and not ledger.claim_delivery_test(test_id, configured.name):
+                raise typer.BadParameter("test was not prepared or was already attempted")
             preview = configured.preview(candidate)
             result = configured.send(preview)
             configured.record_result(candidate, result)
-            ledger.record_delivery_test(configured.name, result, at=point)
+            ledger.record_delivery_test(configured.name, result, at=point, test_id=test_id)
             results.append(
                 {
                     "channel": configured.name,

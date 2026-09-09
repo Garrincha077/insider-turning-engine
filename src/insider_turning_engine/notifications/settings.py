@@ -85,11 +85,17 @@ def build_settings_status(
             for row in delivery_history
             if row.get("channel") == name and row.get("status") in {"FAILED", "UNCERTAIN"}
         )
+        tests = sorted(
+            (row for row in test_history if row.get("channel") == name),
+            key=lambda row: str(row.get("recorded_at", "")),
+        )
         return {
             "enabled": enabled,
             "configured": configured,
             "recipientMasked": masked,
             "lastTestAt": _latest(test_history, channel=name),
+            "lastTestStatus": tests[-1]["status"] if tests else None,
+            "testFailureCount": sum(row["status"] in {"FAILED", "UNCERTAIN"} for row in tests),
             "lastSuccessAt": _latest(delivery_history, channel=name, status="SENT"),
             "failureCount": failures,
         }
@@ -116,6 +122,16 @@ def build_settings_status(
         "environment": environment,
         "alertsAllowed": not reasons,
         "blockingReasons": sorted(reasons),
+        "deliveryHistory": sorted(
+            [
+                {"kind": kind, "channel": row["channel"], "status": row["status"],
+                 "at": row["recorded_at"]}
+                for kind, history in (("TEST", test_history), ("SIGNAL", delivery_history))
+                for row in history
+                if row.get("channel") in {"telegram", "email"}
+                and row.get("status") in {"SENT", "FAILED", "UNCERTAIN", "SUPPRESSED", "CLAIMED"}
+            ], key=lambda row: str(row["at"]), reverse=True,
+        )[:100],
         "policy": {
             "deliveryEnabled": policy.delivery_enabled,
             "minimumSeverity": policy.minimum_severity.value,

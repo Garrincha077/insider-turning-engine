@@ -18,6 +18,19 @@
     "generatedAt": { "type": "string", "format": "date-time" },
     "environment": { "enum": ["local", "staging", "production"] },
     "alertsAllowed": { "type": "boolean" },
+    "deliveryHistory": {
+      "type": "array", "maxItems": 100,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["kind", "channel", "status", "at"],
+        "properties": {
+          "kind": { "enum": ["TEST", "SIGNAL"] },
+          "channel": { "enum": ["telegram", "email"] },
+          "status": { "enum": ["SENT", "FAILED", "UNCERTAIN", "SUPPRESSED", "CLAIMED"] },
+          "at": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
     "blockingReasons": {
       "type": "array",
       "uniqueItems": true,
@@ -89,6 +102,8 @@
         "configured": { "type": "boolean" },
         "recipientMasked": { "type": ["string", "null"], "maxLength": 120 },
         "lastTestAt": { "type": ["string", "null"], "format": "date-time" },
+        "lastTestStatus": { "enum": [null, "SENT", "FAILED", "UNCERTAIN"] },
+        "testFailureCount": { "type": "integer", "minimum": 0 },
         "lastSuccessAt": { "type": ["string", "null"], "format": "date-time" },
         "failureCount": { "type": "integer", "minimum": 0 }
       }

@@ -169,3 +169,10 @@ def test_delivery_workflow_is_explicit_main_only_and_rejects_reruns() -> None:
     assert "inputs.execute && github.run_attempt == 1" in text
     assert "environment: production" in text
     assert "default: false" in text
+    assert workflow["concurrency"]["group"] == "daily-research-pipeline"
+    assert text.index("Persist test intent") < text.index("Explicit test delivery")
+    assert "steps.intent.outcome == 'success'" in text
+    assert "--test-id" in text
+    assert "notifications.state_store persist" in text
+    _, pages = _workflow(PAGES)
+    assert pages.index("Restore durable delivery history") < pages.index("Export masked")

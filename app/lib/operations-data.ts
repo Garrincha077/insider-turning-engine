@@ -42,6 +42,8 @@ export type ChannelStatus = {
   configured: boolean;
   recipientMasked: string | null;
   lastTestAt: string | null;
+  lastTestStatus?: 'SENT' | 'FAILED' | 'UNCERTAIN' | null;
+  testFailureCount?: number;
   lastSuccessAt: string | null;
   failureCount: number;
 };
@@ -52,6 +54,10 @@ export type SettingsStatus = {
   environment: 'local' | 'staging' | 'production';
   alertsAllowed: boolean;
   blockingReasons: string[];
+  deliveryHistory?: Array<{
+    kind: 'TEST' | 'SIGNAL'; channel: 'telegram' | 'email';
+    status: 'SENT' | 'FAILED' | 'UNCERTAIN' | 'SUPPRESSED' | 'CLAIMED'; at: string;
+  }>;
   policy: {
     deliveryEnabled: boolean;
     minimumSeverity: 'INFO' | 'WATCH' | 'HIGH' | 'CRITICAL';

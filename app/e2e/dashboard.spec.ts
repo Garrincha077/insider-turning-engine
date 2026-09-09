@@ -30,8 +30,11 @@ test('dashboard loads without an error overlay and exposes every analysis view',
   }
   await expect(page.getByText('Configured', { exact: true }).first()).toBeVisible();
   await expect(page.getByRole('link', { name: 'Open GitHub Environment settings' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Open delivery test workflow' })).toBeVisible();
+  await expect(page.getByText(/Configuration alone does not confirm delivery/).first()).toBeVisible();
   await page.getByRole('button', { name: 'Alerts', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Actionable alerts blocked' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Delivery history' })).toBeVisible();
 
   expect(consoleErrors).toEqual([]);
 });

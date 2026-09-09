@@ -90,6 +90,15 @@ class SQLiteOutbox:
                 error TEXT,
                 provider_id TEXT
             );
+            CREATE TABLE IF NOT EXISTS delivery_test_runs (
+                test_id TEXT NOT NULL,
+                channel TEXT NOT NULL,
+                status TEXT NOT NULL,
+                recorded_at TEXT NOT NULL,
+                error TEXT,
+                provider_id TEXT,
+                PRIMARY KEY(test_id, channel)
+            );
             """
         )
 
@@ -207,7 +216,31 @@ class SQLiteOutbox:
         return tuple(self._db.execute(query, args).fetchall())
 
     def test_history(self) -> tuple[sqlite3.Row, ...]:
-        return tuple(self._db.execute("SELECT * FROM delivery_tests ORDER BY id").fetchall())
+        return tuple(self._db.execute(
+            """SELECT channel, status, recorded_at, error, provider_id FROM delivery_tests
+               UNION ALL
+               SELECT channel, status, recorded_at, error, provider_id FROM delivery_test_runs
+               ORDER BY recorded_at"""
+        ).fetchall())
+
+    def prepare_delivery_test(self, test_id: str, channel: str) -> None:
+        """Persist ambiguous evidence before the workflow reaches the provider."""
+        if self.recovered_path is not None:
+            raise ValueError("corrupt test ledger requires manual recovery")
+        with self._lock, self._db:
+            self._db.execute(
+                """INSERT INTO delivery_test_runs VALUES (?, ?, 'UNCERTAIN', ?,
+                   'PENDING_TEST_RECEIPT', NULL)""", (test_id, channel, _iso(datetime.now(UTC)))
+            )
+
+    def claim_delivery_test(self, test_id: str, channel: str) -> bool:
+        with self._lock, self._db:
+            cursor = self._db.execute(
+                """UPDATE delivery_test_runs SET error='TEST_IN_FLIGHT'
+                   WHERE test_id=? AND channel=? AND error='PENDING_TEST_RECEIPT'
+                   AND status='UNCERTAIN'""", (test_id, channel)
+            )
+            return cursor.rowcount == 1 and self.recovered_path is None
 
     def record_delivery_test(
         self,
@@ -215,6 +248,7 @@ class SQLiteOutbox:
         result: SendResult,
         *,
         at: datetime | None = None,
+        test_id: str | None = None,
     ) -> None:
         if result.status not in {
             DeliveryStatus.SENT,
@@ -224,6 +258,17 @@ class SQLiteOutbox:
             raise ValueError("test result must be SENT, FAILED, or UNCERTAIN")
         point = at or datetime.now(UTC)
         with self._lock:
+            if test_id is not None:
+                cursor = self._db.execute(
+                    """UPDATE delivery_test_runs SET status=?, recorded_at=?, error=?,
+                       provider_id=? WHERE test_id=? AND channel=? AND error='TEST_IN_FLIGHT'""",
+                    (result.status.value, _iso(point), result.error, result.provider_id,
+                     test_id, channel),
+                )
+                if cursor.rowcount != 1:
+                    raise ValueError("test result requires an active claim")
+                self._db.commit()
+                return
             self._db.execute(
                 """INSERT INTO delivery_tests
                    (channel, status, recorded_at, error, provider_id)
