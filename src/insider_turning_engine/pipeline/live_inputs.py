@@ -252,6 +252,37 @@ def _is_common_stock_evidence(row: Mapping[str, Any]) -> bool:
     return isinstance(value, str) and _COMMON_STOCK.search(value) is not None
 
 
+def _latest_identity_observations(
+    rows: Iterable[Mapping[str, Any]], *, as_of: datetime,
+) -> list[dict[str, Any]]:
+    """Choose knowledge-time revisions BEFORE eligibility; never resurrect old listings.
+
+    Simultaneous conflicting observations (including multiple share classes)
+    cannot identify a single tradable security for an issuer-level score.
+    """
+    groups: dict[str, tuple[datetime, dict[bytes, dict[str, Any]]]] = {}
+    for source in rows:
+        row = dict(source)
+        cik = normalize_cik(_get(row, "cik", "issuer_cik", "issuerCik", "CIK"))
+        known_value = _get(row, "knowledge_at", "knowledgeAt", "accepted_at", "acceptedAt")
+        if cik is None or known_value is None:
+            continue
+        known = _as_utc(known_value, label="identity knowledge_at")
+        valid_from = _get(row, "valid_from", "validFrom", "effective_from", "effectiveFrom")
+        if known > as_of or (
+            valid_from is not None
+            and _as_date(valid_from, label="identity valid_from") > as_of.date()
+        ):
+            continue
+        previous = groups.get(cik)
+        if previous is None or known > previous[0]:
+            groups[cik] = (known, {_canonical_json(row): row})
+        elif known == previous[0]:
+            previous[1][_canonical_json(row)] = row
+    return [next(iter(values.values())) for _, (_, values) in sorted(groups.items())
+            if len(values) == 1]
+
+
 def _identity_candidates(
     rows: Iterable[Mapping[str, Any]],
     *,
@@ -260,8 +291,10 @@ def _identity_candidates(
 ) -> dict[str, dict[str, Any]]:
     filing_titles = common_stock_titles or {}
     selected: dict[str, tuple[datetime, bytes, dict[str, Any]]] = {}
-    for source in rows:
+    for source in _latest_identity_observations(rows, as_of=as_of):
         row = dict(source)
+        if row.get("identity_status", "RESOLVED") != "RESOLVED":
+            continue
         cik = normalize_cik(_get(row, "cik", "issuer_cik", "issuerCik", "CIK"))
         ticker = normalize_ticker(_get(row, "ticker", "symbol", "issuerTradingSymbol"))
         known_value = _get(row, "knowledge_at", "knowledgeAt", "accepted_at", "acceptedAt")
@@ -314,11 +347,9 @@ def _identity_candidates(
             "exchange": str(_get(row, "exchange", "primary_exchange", "primaryExchange") or "")
             .strip()
             .upper(),
-            "security_type": (
-                str(security_type).strip()
-                if security_type is not None
-                else "Common Stock"
-            ),
+            # The daily core consumes the canonical enum spelling; retain the
+            # source title separately as evidence, not as the normalized type.
+            "security_type": "COMMON_STOCK",
             "security_type_source": (
                 "identity_row"
                 if has_explicit_common_stock
@@ -339,11 +370,19 @@ def _identity_candidates(
             value = _get(row, name, camel_name)
             if value is not None:
                 normalized[name] = _json_value(value)
+        for name in ("schema_version", "source", "ingested_at", "run_id", "provenance",
+                     "current_mapping", "survivorship_caveat", "quality_flags"):
+            if name in row:
+                normalized[name] = _json_value(row[name])
         encoded = _canonical_json(normalized)
         current = selected.get(cik)
         if current is None or (known, encoded) > (current[0], current[1]):
             selected[cik] = (known, encoded, normalized)
-    return {cik: selected[cik][2] for cik in sorted(selected)}
+    owners: dict[str, set[str]] = {}
+    for cik, (_, _, row) in selected.items():
+        owners.setdefault(str(row["ticker"]), set()).add(cik)
+    return {cik: selected[cik][2] for cik in sorted(selected)
+            if len(owners[str(selected[cik][2]["ticker"])]) == 1}
 
 
 def _common_stock_titles(

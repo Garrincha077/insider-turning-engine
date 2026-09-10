@@ -226,6 +226,7 @@ def test_cli_market_to_daily_bridge_is_offline_and_fail_closed(tmp_path: Path) -
     assert result.exit_code == 0, result.output
     output = json.loads(result.stdout)
     assert output["alerts"] == []
+    assert output["signals"][0]["ticker"] == "ACME"
 
 
 @pytest.mark.parametrize("invalid", ["future", "missing_price", "zero_shares"])

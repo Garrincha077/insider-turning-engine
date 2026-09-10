@@ -536,6 +536,36 @@ def assemble_sec_history(
         raise typer.Exit(1)
 
 
+@app.command("observe-sec-identities")
+def observe_sec_identities(
+    ciks_file: Annotated[Path, typer.Option(help="One issuer CIK per line; no ticker guessing.")],
+    output: Annotated[Path, typer.Option(help="Fresh immutable local observation directory.")],
+    run_id: Annotated[str, typer.Option()],
+    previous: Annotated[
+        Path | None, typer.Option(help="Prior identities.json observation history.")
+    ] = None,
+    execute: Annotated[bool, typer.Option()] = False,
+) -> None:
+    """Observe current SEC ticker/SIC identity. No network unless --execute is supplied."""
+    from .pipeline.identity_observations import _cik, acquire_identity_observations
+
+    ciks = sorted({_cik(line) for line in ciks_file.read_text(encoding="utf-8").splitlines()
+                   if line.strip()})
+    if not ciks or len(ciks) > 10000:
+        raise typer.BadParameter("CIK file must contain 1 to 10000 distinct identifiers")
+    if not execute:
+        _echo({"status": "DRY_RUN", "issuerCount": len(ciks), "signalReady": False,
+               "publishable": False, "alertsAllowed": False})
+        return
+    report = acquire_identity_observations(
+        ciks, user_agent=validate_sec_user_agent(os.getenv("SEC_USER_AGENT", "")),
+        run_id=run_id, output=output, previous=previous,
+    )
+    _echo(report)
+    if report["status"] != "OBSERVED":
+        raise typer.Exit(1)
+
+
 @app.command("plan-live-market")
 def plan_live_market_command(
     canonical: Annotated[list[Path], typer.Option("--canonical")],

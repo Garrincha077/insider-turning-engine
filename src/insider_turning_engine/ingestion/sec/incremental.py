@@ -206,6 +206,20 @@ class SECIncrementalSource:
     def submissions_urls(self) -> tuple[str, ...]:
         return tuple(SEC_SUBMISSIONS_URL.format(cik=cik) for cik in self.issuer_ciks)
 
+    def fetch_company_metadata(self, cik: str) -> tuple[bytes, datetime]:
+        """Fetch a current submissions observation, not historical identity evidence."""
+        normalized = _as_cik(cik)
+        if normalized not in self.issuer_ciks:
+            raise ValueError("metadata CIK is outside the requested universe")
+        payload, _, _ = self._request(
+            SEC_SUBMISSIONS_URL.format(cik=normalized), "application/json",
+            accepted_content_types=_JSON_CONTENT_TYPES, max_bytes=self.max_submissions_bytes,
+        )
+        observed = self.clock()
+        if observed.tzinfo is None:
+            raise ValueError("metadata observation clock must be timezone-aware")
+        return payload, observed.astimezone(UTC)
+
     def _cache_path(self, kind: str, key: str, suffix: str) -> Path | None:
         if self.cache_dir is None:
             return None
