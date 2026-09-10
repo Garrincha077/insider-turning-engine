@@ -431,6 +431,86 @@ def update_sec(
         raise typer.Exit(1)
 
 
+@app.command("ingest-sec-day")
+def ingest_sec_day(
+    day: Annotated[str, typer.Option(help="Completed SEC index date, YYYY-MM-DD.")],
+    max_filings: Annotated[int, typer.Option(min=1, max=5000)] = 250,
+    cache_dir: Annotated[Path, typer.Option()] = Path("data/cache/sec-daily-index"),
+    output_root: Annotated[Path, typer.Option()] = Path("data/staging/sec-daily"),
+    execute: Annotated[bool, typer.Option()] = False,
+) -> None:
+    """Resume canonical acquisition of one global ownership-filing day."""
+    from .ingestion.sec.daily_history import ingest_day
+
+    index_day = date.fromisoformat(day)
+    if not execute:
+        _echo({"status": "DRY_RUN", "day": day, "maxFilings": max_filings})
+        return
+    source = SECDailyIndexSource(
+        validate_sec_user_agent(os.getenv("SEC_USER_AGENT", "")), cache_dir=cache_dir,
+    )
+    try:
+        report = ingest_day(source, day=index_day, output_root=output_root, max_filings=max_filings)
+    finally:
+        source.close()
+    _echo({key: value for key, value in report.items() if key != "filings"})
+    if report["status"] != "ACQUIRED":
+        raise typer.Exit(1)
+
+
+@app.command("plan-live-market")
+def plan_live_market_command(
+    canonical: Annotated[list[Path], typer.Option("--canonical")],
+    sec_batch: Annotated[Path, typer.Option()],
+    identities: Annotated[Path, typer.Option()],
+    as_of: Annotated[str, typer.Option()],
+    output_dir: Annotated[Path, typer.Option()] = Path("data/staging/market-plan"),
+) -> None:
+    """Write PIT symbol/benchmark lists for update-market, without network access."""
+    from .pipeline.live_inputs import plan_live_market
+
+    report = plan_live_market(
+        canonical_sources=canonical, sec_envelope=sec_batch, identity_rows=identities,
+        as_of=datetime.fromisoformat(as_of),
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for name in ("symbols", "benchmarks"):
+        path = output_dir / f"{name}.txt"
+        temporary = path.with_suffix(".txt.tmp")
+        temporary.write_text("\n".join(report[name]) + "\n", encoding="utf-8")
+        os.replace(temporary, path)
+    _write_json(output_dir / "plan.json", report)
+    _echo(report)
+
+
+@app.command("prepare-live-inputs")
+def prepare_live_inputs_command(
+    canonical: Annotated[list[Path], typer.Option("--canonical")],
+    sec_batch: Annotated[Path, typer.Option()],
+    identities: Annotated[Path, typer.Option()],
+    prior_state: Annotated[Path, typer.Option()],
+    market_bars: Annotated[Path, typer.Option()],
+    market_quality: Annotated[Path, typer.Option()],
+    as_of: Annotated[str, typer.Option()],
+    run_id: Annotated[str, typer.Option()],
+    work_root: Annotated[Path, typer.Option()] = Path("work/live-daily"),
+    core_coverage: PathOption = None,
+    backtest_report: PathOption = None,
+) -> None:
+    """Connect verified SEC/market artifacts to daily --execute --input-manifest."""
+    from .pipeline.live_inputs import prepare_live_inputs
+
+    result = prepare_live_inputs(
+        canonical_sources=canonical, sec_envelope=sec_batch, identity_rows=identities,
+        prior_state_file=prior_state, market_bars_file=market_bars,
+        market_quality_file=market_quality, core_coverage_file=core_coverage,
+        backtest_report_file=backtest_report, as_of=datetime.fromisoformat(as_of),
+        run_id=run_id, work_root=work_root,
+    )
+    _echo({"status": "PREPARED", "manifest": str(result.manifest_path),
+           "symbols": result.symbols, "benchmarks": result.benchmarks})
+
+
 @app.command("update-market")
 def update_market(
     csv_path: PathOption = None,

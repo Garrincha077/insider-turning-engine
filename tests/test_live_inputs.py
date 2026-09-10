@@ -7,10 +7,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from typer.testing import CliRunner
 
+from insider_turning_engine.cli import app
 from insider_turning_engine.ingestion.sec.parser import parse_sec_xml
 from insider_turning_engine.pipeline.live_inputs import (
     LiveInputPreparationError,
+    plan_live_market,
     prepare_live_inputs,
 )
 
@@ -92,6 +95,10 @@ def test_preparation_writes_replayable_relative_manifest_and_derived_evidence(
     tmp_path: Path,
 ) -> None:
     paths = _inputs(tmp_path)
+    plan = plan_live_market(
+        canonical_sources=[paths["canonical"]], sec_envelope=paths["sec"],
+        identity_rows=_identity(), as_of=AS_OF,
+    )
     coverage = tmp_path / "coverage.json"
     _write_json(coverage, {"totals": {"covered_branches": 7, "num_branches": 8}})
 
@@ -113,6 +120,8 @@ def test_preparation_writes_replayable_relative_manifest_and_derived_evidence(
     assert result.active_issuers == ("0001999001",)
     assert result.symbols == ("ACME",)
     assert result.benchmarks == ("SPY", "XLE")
+    assert tuple(plan["symbols"]) == result.symbols
+    assert tuple(plan["benchmarks"]) == result.benchmarks
     assert all(not Path(item["path"]).is_absolute() for item in manifest["inputs"].values())
     assert evidence["sec"] == {
         "failureCount": 0,
@@ -187,6 +196,52 @@ def test_sec_failure_fails_before_a_prepared_bundle_is_published(tmp_path: Path)
             run_id=RUN_ID,
             work_root=tmp_path / "work",
         )
+
+
+def test_cli_market_to_daily_bridge_is_offline_and_fail_closed(tmp_path: Path) -> None:
+    paths = _inputs(tmp_path)
+    identities = tmp_path / "identities.json"
+    _write_json(identities, _identity())
+    runner = CliRunner()
+    shared = ["--canonical", str(paths["canonical"]), "--sec-batch", str(paths["sec"]),
+              "--identities", str(identities), "--as-of", AS_OF.isoformat()]
+    plan_dir = tmp_path / "plan"
+    result = runner.invoke(app, ["plan-live-market", *shared, "--output-dir", str(plan_dir)])
+    assert result.exit_code == 0, result.output
+    assert (plan_dir / "symbols.txt").read_text().strip() == "ACME"
+    assert (plan_dir / "benchmarks.txt").read_text().splitlines() == ["SPY", "XLE"]
+    market_path = tmp_path / "market.parquet"
+    quality = tmp_path / "actual-quality.json"
+    result = runner.invoke(app, ["update-market", "--csv-path", str(FIXTURES / "daily_market.csv"),
+                                "--as-of", "2026-08-31", "--output", str(market_path),
+                                "--quality-output", str(quality)])
+    assert result.exit_code == 0, result.output
+    result = runner.invoke(app, ["prepare-live-inputs", *shared,
+                                "--prior-state", str(paths["state"]),
+                                "--market-bars", str(market_path), "--market-quality", str(quality),
+                                "--run-id", RUN_ID, "--work-root", str(tmp_path / "prepared")])
+    assert result.exit_code == 0, result.output
+    manifest = json.loads(result.stdout)["manifest"]
+    result = runner.invoke(app, ["daily", "--execute", "--input-manifest", manifest])
+    assert result.exit_code == 0, result.output
+    output = json.loads(result.stdout)
+    assert output["alerts"] == []
+
+
+@pytest.mark.parametrize("invalid", ["future", "missing_price", "zero_shares"])
+def test_market_plan_never_requests_ineligible_activity(tmp_path: Path, invalid: str) -> None:
+    paths = _inputs(tmp_path)
+    row = _canonical_row()
+    if invalid == "future":
+        row["timestamps"]["knowledgeAt"] = "2026-09-01T00:00:00Z"
+    elif invalid == "missing_price":
+        row["transaction"]["pricePerShare"] = None
+    else:
+        row["transaction"]["shares"] = "0"
+    _write_json(paths["canonical"], [row])
+    plan = plan_live_market(canonical_sources=[paths["canonical"]], sec_envelope=paths["sec"],
+                            identity_rows=_identity(), as_of=AS_OF)
+    assert plan["symbols"] == []
     assert not (tmp_path / "work" / RUN_ID).exists()
 
 

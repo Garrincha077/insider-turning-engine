@@ -17,14 +17,21 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path, PurePosixPath
-from urllib.parse import urlparse
+from zoneinfo import ZoneInfo
 
 import httpx
 
 from insider_turning_engine.domain.models import QuarantineRecord
 
 from .base import SecPage, SecRawRecord
-from .historical import _SEC_PACER, RequestPacer, validate_sec_user_agent
+from .historical import (
+    _SEC_PACER,
+    RequestPacer,
+    _bounded_response_body,
+    _response_context,
+    _validate_sec_url,
+    validate_sec_user_agent,
+)
 from .incremental import OWNERSHIP_FORMS
 
 DAILY_INDEX_ROOT = "https://www.sec.gov/Archives/edgar/daily-index"
@@ -85,12 +92,13 @@ def parse_daily_master_index(payload: bytes | str) -> tuple[DailyIndexEntry, ...
         if (
             path.is_absolute()
             or ".." in path.parts
-            or len(path.parts) < 4
+            or len(path.parts) != 4
             or path.parts[:2] != ("edgar", "data")
+            or not path.parts[2].isdigit()
             or path.suffix.lower() != ".txt"
         ):
             raise ValueError("SEC daily index submission path is invalid")
-        match = _ACCESSION_RE.search(path.name)
+        match = re.fullmatch(r"(\d{10}-\d{2}-\d{6})\.txt", path.name)
         if match is None:
             raise ValueError("SEC daily index accession is invalid")
         rows.append(
@@ -100,7 +108,7 @@ def parse_daily_master_index(payload: bytes | str) -> tuple[DailyIndexEntry, ...
                 form,
                 date.fromisoformat(filed),
                 path.as_posix(),
-                match.group(0),
+                match.group(1),
             )
         )
     if not in_body:
@@ -118,6 +126,8 @@ def parse_daily_master_index(payload: bytes | str) -> tuple[DailyIndexEntry, ...
         if current is None:
             selected[row.accession_number] = row
             continue
+        if row.form_type != current.form_type or row.filing_date != current.filing_date:
+            raise ValueError("daily index aliases disagree on form or filing date")
         current_rank = (
             current.filer_cik.lstrip("0") != prefix.lstrip("0"),
             current.filer_cik,
@@ -149,7 +159,19 @@ def parse_complete_submission(
     accepted_match = _ACCEPTED_RE.search(text)
     if accepted_match is None:
         raise ValueError("complete submission has no acceptance timestamp")
-    accepted = datetime.strptime(accepted_match.group(1), "%Y%m%d%H%M%S").replace(tzinfo=UTC)
+    # SGML's unzoned acceptance clock is Eastern, NOT the UTC submissions API
+    # representation. The IANA zone handles DST, including the pre-2007 rule.
+    wall_time = datetime.strptime(accepted_match.group(1), "%Y%m%d%H%M%S")
+    eastern = ZoneInfo("America/New_York")
+    local = wall_time.replace(tzinfo=eastern)
+    if (local.utcoffset() != wall_time.replace(tzinfo=eastern, fold=1).utcoffset()
+        or local.astimezone(UTC).astimezone(eastern).replace(tzinfo=None) != wall_time):
+        raise ValueError("ambiguous or nonexistent SEC acceptance time")
+    accepted = local.astimezone(UTC)
+    if retrieved_at.tzinfo is None:
+        raise ValueError("retrieved_at must include a timezone")
+    if accepted > retrieved_at.astimezone(UTC):
+        raise ValueError("SEC acceptance is later than retrieval")
     accession_match = _ACCESSION_HEADER_RE.search(text[:100_000])
     accession_header = accession_match.group(1) if accession_match is not None else None
     if accession_header != entry.accession_number:
@@ -209,6 +231,8 @@ def parse_complete_submission(
             "daily_index_hash": index_hash,
             "complete_submission_hash": "sha256:" + hashlib.sha256(payload).hexdigest(),
             "filer_cik": entry.filer_cik,
+            "acceptance_timezone": "America/New_York",
+            "acceptance_parser_version": "2",
         },
     )
 
@@ -236,28 +260,20 @@ class SECDailyIndexSource:
         self.clock = clock
 
     def _get(self, url: str, *, maximum_bytes: int) -> bytes:
-        host = urlparse(url).hostname
-        if host not in {"www.sec.gov", "sec.gov"}:
-            raise ValueError("SEC URL host is outside the allow-list")
+        _validate_sec_url(url)
         error: Exception | None = None
         for attempt in range(self.max_attempts):
             self.pacer.wait()
             try:
-                response = self.client.get(
-                    url,
-                    headers={"User-Agent": self.user_agent, "Accept": "text/plain"},
-                )
-                if response.history or response.status_code in {301, 302, 303, 307, 308}:
-                    raise ValueError("SEC redirects are not accepted")
-                if response.status_code in {429, 500, 502, 503, 504}:
-                    raise httpx.HTTPStatusError(
-                        "retryable SEC response", request=response.request, response=response
-                    )
-                response.raise_for_status()
-                content = response.content
-                if len(content) > maximum_bytes:
-                    raise ValueError("SEC response exceeds the configured size limit")
-                return content
+                with _response_context(
+                    self.client, url, {"User-Agent": self.user_agent, "Accept": "text/plain"}
+                ) as response:
+                    if response.history or 300 <= response.status_code < 400:
+                        raise ValueError("SEC redirects are not accepted")
+                    if str(response.url) != url:
+                        raise ValueError("SEC response URL changed")
+                    response.raise_for_status()
+                    return _bounded_response_body(response, maximum_bytes)
             except (httpx.HTTPError, ValueError) as exc:
                 error = exc
                 if attempt + 1 < self.max_attempts:
@@ -324,7 +340,8 @@ class SECDailyIndexSource:
                 os.fsync(stream.fileno())
             os.replace(temporary, path)
 
-    def fetch_day(self, day: date) -> SecPage:
+    def discover_day(self, day: date) -> tuple[DailyIndexEntry, ...]:
+        """Discover a complete archived index without fetching every submission."""
         index_url = daily_index_url(day)
         index_name = f"master.{day:%Y%m%d}.idx"
         cached_index = self._cached(index_name, maximum_bytes=25 * 1024 * 1024)
@@ -333,35 +350,36 @@ class SECDailyIndexSource:
             self._cache(index_name, index_payload, retrieved_at=self.clock())
         else:
             index_payload, _index_retrieved_at = cached_index
-        index_hash = "sha256:" + hashlib.sha256(index_payload).hexdigest()
         entries = parse_daily_master_index(index_payload)
+        self.last_index_hash = "sha256:" + hashlib.sha256(index_payload).hexdigest()
+        if any(entry.filing_date != day for entry in entries):
+            raise ValueError("daily index contains a different filing date")
+        return entries
+
+    def fetch_entry(self, entry: DailyIndexEntry, *, index_hash: str) -> SecRawRecord:
+        submission_name = f"{entry.accession_number}.txt"
+        cached = self._cached(submission_name, maximum_bytes=25 * 1024 * 1024)
+        if cached is None:
+            submission = self._get(entry.submission_url, maximum_bytes=25 * 1024 * 1024)
+            retrieved_at = self.clock()
+            self._cache(submission_name, submission, retrieved_at=retrieved_at)
+        else:
+            submission, retrieved_at = cached
+        return parse_complete_submission(
+            submission, entry, retrieved_at=retrieved_at,
+            index_url=daily_index_url(entry.filing_date), index_hash=index_hash,
+        )
+
+    def fetch_day(self, day: date) -> SecPage:
+        entries = self.discover_day(day)
+        # discover_day caches the source; when caching is disabled, retain the
+        # index hash from the exact response instead of issuing a second request.
+        index_hash = self.last_index_hash
         records: list[SecRawRecord] = []
         quarantines: list[QuarantineRecord] = []
         for entry in entries:
             try:
-                submission_name = f"{entry.accession_number}.txt"
-                cached_submission = self._cached(
-                    submission_name,
-                    maximum_bytes=25 * 1024 * 1024,
-                )
-                if cached_submission is None:
-                    submission = self._get(
-                        entry.submission_url,
-                        maximum_bytes=25 * 1024 * 1024,
-                    )
-                    retrieved_at = self.clock()
-                    self._cache(submission_name, submission, retrieved_at=retrieved_at)
-                else:
-                    submission, retrieved_at = cached_submission
-                records.append(
-                    parse_complete_submission(
-                        submission,
-                        entry,
-                        retrieved_at=retrieved_at,
-                        index_url=index_url,
-                        index_hash=index_hash,
-                    )
-                )
+                records.append(self.fetch_entry(entry, index_hash=index_hash))
             except (RuntimeError, ValueError) as exc:
                 quarantines.append(
                     QuarantineRecord(

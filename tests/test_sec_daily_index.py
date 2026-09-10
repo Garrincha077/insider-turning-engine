@@ -67,7 +67,7 @@ def test_complete_submission_recovers_exact_acceptance_and_issuer() -> None:
         index_url=daily_index_url(entry.filing_date),
         index_hash="sha256:" + "1" * 64,
     )
-    assert record.accepted_at == datetime(2026, 8, 31, 19, 45, 30, tzinfo=UTC)
+    assert record.accepted_at == datetime(2026, 8, 31, 23, 45, 30, tzinfo=UTC)
     assert record.issuer_cik == "0007654321"
     assert record.primary_document == "ownership.xml"
     assert record.payload is not None and b"ownershipDocument" in record.payload
@@ -83,7 +83,7 @@ def test_complete_submission_accepts_real_edgar_sgml_accession_header() -> None:
         index_hash="sha256:" + "1" * 64,
     )
     assert record.accession_number == entry.accession_number
-    assert record.accepted_at == datetime(2026, 8, 31, 19, 45, 30, tzinfo=UTC)
+    assert record.accepted_at == datetime(2026, 8, 31, 23, 45, 30, tzinfo=UTC)
 
 
 def test_daily_index_deduplicates_reporting_owner_aliases_by_accession() -> None:

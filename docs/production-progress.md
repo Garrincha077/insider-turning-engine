@@ -14,6 +14,10 @@ Historical acquisition now has a catalog-backed, resumable range importer and
 fail-closed table-integrity validation. Five real quarters have been verified
 locally; this is not complete canonical history. See [SEC history](sec-history.md)
 for exact evidence, commands, limitations and the next enrichment boundary.
+The [live daily CLI bridge](live-daily-bridge.md) now connects bounded global
+SEC-day acquisition, common PIT market selection, market artifacts and Gate 1 input
+preparation. One real day was acquired with two derivative rows still quarantined;
+the scheduled full producer graph remains a release blocker.
 
 - Materialize canonical SEC history from 2006 and a complete trailing 365-day
   insider-active universe. The preview window is not that universe.

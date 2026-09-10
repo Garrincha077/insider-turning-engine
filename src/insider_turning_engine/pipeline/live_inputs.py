@@ -237,6 +237,11 @@ def _qualified(record: CanonicalTransaction, *, as_of: datetime) -> bool:
         and record.transaction.transaction_date <= as_of.date()
         and record.transaction.transaction_date >= as_of.date() - timedelta(days=365)
         and record.transaction.code in {"P", "S"}
+        and record.transaction.shares > 0
+        and record.transaction.price_per_share is not None
+        and record.transaction.price_per_share > 0
+        and (record.transaction.code, record.transaction.acquired_disposed)
+        in {("P", "A"), ("S", "D")}
         and record.security.table_type is TableType.NON_DERIVATIVE
         and record.lifecycle.status.value == "ACTIVE"
     )
@@ -369,6 +374,51 @@ def _read_identity_rows(value: Iterable[Mapping[str, Any]] | str | Path) -> list
     return [dict(row) for row in rows]
 
 
+def _select_market_universe(
+    effective: Iterable[CanonicalTransaction],
+    identity_rows: Iterable[Mapping[str, Any]] | str | Path,
+    *, as_of: datetime,
+) -> tuple[tuple[str, ...], list[dict[str, Any]], tuple[str, ...], tuple[str, ...]]:
+    records = list(effective)
+    active = tuple(sorted({r.issuer.cik for r in records if _qualified(r, as_of=as_of)}))
+    identities = _identity_candidates(
+        _read_identity_rows(identity_rows), as_of=as_of,
+        common_stock_titles=_common_stock_titles(records, as_of=as_of),
+    )
+    selected = [identities[cik] for cik in active if cik in identities]
+    symbols = tuple(sorted({str(row["ticker"]) for row in selected}))
+    sectors = {str(row["sector_etf"]) for row in selected
+               if str(row.get("sector_etf", "")).strip()
+               and str(row["sector_etf"]).upper() != "UNKNOWN"}
+    return active, selected, symbols, tuple(sorted({"SPY", *sectors}))
+
+
+def plan_live_market(
+    *, canonical_sources: Iterable[str | Path], sec_envelope: str | Path,
+    identity_rows: Iterable[Mapping[str, Any]] | str | Path, as_of: datetime,
+) -> dict[str, Any]:
+    """Plan the same PIT universe used after market acquisition; no network or scores."""
+    point = _as_utc(as_of, label="as_of")
+    paths = [Path(value) for value in canonical_sources]
+    if not paths:
+        raise LiveInputPreparationError("at least one canonical source is required")
+    rows = [row for path in paths for row in _read_rows(path, label="canonical source")]
+    batch, _ = _load_sec_envelope(Path(sec_envelope))
+    records = _merge_records(_typed_records([*rows, *batch], label="market selection"))
+    resolution = resolve_amendments(records, as_of=point)
+    active, selected, symbols, benchmarks = _select_market_universe(
+        resolution.effective_records, identity_rows, as_of=point,
+    )
+    return {
+        "schemaVersion": "1.0.0", "asOf": _json_value(point),
+        "activeIssuerCount": len(active), "selectedIdentityCount": len(selected),
+        "unmappedIssuerCiks": sorted(set(active) - {str(row["cik"]) for row in selected}),
+        "amendmentQuarantineCount": len(resolution.quarantines),
+        "symbols": list(symbols), "benchmarks": list(benchmarks),
+        "selection": "point-in-time-insider-active-365d", "signalReady": False,
+    }
+
+
 def _load_quality(path: Path, *, as_of: datetime) -> dict[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -483,32 +533,9 @@ def prepare_live_inputs(
         resolution.all_revisions if not resolution.quarantines else records,
         key=_record_key,
     )
-    active_issuers = tuple(
-        sorted(
-            {
-                record.issuer.cik
-                for record in resolution.effective_records
-                if _qualified(record, as_of=point)
-            }
-        )
+    active_issuers, selected_identities, symbols, benchmarks = _select_market_universe(
+        resolution.effective_records, identity_rows, as_of=point,
     )
-
-    identities = _identity_candidates(
-        _read_identity_rows(identity_rows),
-        as_of=point,
-        common_stock_titles=_common_stock_titles(
-            resolution.effective_records,
-            as_of=point,
-        ),
-    )
-    selected_identities = [identities[cik] for cik in active_issuers if cik in identities]
-    symbols = tuple(sorted({str(row["ticker"]) for row in selected_identities}))
-    sector_etfs = {
-        str(row["sector_etf"])
-        for row in selected_identities
-        if str(row.get("sector_etf", "")).strip() and str(row["sector_etf"]).upper() != "UNKNOWN"
-    }
-    benchmarks = tuple(sorted({"SPY", *sector_etfs}))
 
     prior_rows = _read_rows(Path(prior_state_file), label="prior state")
     market_path = Path(market_bars_file)
@@ -642,4 +669,5 @@ __all__ = [
     "LiveInputPreparationError",
     "prepare_live_daily_inputs",
     "prepare_live_inputs",
+    "plan_live_market",
 ]

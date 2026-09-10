@@ -442,6 +442,13 @@ def parse_sec_ownership_document(
             ]
         )
     ticker = ticker.upper() if ticker else None
+    unresolved_ticker = (
+        ticker is not None and re.fullmatch(r"[A-Z0-9][A-Z0-9.\-]{0,14}", ticker) is None
+    )
+    if unresolved_ticker:
+        # CIK is the issuer identity. N/A or multiple listed classes do not
+        # invalidate otherwise valid transactions, nor identify a tradable ticker.
+        ticker = None
     try:
         issuer = Issuer(cik=issuer_cik, name=issuer_name, ticker=ticker)
     except ValueError as exc:
@@ -716,6 +723,12 @@ def parse_sec_ownership_document(
                     footnotes=row_footnotes,
                 )
                 flags: list[QualityFlag] = []
+                if unresolved_ticker:
+                    flags.append(QualityFlag(
+                        code="UNRESOLVED_ISSUER_TICKER", severity=QualitySeverity.WARNING,
+                        message="SEC symbol is unavailable or ambiguous; use PIT CIK mapping",
+                        path="issuer.ticker",
+                    ))
                 if price is None:
                     flags.append(
                         QualityFlag(
