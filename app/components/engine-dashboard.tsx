@@ -34,6 +34,7 @@ import {
   useTable,
 } from '@tanstack/react-table';
 
+import { SortControls, sortRows, useRowSort, type SortField } from '@/components/sort-controls';
 import { Badge } from '@/components/ui/badge';
 import { EChart } from '@/components/echart';
 import {
@@ -53,6 +54,7 @@ import {
 } from '@/components/ui/table';
 import {
   type Candidate,
+  type Filing,
   type DashboardData,
 } from '@/lib/dashboard-data';
 import { type PublicationManifest, type SettingsStatus } from '@/lib/operations-data';
@@ -97,6 +99,36 @@ const candidateColumns = candidateColumn.columns([
   candidateColumn.accessor((row) => costReturn(row), { id: 'costPl', header: 'Cost P/L', cell: (info) => <span className="font-mono text-xs text-amber-200">{signed(info.getValue())}{info.getValue() === null ? '' : '%'}</span> }),
   candidateColumn.accessor('state', { header: 'State', cell: (info) => <StateBadge state={info.getValue()} /> }),
 ]);
+
+
+const candidateSortFields: SortField<Candidate>[] = [
+  { id: 'total', label: 'Total', value: (row) => row.total },
+  { id: 'insider', label: 'Insider', value: (row) => row.insider },
+  { id: 'turn', label: 'Turn', value: (row) => row.turn },
+  { id: 'divergence', label: 'Divergence', value: (row) => row.divergence },
+  { id: 'marketRs', label: 'MRS Mkt', value: (row) => row.marketRs },
+  { id: 'costPl', label: 'Cost P/L', value: costReturn },
+  { id: 'ticker', label: 'Ticker', value: (row) => row.ticker },
+  { id: 'state', label: 'State', value: (row) => row.state },
+];
+const filingSortFields: SortField<Filing>[] = [
+  { id: 'value', label: 'Value', value: (row) => row.value },
+  { id: 'filedAt', label: 'Filed UTC', value: (row) => Date.parse(row.filedAt.replace(' ', 'T') + (/(Z|[+-]\d{2}:\d{2})$/.test(row.filedAt) ? '' : 'Z')) },
+  ...(['ticker', 'owner', 'role', 'side', 'accession'] as const).map((id) => ({
+    id, label: { ticker: 'Ticker', owner: 'Reporting owner', role: 'Role', side: 'Side', accession: 'Accession' }[id],
+    value: (row: Filing) => row[id],
+  })),
+];
+const clusterSortFields: SortField<Candidate>[] = [
+  { id: 'cluster', label: 'Cluster score', value: (row) => row.cluster },
+  ...candidateSortFields.filter((field) => ['total', 'ticker'].includes(field.id)),
+];
+const costSortFields: SortField<Candidate>[] = [
+  { id: 'costPl', label: 'Cost P/L', value: costReturn },
+  { id: 'insiderCost', label: 'Insider cost', value: (row) => row.insiderCost },
+  { id: 'currentPrice', label: 'Current price', value: (row) => row.currentPrice },
+  { id: 'ticker', label: 'Ticker', value: (row) => row.ticker },
+];
 
 export function EngineDashboard() {
   const [view, setView] = useState<ViewId>('radar');
@@ -244,11 +276,14 @@ function PulseCards({ data }: { data: DashboardData }) {
   </div>;
 }
 
-function CandidateTable({ candidates, selectedTicker, onSelect }: { candidates: Candidate[]; selectedTicker?: string; onSelect: (ticker: string) => void }) {
-  const [sorting, setSorting] = useState<SortingState>([{ id: 'total', desc: true }]);
+function CandidateTable({ candidates, selectedTicker, onSelect, initialSort = 'total' }: { candidates: Candidate[]; selectedTicker?: string; onSelect: (ticker: string) => void; initialSort?: string }) {
+  const [sorting, setSorting] = useState<SortingState>([{ id: initialSort, desc: true }]);
   const [search, setSearch] = useState('');
   const table = useTable({
-    data: candidates,
+    data: sortRows(candidates, candidateSortFields.find((field) => field.id === sorting[0]?.id) ?? candidateSortFields[0], sorting[0]?.desc ?? true),
+    manualSorting: true,
+    sortDescFirst: true,
+    enableSortingRemoval: false,
     columns: candidateColumns,
     features: candidateFeatures,
     state: { sorting, globalFilter: search },
@@ -258,7 +293,8 @@ function CandidateTable({ candidates, selectedTicker, onSelect }: { candidates: 
   });
   return <section className="overflow-hidden rounded-xl border border-border bg-card">
     <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-sm font-semibold">Ranked candidates</h2><p className="mt-1 text-xs text-muted-foreground">Click headers to sort · rows to inspect</p></div><div className="relative"><Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Ticker or company" className="h-8 w-full pl-8 text-xs sm:w-48" /></div></div>
-    <Table><TableHeader>{table.getHeaderGroups().map((group) => <TableRow key={group.id} className="hover:bg-transparent">{group.headers.map((header, index) => <TableHead key={header.id} className={index === 0 ? 'pl-5' : ''}><button className="flex items-center gap-1" onClick={header.column.getToggleSortingHandler()}>{header.isPlaceholder ? null : <table.FlexRender header={header} />}{header.column.getIsSorted() && <ChevronDown className={`size-3 transition ${header.column.getIsSorted() === 'asc' ? 'rotate-180' : ''}`} />}</button></TableHead>)}</TableRow>)}</TableHeader>
+    <div className="px-5 pt-4"><SortControls fields={candidateSortFields} fieldId={sorting[0]?.id ?? initialSort} descending={sorting[0]?.desc ?? true} onField={(id) => setSorting([{ id, desc: true }])} onReverse={() => setSorting((previous) => [{ id: previous[0]?.id ?? initialSort, desc: !(previous[0]?.desc ?? true) }])} /></div>
+    <Table><TableHeader>{table.getHeaderGroups().map((group) => <TableRow key={group.id} className="hover:bg-transparent">{group.headers.map((header, index) => <TableHead key={header.id} aria-sort={header.column.getIsSorted() === 'desc' ? 'descending' : header.column.getIsSorted() === 'asc' ? 'ascending' : 'none'} className={index === 0 ? 'pl-5' : ''}><button className="flex items-center gap-1" onClick={header.column.getToggleSortingHandler()}>{header.isPlaceholder ? null : <table.FlexRender header={header} />}{header.column.getIsSorted() && <ChevronDown className={`size-3 transition ${header.column.getIsSorted() === 'asc' ? 'rotate-180' : ''}`} />}</button></TableHead>)}</TableRow>)}</TableHeader>
       <TableBody>{table.getRowModel().rows.map((row) => <TableRow key={row.id} data-state={row.original.ticker === selectedTicker ? 'selected' : undefined} onClick={() => onSelect(row.original.ticker)} className="cursor-pointer">{row.getAllCells().map((cell, index) => <TableCell key={cell.id} className={index === 0 ? 'pl-5' : ''}><table.FlexRender cell={cell} /></TableCell>)}</TableRow>)}</TableBody>
     </Table>
   </section>;
@@ -277,25 +313,50 @@ function MarketPulseView({ data }: { data: DashboardData }) {
 function CandidateList({ data, mode, selectedTicker, onSelect }: { data: DashboardData; mode: 'turning' | 'divergence'; selectedTicker: string; onSelect: (ticker: string) => void }) {
   const sorted = [...data.candidates].sort((a, b) => mode === 'turning' ? b.turn - a.turn : b.divergence - a.divergence);
   const selected = sorted.find((candidate) => candidate.ticker === selectedTicker) ?? sorted[0];
-  return <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_340px]"><CandidateTable candidates={sorted} selectedTicker={selectedTicker} onSelect={onSelect} />{selected ? <ReasonPanel candidate={selected} onOpen={() => undefined} /> : <EmptyState message="No complete candidates are available for this view." />}</div>;
+  return <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_340px]"><CandidateTable key={mode} initialSort={mode === 'turning' ? 'turn' : 'divergence'} candidates={sorted} selectedTicker={selectedTicker} onSelect={onSelect} />{selected ? <ReasonPanel candidate={selected} onOpen={() => undefined} /> : <EmptyState message="No complete candidates are available for this view." />}</div>;
 }
 
 function SmartBuysView({ data }: { data: DashboardData }) {
-  const buys = data.filings.filter((filing) => filing.side === 'BUY');
-  return <Panel title="Highest-conviction purchases" subtitle="Qualified open-market buys only">{buys.length === 0 ? <EmptyState message="No qualified open-market purchase is available in this live window." /> : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{buys.map((filing) => <div key={`${filing.accession}:${filing.owner}`} className="rounded-lg border border-border bg-background/35 p-4"><div className="flex items-center justify-between"><span className="font-mono text-lg font-semibold text-emerald-200">{filing.ticker}</span><Badge className="bg-emerald-400/10 text-emerald-200">BUY</Badge></div><p className="mt-4 text-sm font-medium">{filing.owner}</p><p className="text-xs text-muted-foreground">{filing.role}</p><p className="mt-4 font-mono text-2xl font-semibold">${compactMoney(filing.value)}</p><p className="mt-1 text-[10px] text-muted-foreground">Filed {filing.filedAt} UTC</p></div>)}</div>}</Panel>;
+  const sort = useRowSort(data.filings.filter((filing) => filing.side === 'BUY'), filingSortFields, 'value');
+  const buys = sort.rows;
+  return <Panel title="Qualified insider purchases" subtitle="Qualified open-market buys only"><SortControls fields={filingSortFields} fieldId={sort.fieldId} descending={sort.descending} onField={sort.choose} onReverse={sort.reverse} />{buys.length === 0 ? <EmptyState message="No qualified open-market purchase is available in this live window." /> : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{buys.map((filing) => <div key={`${filing.accession}:${filing.owner}`} className="rounded-lg border border-border bg-background/35 p-4"><div className="flex items-center justify-between"><span className="font-mono text-lg font-semibold text-emerald-200">{filing.ticker}</span><Badge className="bg-emerald-400/10 text-emerald-200">BUY</Badge></div><p className="mt-4 text-sm font-medium">{filing.owner}</p><p className="text-xs text-muted-foreground">{filing.role}</p><p className="mt-4 font-mono text-2xl font-semibold">${compactMoney(filing.value)}</p><p className="mt-1 text-[10px] text-muted-foreground">Filed {filing.filedAt} UTC</p></div>)}</div>}</Panel>;
 }
 
 function ClusterView({ data, selectedTicker, onSelect }: { data: DashboardData; selectedTicker: string; onSelect: (ticker: string) => void }) {
-  return <div className="grid gap-6 lg:grid-cols-2">{[...data.candidates].sort((a, b) => b.cluster - a.cluster).map((candidate) => <button key={candidate.ticker} onClick={() => onSelect(candidate.ticker)} className={`rounded-xl border p-5 text-left transition ${selectedTicker === candidate.ticker ? 'border-emerald-400/35 bg-emerald-400/8' : 'border-border bg-card hover:border-slate-500'}`}><div className="flex items-center justify-between"><span className="font-mono text-xl font-semibold text-emerald-200">{candidate.ticker}</span><Score value={candidate.cluster} strong /></div><p className="mt-1 text-xs text-muted-foreground">{candidate.company}</p><div className="mt-5 flex gap-2"><Badge variant="outline">{candidate.cluster >= 90 ? 'CEO_CFO_CLUSTER' : '3_PLUS_BUYERS'}</Badge>{candidate.reasons.some((item) => item.toLowerCase().includes('sales')) && <Badge variant="outline">NO_SELLS_90D</Badge>}</div></button>)}</div>;
+  const sort = useRowSort(data.candidates, clusterSortFields, 'cluster');
+  return <div><div><SortControls fields={clusterSortFields} fieldId={sort.fieldId} descending={sort.descending} onField={sort.choose} onReverse={sort.reverse} /></div><div className="grid gap-6 lg:grid-cols-2">{sort.rows.map((candidate) => <button key={candidate.ticker} onClick={() => onSelect(candidate.ticker)} className={`rounded-xl border p-5 text-left transition ${selectedTicker === candidate.ticker ? 'border-emerald-400/35 bg-emerald-400/8' : 'border-border bg-card hover:border-slate-500'}`}><div className="flex items-center justify-between"><span className="font-mono text-xl font-semibold text-emerald-200">{candidate.ticker}</span><Score value={candidate.cluster} strong /></div><p className="mt-1 text-xs text-muted-foreground">{candidate.company}</p><div className="mt-5 flex gap-2"><Badge variant="outline">{candidate.cluster >= 90 ? 'CEO_CFO_CLUSTER' : '3_PLUS_BUYERS'}</Badge>{candidate.reasons.some((item) => item.toLowerCase().includes('sales')) && <Badge variant="outline">NO_SELLS_90D</Badge>}</div></button>)}</div></div>;
 }
 
 function CostBasisView({ data }: { data: DashboardData }) {
-  const available = data.candidates.flatMap((candidate) => { const pnl = costReturn(candidate); return pnl === null ? [] : [{ candidate, pnl }]; });
-  return <Panel title="Insider weighted cost basis" subtitle="Qualified purchases in the trailing 90 days">{available.length === 0 ? <EmptyState message="No candidate has both a current price and a qualified 90D insider basis." /> : <div className="space-y-3">{available.map(({ candidate, pnl }) => <div key={candidate.ticker} className="grid grid-cols-[70px_1fr_auto_auto] items-center gap-4 rounded-lg border border-border bg-background/35 p-4"><span className="font-mono font-semibold text-emerald-200">{candidate.ticker}</span><div className="h-1.5 overflow-hidden rounded-full bg-slate-800"><div className={`h-full rounded-full ${pnl >= 0 ? 'bg-emerald-400' : 'bg-amber-300'}`} style={{ width: `${Math.min(100, 45 + Math.abs(pnl) * 4)}%` }} /></div><span className="font-mono text-xs">${candidate.insiderCost?.toFixed(2)}</span><span className={`w-16 text-right font-mono text-xs ${pnl >= 0 ? 'text-emerald-300' : 'text-amber-200'}`}>{signed(pnl)}%</span></div>)}</div>}</Panel>;
+  const sort = useRowSort(data.candidates, costSortFields, 'costPl');
+  const available = sort.rows.flatMap((candidate) => { const pnl = costReturn(candidate); return pnl === null ? [] : [{ candidate, pnl }]; });
+  return <Panel title="Insider weighted cost basis" subtitle="Qualified purchases in the trailing 90 days"><SortControls fields={costSortFields} fieldId={sort.fieldId} descending={sort.descending} onField={sort.choose} onReverse={sort.reverse} />{available.length === 0 ? <EmptyState message="No candidate has both a current price and a qualified 90D insider basis." /> : <div className="space-y-3">{available.map(({ candidate, pnl }) => <div key={candidate.ticker} className="grid grid-cols-[70px_1fr_auto_auto] items-center gap-4 rounded-lg border border-border bg-background/35 p-4"><span className="font-mono font-semibold text-emerald-200">{candidate.ticker}</span><div className="h-1.5 overflow-hidden rounded-full bg-slate-800"><div className={`h-full rounded-full ${pnl >= 0 ? 'bg-emerald-400' : 'bg-amber-300'}`} style={{ width: `${Math.min(100, 45 + Math.abs(pnl) * 4)}%` }} /></div><span className="font-mono text-xs">${candidate.insiderCost?.toFixed(2)}</span><span className={`w-16 text-right font-mono text-xs ${pnl >= 0 ? 'text-emerald-300' : 'text-amber-200'}`}>{signed(pnl)}%</span></div>)}</div>}</Panel>;
 }
 
 function SecTapeView({ data }: { data: DashboardData }) {
-  return <Panel title="Latest relevant Form 4 filings" subtitle="Normalized and deduplicated SEC tape">{data.filings.length === 0 ? <EmptyState message="No normalized P/S filing is available in this snapshot." /> : <Table><TableHeader><TableRow><TableHead>Ticker</TableHead><TableHead>Reporting owner</TableHead><TableHead>Role</TableHead><TableHead>Side</TableHead><TableHead>Value</TableHead><TableHead>Filed UTC</TableHead><TableHead>Accession</TableHead></TableRow></TableHeader><TableBody>{data.filings.map((filing) => <TableRow key={`${filing.accession}:${filing.owner}:${filing.side}`}><TableCell className="font-mono font-semibold text-emerald-200">{filing.ticker}</TableCell><TableCell>{filing.owner}</TableCell><TableCell className="text-muted-foreground">{filing.role}</TableCell><TableCell><Badge className={filing.side === 'BUY' ? 'bg-emerald-400/10 text-emerald-200' : 'bg-rose-400/10 text-rose-200'}>{filing.side}</Badge></TableCell><TableCell className="font-mono">${compactMoney(filing.value)}</TableCell><TableCell className="font-mono text-xs text-muted-foreground">{filing.filedAt}</TableCell><TableCell className="font-mono text-[10px] text-muted-foreground">{filing.accession}</TableCell></TableRow>)}</TableBody></Table>}</Panel>;
+  const sort = useRowSort(data.filings, filingSortFields, 'value');
+  const columns = ['ticker', 'owner', 'role', 'side', 'value', 'filedAt', 'accession'];
+  return <Panel title="Relevant SEC filings" subtitle="Normalized and deduplicated SEC tape">
+    <SortControls fields={filingSortFields} fieldId={sort.fieldId} descending={sort.descending} onField={sort.choose} onReverse={sort.reverse} />
+    {sort.rows.length === 0 ? <EmptyState message="No normalized P/S filing is available in this snapshot." /> :
+      <Table><TableHeader><TableRow>{columns.map((id) => {
+        const field = filingSortFields.find((item) => item.id === id)!;
+        const active = sort.fieldId === id;
+        return <TableHead key={id} aria-sort={active ? sort.descending ? 'descending' : 'ascending' : 'none'}>
+          <button type="button" className="flex items-center gap-1 py-2 focus-visible:outline-2 focus-visible:outline-emerald-300" onClick={() => sort.toggle(id)}>
+            {field.label}<span aria-hidden="true">{active ? sort.descending ? '↓' : '↑' : '↕'}</span>
+          </button>
+        </TableHead>;
+      })}</TableRow></TableHeader><TableBody>{sort.rows.map((filing, index) =>
+        <TableRow key={`${filing.accession}:${filing.owner}:${filing.side}:${index}`}>
+          <TableCell className="font-mono font-semibold text-emerald-200">{filing.ticker}</TableCell>
+          <TableCell>{filing.owner}</TableCell><TableCell className="text-muted-foreground">{filing.role}</TableCell>
+          <TableCell><Badge className={filing.side === 'BUY' ? 'bg-emerald-400/10 text-emerald-200' : 'bg-rose-400/10 text-rose-200'}>{filing.side}</Badge></TableCell>
+          <TableCell data-value={filing.value} title={filing.value.toLocaleString('en-US', { style: 'currency', currency: 'USD' })} className="font-mono">${compactMoney(filing.value)}</TableCell>
+          <TableCell className="font-mono text-xs text-muted-foreground">{filing.filedAt}</TableCell>
+          <TableCell className="font-mono text-[10px] text-muted-foreground">{filing.accession}</TableCell>
+        </TableRow>)}</TableBody></Table>}
+  </Panel>;
 }
 
 function CompanyLab({ data, candidate, onTicker }: { data: DashboardData; candidate: Candidate; onTicker: (ticker: string) => void }) {
