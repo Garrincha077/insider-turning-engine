@@ -29,7 +29,7 @@ def test_daily_schedule_dispatch_lock_and_runtime_contract() -> None:
     trigger = workflow["on"] if "on" in workflow else workflow[True]
     assert isinstance(trigger, dict)
     schedules = [item["cron"] for item in trigger["schedule"]]
-    assert "30 2 * * 2-6" in schedules
+    assert "30 2 * * 2-6" not in schedules
     assert "0 3 1 1,4,7,10 *" in schedules
     assert "workflow_dispatch" in trigger
     assert workflow["concurrency"] == {

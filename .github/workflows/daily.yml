@@ -1,10 +1,9 @@
 name: Daily research pipeline
 
 on:
-  # The SEC filing cutoff is deliberately after the US market close.  GitHub
-  # cron uses UTC and the range 2-6 is Tuesday through Saturday.
+  # Quarterly bulk schedule only. Real daily acquisition has its own workflow;
+  # the legacy scoring/import graph remains manual until all producers are joined.
   schedule:
-    - cron: "30 2 * * 2-6"
     - cron: "0 3 1 1,4,7,10 *"
   workflow_dispatch:
     inputs:
