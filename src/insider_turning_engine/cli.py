@@ -500,6 +500,42 @@ def acquire_sec_daily(
         raise typer.Exit(1)
 
 
+@app.command("assemble-sec-history")
+def assemble_sec_history(
+    repository: Annotated[str, typer.Option()],
+    target: Annotated[str, typer.Option(help="Full audited commit SHA.")],
+    start: Annotated[str, typer.Option(help="First SEC day, YYYY-MM-DD.")],
+    end: Annotated[str, typer.Option(help="Last SEC day, YYYY-MM-DD.")],
+    as_of: Annotated[str, typer.Option(help="Aware point-in-time cutoff.")],
+    output: Annotated[Path, typer.Option(help="Immutable output directory.")],
+    execute: Annotated[bool, typer.Option()] = False,
+) -> None:
+    """Assemble verified daily Releases; incomplete sources produce diagnostics only."""
+    from .ingestion.sec.release_store import ReleaseCheckpointStore
+    from .pipeline.sec_history import assemble_history
+
+    cutoff = datetime.fromisoformat(as_of.replace("Z", "+00:00"))
+    if cutoff.tzinfo is None or cutoff > datetime.now(UTC):
+        raise typer.BadParameter("as-of must be timezone-aware and not in the future")
+    first, last = date.fromisoformat(start), date.fromisoformat(end)
+    if first > last or last > cutoff.date():
+        raise typer.BadParameter("invalid history range for as-of")
+    if not execute:
+        _echo({"status": "DRY_RUN", "start": start, "end": end, "signalReady": False})
+        return
+    source = SECDailyIndexSource(validate_sec_user_agent(os.getenv("SEC_USER_AGENT", "")))
+    store = ReleaseCheckpointStore(repository, target=target)
+    try:
+        days = source.discover_days(first, last)
+        checkpoints = [value for day in days if (value := store.latest(day)) is not None]
+        report = assemble_history(checkpoints, expected_days=days, as_of=cutoff, output=output)
+    finally:
+        source.close()
+    _echo(report)
+    if report["status"] != "HISTORY_READY":
+        raise typer.Exit(1)
+
+
 @app.command("plan-live-market")
 def plan_live_market_command(
     canonical: Annotated[list[Path], typer.Option("--canonical")],

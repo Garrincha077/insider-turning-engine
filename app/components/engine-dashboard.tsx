@@ -335,7 +335,7 @@ function CostBasisView({ data }: { data: DashboardData }) {
 
 function SecTapeView({ data }: { data: DashboardData }) {
   const sort = useRowSort(data.filings, filingSortFields, 'value');
-  const columns = ['ticker', 'owner', 'role', 'side', 'value', 'filedAt', 'accession'];
+  const columns = ['ticker', 'value', 'side', 'owner', 'role', 'filedAt', 'accession'];
   return <Panel title="Relevant SEC filings" subtitle="Normalized and deduplicated SEC tape">
     <SortControls fields={filingSortFields} fieldId={sort.fieldId} descending={sort.descending} onField={sort.choose} onReverse={sort.reverse} />
     {sort.rows.length === 0 ? <EmptyState message="No normalized P/S filing is available in this snapshot." /> :
@@ -350,9 +350,9 @@ function SecTapeView({ data }: { data: DashboardData }) {
       })}</TableRow></TableHeader><TableBody>{sort.rows.map((filing, index) =>
         <TableRow key={`${filing.accession}:${filing.owner}:${filing.side}:${index}`}>
           <TableCell className="font-mono font-semibold text-emerald-200">{filing.ticker}</TableCell>
-          <TableCell>{filing.owner}</TableCell><TableCell className="text-muted-foreground">{filing.role}</TableCell>
-          <TableCell><Badge className={filing.side === 'BUY' ? 'bg-emerald-400/10 text-emerald-200' : 'bg-rose-400/10 text-rose-200'}>{filing.side}</Badge></TableCell>
           <TableCell data-value={filing.value} title={filing.value.toLocaleString('en-US', { style: 'currency', currency: 'USD' })} className="font-mono">${compactMoney(filing.value)}</TableCell>
+          <TableCell><Badge className={filing.side === 'BUY' ? 'bg-emerald-400/10 text-emerald-200' : 'bg-rose-400/10 text-rose-200'}>{filing.side}</Badge></TableCell>
+          <TableCell>{filing.owner}</TableCell><TableCell className="text-muted-foreground">{filing.role}</TableCell>
           <TableCell className="font-mono text-xs text-muted-foreground">{filing.filedAt}</TableCell>
           <TableCell className="font-mono text-[10px] text-muted-foreground">{filing.accession}</TableCell>
         </TableRow>)}</TableBody></Table>}
