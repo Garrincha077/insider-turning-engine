@@ -179,3 +179,19 @@ def test_delivery_workflow_is_explicit_main_only_and_rejects_reruns() -> None:
     assert "notifications.state_store persist" in text
     _, pages = _workflow(PAGES)
     assert pages.index("Restore durable delivery history") < pages.index("Export masked")
+
+
+def test_sec_acquisition_workflow_has_no_state_secrets_alerts_or_pages_writes() -> None:
+    workflow, text = _workflow(ROOT / ".github/workflows/sec-daily-acquisition.yml")
+    assert workflow["permissions"] == {"contents": "read"}
+    assert workflow["concurrency"]["group"] == "daily-research-pipeline"
+    assert "30 6 * * 2-6" in text
+    assert "github.ref == 'refs/heads/main'" in text
+    assert "environment" not in workflow["jobs"]["acquire"]
+    assert "insider-turning acquire-sec-daily" in text
+    assert "GITHUB_STEP_SUMMARY" in text and "not a production data gate" in text
+    assert "secrets." not in text and "deploy-pages" not in text and "send-alerts" not in text
+    assert "notifications.state_store" not in text and "--clobber" not in text
+    assert "path: work/sec-acquisition/acquisition-status.json" in text
+    daily, _ = _workflow(DAILY)
+    assert "github.event_name != 'schedule'" in daily["jobs"]["daily"]["if"]

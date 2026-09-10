@@ -176,9 +176,13 @@ jobs:
 
   daily:
     name: Ingest, score, gate, and persist state
+    # Legacy import/replay graph remains manual until canonical/identity/market
+    # producers are joined. Do not schedule a misleading green no-input run.
+    # Real scheduled acquisition lives in sec-daily-acquisition.yml.
     if: >-
       ${{
-        github.event_name != 'workflow_dispatch' || inputs.fixture_only != true
+        github.event_name != 'schedule' &&
+        (github.event_name != 'workflow_dispatch' || inputs.fixture_only != true)
       }}
     runs-on: ubuntu-latest
     timeout-minutes: 30

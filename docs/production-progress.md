@@ -34,6 +34,15 @@ the scheduled full producer graph remains a release blocker.
 
 ## Owner setup
 
+Scheduled acquisition now has an independent durable checkpoint path, described
+in [durable SEC acquisition](durable-sec-acquisition.md). It uses actual published
+global daily indexes, immutable normalized Release assets, bounded replay and
+read-back verification. It never advances SEC/score state or publishes signals.
+The old disconnected daily graph is manual-only until the effective-history,
+identity and market producers are integrated. The Pages preview schedule remains.
+Storage VERIFIED and acquisition ACQUIRED are distinct from production readiness;
+the rolling seven-day acquisition scope is not complete historical coverage.
+
 Open the repository's Settings > Environments > production. Add secrets there:
 `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `EMAIL_API_KEY`, `ALERT_EMAIL_FROM`,
 `ALERT_EMAIL_TO`. Never put secrets in Vite variables or public data. Settings

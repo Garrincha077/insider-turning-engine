@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -27,7 +28,9 @@ def _digest(value: Any) -> str:
                           .encode("utf-8")).hexdigest()
 
 
-def _load_filing(path: Path, accession: str, index_hash: str) -> dict[str, Any] | None:
+def _load_filing(
+    path: Path, accession: str, index_hash: str, *, retry_quarantined: bool = True,
+) -> dict[str, Any] | None:
     if not path.exists():
         return None
     try:
@@ -37,7 +40,7 @@ def _load_filing(path: Path, accession: str, index_hash: str) -> dict[str, Any] 
         payload = wrapper["payload"]
         if (wrapper["sha256"] != _digest(payload) or payload["parserVersion"] != PARSER_VERSION
             or payload["accession"] != accession or payload["indexHash"] != index_hash
-            or payload["quarantines"]):
+            or (retry_quarantined and payload["quarantines"])):
             return None
         for record in payload["records"]:
             typed = CanonicalTransaction.model_validate(record)
@@ -50,6 +53,8 @@ def _load_filing(path: Path, accession: str, index_hash: str) -> dict[str, Any] 
 
 def ingest_day(
     source: SECDailyIndexSource, *, day: date, output_root: Path, max_filings: int = 250,
+    retry_quarantined: bool = True,
+    max_seconds: float | None = None,
 ) -> dict[str, Any]:
     """Resume a completed filing day with a bounded number of new/retried filings.
 
@@ -57,8 +62,9 @@ def ingest_day(
     Incomplete batches carry failures and no marker, so input preparation refuses
     them. Raw source payloads remain in the source's separate checksum cache.
     """
-    if max_filings < 1:
-        raise ValueError("max_filings must be positive")
+    if max_filings < 1 or (max_seconds is not None and max_seconds <= 0):
+        raise ValueError("acquisition budgets must be positive")
+    deadline = time.monotonic() + max_seconds if max_seconds is not None else float("inf")
     if day >= source.clock().astimezone(ZoneInfo("America/New_York")).date():
         raise ValueError("only completed SEC filing days may be acquired")
     root = output_root / day.isoformat()
@@ -78,8 +84,8 @@ def ingest_day(
     for entry in entries:
         accession = entry.accession_number
         path = root / "filings" / f"{accession}.json"
-        payload = _load_filing(path, accession, index_hash)
-        if payload is None and attempted >= max_filings:
+        payload = _load_filing(path, accession, index_hash, retry_quarantined=retry_quarantined)
+        if payload is None and (attempted >= max_filings or time.monotonic() >= deadline):
             pending += 1
             failures.append({"providerRecordId": accession, "status": "PENDING_BUDGET"})
             continue

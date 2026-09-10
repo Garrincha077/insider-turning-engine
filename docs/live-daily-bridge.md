@@ -1,9 +1,10 @@
 # Global SEC acquisition → market plan → daily inputs
 
-The command-line data path is connected and tested offline. The scheduled daily
-workflow has **not** been switched to this path: complete historical inputs,
-identity evidence and a persistent canonical artifact store are still required.
-These commands never deploy Pages, open OOS or send messages.
+The command-line data path is connected and tested offline. Scheduled SEC
+acquisition now restores and verifies immutable acquisition checkpoints; see
+[durable SEC acquisition](durable-sec-acquisition.md). The full scoring graph is
+not yet scheduled: cross-day effective history, calendar coverage and identity
+evidence are still required. These commands never deploy Pages, open OOS or send messages.
 
 ## 1. Acquire a completed global SEC filing day
 
@@ -26,7 +27,8 @@ not public dashboard data. A clean day additionally gets
 `sec-batch-committed.sha256`; it never advances the production SEC cursor. Current
 or future Eastern calendar dates are rejected, rather than cached as complete.
 Select only known published index dates; a missing index fails, not an invented
-zero-filing day. Multi-day/current-quarter enumeration remains to be connected.
+zero-filing day. `acquire-sec-daily` now enumerates actual published index dates
+over a bounded range and resumes them from durable Release evidence.
 
 Acceptance headers are interpreted as `America/New_York`, then converted to UTC,
 including pre-2007 DST rules. Ambiguous/nonexistent clocks and acceptance after
@@ -93,6 +95,6 @@ The fixture chain intentionally remains blocked for publication: it is a contrac
 test, not a historical validation result.
 
 Next integration requires explicit treatment of non-economic/insufficient SEC rows,
-current-quarter index enumeration, complete canonical history and PIT identities,
-then durable artifact restore and live market producer wiring in GitHub Actions.
+complete canonical history and PIT identities, then live market/scoring producer
+wiring in GitHub Actions. Acquisition checkpoint restore is now implemented.
 Candidate methodology and experimental signals remain unchanged.

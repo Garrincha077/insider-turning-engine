@@ -1,0 +1,101 @@
+name: Durable SEC daily acquisition
+
+on:
+  # After midnight Eastern in both DST regimes; never seals an active SEC day.
+  schedule:
+    - cron: "30 6 * * 2-6"
+  workflow_dispatch:
+    inputs:
+      start:
+        description: First SEC day (YYYY-MM-DD); blank uses trailing seven calendar days
+        type: string
+        default: ""
+      end:
+        description: Last SEC day (YYYY-MM-DD); blank uses yesterday in New York
+        type: string
+        default: ""
+      max_days:
+        description: Maximum new or partial days to acquire (1-10)
+        type: number
+        default: 3
+      max_filings:
+        description: Maximum new filings per attempted day (1-5000)
+        type: number
+        default: 750
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-research-pipeline
+  cancel-in-progress: false
+
+jobs:
+  acquire:
+    name: Store and verify SEC evidence (not a signal validation run)
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # No environment secrets are needed. Existing staging/production environment
+    # branch restrictions stay unchanged; only the scoped repository token is used.
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Restore, acquire, and read-back verify immutable SEC checkpoints
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT }}
+          START_DAY: ${{ inputs.start }}
+          END_DAY: ${{ inputs.end }}
+          MAX_DAYS: ${{ inputs.max_days || 3 }}
+          MAX_FILINGS: ${{ inputs.max_filings || 750 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=()
+          if [[ -n "$START_DAY" ]]; then args+=(--start "$START_DAY"); fi
+          if [[ -n "$END_DAY" ]]; then args+=(--end "$END_DAY"); fi
+          uv run insider-turning acquire-sec-daily \
+            --repository "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --max-days "$MAX_DAYS" --max-filings "$MAX_FILINGS" \
+            --output-root work/sec-acquisition "${args[@]}" --execute
+      - name: Report storage separately from acquisition and signal readiness
+        if: always()
+        shell: bash
+        run: |
+          uv run python - <<'PY'
+          import json, os
+          from pathlib import Path
+          path = Path("work/sec-acquisition/acquisition-status.json")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as stream:
+              stream.write("## SEC acquisition — not a production data gate\n\n")
+              if not path.exists():
+                  stream.write("FAILED: no acquisition evidence was produced.\n")
+              else:
+                  report = json.loads(path.read_text())
+                  stream.write(f"Storage: {report['storageStatus']}. Acquisition: {report['acquisitionStatus']}.\n\n")
+                  stream.write("| Day | Storage | Acquisition | Filings stored/found | Quarantine | Pending |\n")
+                  stream.write("|---|---|---|---|---|---|\n")
+                  for day in report['days']:
+                      stream.write(f"| {day['day']} | {day['storageStatus']} | {day['acquisitionStatus']} | "
+                                   f"{day.get('storedFilings', 0)}/{day.get('discoveredFilings', '?')} | "
+                                   f"{day.get('quarantineCount', '?')} | {day.get('pendingFilings', '?')} |\n")
+                  stream.write(f"\nDeferred days: {len(report['deferredDays'])}.\n")
+              stream.write("\nSignals, cursor advancement, Pages and alert delivery: **BLOCKED / NOT RUN**. "
+                           "A storage success is not one of the required staging signal sessions.\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sec-acquisition-status-${{ github.run_id }}-${{ github.run_attempt }}
+          path: work/sec-acquisition/acquisition-status.json
+          if-no-files-found: warn
+          retention-days: 90

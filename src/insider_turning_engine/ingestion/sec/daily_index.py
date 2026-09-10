@@ -356,6 +356,36 @@ class SECDailyIndexSource:
             raise ValueError("daily index contains a different filing date")
         return entries
 
+    def discover_days(self, start: date, end: date) -> tuple[date, ...]:
+        """List actually published daily indexes, not guessed weekday/holiday dates."""
+        if start > end or (end - start).days > 31:
+            raise ValueError("SEC discovery range must span at most 32 days")
+        if end >= self.clock().astimezone(ZoneInfo("America/New_York")).date():
+            raise ValueError("only completed SEC days may be discovered")
+        quarters = {(start.year, (start.month - 1) // 3 + 1),
+                    (end.year, (end.month - 1) // 3 + 1)}
+        found: set[date] = set()
+        for year, quarter in sorted(quarters):
+            url = f"{DAILY_INDEX_ROOT}/{year}/QTR{quarter}/index.json"
+            value = json.loads(self._get(url, maximum_bytes=4 * 1024 * 1024))
+            items = value["directory"]["item"]
+            if not isinstance(items, list) or not items:
+                raise ValueError("SEC directory listing is empty or malformed")
+            for item in items:
+                name = item["name"]
+                match = re.fullmatch(r"master\.(\d{8})\.idx", name)
+                if match is None:
+                    continue
+                day = datetime.strptime(match.group(1), "%Y%m%d").date()
+                if (item.get("type") != "file" or item.get("href", name) != name
+                    or day.year != year or (day.month - 1) // 3 + 1 != quarter):
+                    raise ValueError("SEC directory entry does not match its quarter")
+                if start <= day <= end:
+                    if day in found:
+                        raise ValueError("duplicate SEC daily directory entry")
+                    found.add(day)
+        return tuple(sorted(found))
+
     def fetch_entry(self, entry: DailyIndexEntry, *, index_hash: str) -> SecRawRecord:
         submission_name = f"{entry.accession_number}.txt"
         cached = self._cached(submission_name, maximum_bytes=25 * 1024 * 1024)

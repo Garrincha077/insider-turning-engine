@@ -7,7 +7,7 @@ import os
 import re
 from collections.abc import Mapping
 from dataclasses import asdict, replace
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from importlib import import_module
 from pathlib import Path
 from typing import Annotated, Any, cast
@@ -455,6 +455,48 @@ def ingest_sec_day(
         source.close()
     _echo({key: value for key, value in report.items() if key != "filings"})
     if report["status"] != "ACQUIRED":
+        raise typer.Exit(1)
+
+
+@app.command("acquire-sec-daily")
+def acquire_sec_daily(
+    repository: Annotated[str, typer.Option(help="GitHub owner/repository checkpoint store.")],
+    target: Annotated[str, typer.Option(help="Full audited commit SHA for data release tags.")],
+    start: Annotated[str | None, typer.Option(help="Range start, YYYY-MM-DD.")] = None,
+    end: Annotated[str | None, typer.Option(help="Range end; default prior Eastern day.")] = None,
+    max_days: Annotated[int, typer.Option(min=1, max=10)] = 3,
+    max_filings: Annotated[int, typer.Option(min=1, max=5000)] = 750,
+    output_root: Annotated[Path, typer.Option()] = Path("work/sec-acquisition"),
+    execute: Annotated[bool, typer.Option()] = False,
+) -> None:
+    """Resume and verify durable SEC checkpoints; no scoring, cursor, Pages or alerts."""
+    from zoneinfo import ZoneInfo
+
+    from .ingestion.sec.release_store import ReleaseCheckpointStore
+    from .pipeline.sec_acquisition import acquire_range
+
+    last = date.fromisoformat(end) if end else (
+        datetime.now(ZoneInfo("America/New_York")).date() - timedelta(days=1)
+    )
+    first = date.fromisoformat(start) if start else last - timedelta(days=6)
+    store = ReleaseCheckpointStore(repository, target=target)
+    if not execute:
+        _echo({"status": "DRY_RUN", "start": first.isoformat(), "end": last.isoformat(),
+               "repository": repository, "publishable": False, "alertsAllowed": False})
+        return
+    if output_root.exists():
+        raise typer.BadParameter("Use a fresh output root; durable progress restores from Releases")
+    source = SECDailyIndexSource(
+        validate_sec_user_agent(os.getenv("SEC_USER_AGENT", "")),
+        cache_dir=output_root / "raw-cache",
+    )
+    try:
+        report = acquire_range(source, store, start=first, end=last, root=output_root,
+                               max_days=max_days, max_filings=max_filings)
+    finally:
+        source.close()
+    _echo(report)
+    if report["storageStatus"] != "VERIFIED":
         raise typer.Exit(1)
 
 
