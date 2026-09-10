@@ -73,6 +73,15 @@ State writes preserve all other allow-listed files and reject concurrent updates
 The test workflow shares the daily state-writer concurrency lock. This closes
 delivery-test durability, not the remaining production signal-outbox release gate.
 
+The daily state writer now reuses checkout authentication through the shared
+isolated Git adapter instead of creating an unauthenticated replacement orphan.
+Updates preserve commit history, validate the allow-listed JSON/SQLite files,
+check the expected remote baseline and use a non-forcing push. Failed restores
+cannot enter the persist step. Degraded runs preserve prior SEC/score/state
+checkpoints; only delivery evidence can change independently of signal quality.
+A successful workflow with a blocked data gate is operational evidence only,
+not one of the five required successful staging data sessions.
+
 Current release verification: Python suite, strict mypy, Ruff, frontend lint,
 typecheck/build, and desktop/mobile Playwright smoke including missing/tampered
 snapshot rejection. Core branch coverage uses the explicit CI module allowlist;

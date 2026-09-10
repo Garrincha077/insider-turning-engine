@@ -412,7 +412,7 @@ jobs:
             echo "No alert candidate file; retaining an empty auditable outbox"
           fi
       - name: Prepare and atomically update the orphan state branch
-        if: ${{ always() }}
+        if: ${{ always() && steps.state-restore.outcome == 'success' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -499,7 +499,7 @@ jobs:
           fi
           for file in "${allowed[@]}"; do
             [[ "$file" == "watermarks.json" ]] && continue
-            if [[ -f "run/state/$file" ]]; then
+            if [[ -f "run/state/$file" && ( "$state_can_advance" == "true" || "$file" == "alerts.sqlite" || "$file" == "alert-outbox.jsonl" || "$file" == "alert-history.jsonl" ) ]]; then
               cp "run/state/$file" "state-next/$file"
             elif [[ -f "state-previous/$file" ]]; then
               cp "state-previous/$file" "state-next/$file"
@@ -516,21 +516,10 @@ jobs:
             echo "alert outbox exceeds the 10 MiB operational-state limit"
             exit 1
           fi
-          git -C state-next init >/dev/null
-          git -C state-next checkout --orphan state >/dev/null
-          git -C state-next config user.name "github-actions[bot]"
-          git -C state-next config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git -C state-next remote add origin "$(git remote get-url origin)"
-          git -C state-next add -A
-          forbidden="$(git -C state-next ls-files | grep -Ev '^(watermarks\.json|sec\.cursor|prior-scores\.json|prior-states\.json|alert-outbox\.jsonl|alert-history\.jsonl|alerts\.sqlite)$' || true)"
-          test -z "$forbidden" || { echo "state branch contains forbidden paths: $forbidden"; exit 1; }
-          git -C state-next commit -m "Persist operational state for run ${GITHUB_RUN_ID}" >/dev/null
-          # Re-read immediately before replacement.  A concurrent writer must
-          # make this run fail closed rather than overwrite another checkpoint.
-          current_sha="$(git ls-remote origin refs/heads/state | awk 'NR==1 {print $1}')"
-          test "$current_sha" = "$expected_sha" || { echo "state branch changed during run"; exit 1; }
-          lease="${expected_sha:-0000000000000000000000000000000000000000}"
-          git -C state-next push --force-with-lease="refs/heads/state:$lease" origin HEAD:refs/heads/state
+          # Reuse checkout authentication in an isolated .git directory. Preserve
+          # the existing state history and reject concurrent writes, never force push.
+          uv run python -m insider_turning_engine.notifications.state_store sync \
+            --store work/daily-state --incoming state-next --expected-head "$expected_sha"
       - name: Retain run audit bundle
         if: ${{ always() }}
         uses: actions/upload-artifact@v4

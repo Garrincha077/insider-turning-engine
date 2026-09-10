@@ -43,7 +43,7 @@ def test_daily_schedule_dispatch_lock_and_runtime_contract() -> None:
     assert "TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}" in text
 
 
-def test_daily_has_fixture_mode_quality_gate_state_lease_and_release() -> None:
+def test_daily_has_fixture_mode_quality_gate_safe_state_sync_and_release() -> None:
     _, text = _workflow(DAILY)
     for required in (
         "fixture-dry-run:",
@@ -54,9 +54,9 @@ def test_daily_has_fixture_mode_quality_gate_state_lease_and_release() -> None:
         "insider-turning daily --fixture-only",
         "steps.quality.outputs.alerts_allowed == 'true'",
         "steps.quality.outputs.publishable == 'true'",
-        "--force-with-lease",
+        "notifications.state_store sync",
         "git ls-remote origin refs/heads/state",
-        "git -C state-next ls-files",
+        '--expected-head "$expected_sha"',
         "actions/upload-artifact@v4",
         "retention-days:",
         "PAGES_BASE_PATH",
@@ -71,6 +71,9 @@ def test_daily_has_fixture_mode_quality_gate_state_lease_and_release() -> None:
     assert "state branch contains forbidden paths" in text
     assert "raw filings" in text
     assert "--execute" in text
+    assert "--force" not in text
+    assert "always() && steps.state-restore.outcome == 'success'" in text
+    assert '"$state_can_advance" == "true" || "$file" == "alerts.sqlite"' in text
 
 
 def test_daily_uses_live_sec_incremental_cursor_and_fail_closed_universe() -> None:
@@ -129,7 +132,7 @@ def test_fixture_job_is_offline_and_state_allowlist_includes_only_small_state() 
     assert "--fixture-only" in fixture_text
     assert "--execute" not in fixture_text
     assert "watermarks\\.json|sec\\.cursor|prior-scores\\.json" in text
-    assert "grep -Ev '^(watermarks\\.json|sec\\.cursor|prior-scores\\.json" in text
+    assert "--incoming state-next" in text
     assert "run/public/data" in text
 
 
