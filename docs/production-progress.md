@@ -21,7 +21,9 @@ the scheduled full producer graph remains a release blocker.
 
 - Materialize canonical SEC history from 2006 and a complete trailing 365-day
   insider-active universe. The preview window is not that universe.
-- Replace current-identity and SPY-sector proxies with evidenced temporal mapping.
+- Extend the new immutable current-identity observations into historical temporal
+  coverage. Experimental Pages now uses SIC v1.1 sector ETFs, not SPY as a sector
+  substitute; the proxy mapping is not historical GICS or a complete security master.
 - Reconcile adjusted market history, corporate actions, missing and delisted bars.
 - Run development/validation on real historical inputs, review methodology, and
   freeze before opening sealed OOS. Do not manufacture a PASS or adjust thresholds
@@ -73,8 +75,12 @@ desktop/mobile smoke tests before artifact upload. Push/manual UI builds preserv
 source timestamps by restoring and hash-validating the published bundle (restore
 failure blocks deployment instead of falling back to older committed data).
 Only `main` can deploy public Pages. Scheduled or explicit `refresh_data` builds fetch real preview
-data without the former 50-symbol cap. The rolling preview still uses one SEC
-business day; removing the cap does not create a full historical universe.
+data without the former 50-symbol cap. The rolling preview reads actually published
+SEC indexes in a five-weekday window. Removing the cap and widening this window
+does not create the full 365-day insider-active universe. Identity observations
+are restored, appended and read-back verified in immutable public Releases before
+the snapshot is built; missing benchmarks or selected-symbol market coverage below
+90% preserve the previous snapshot. See [identity observations](sec-identity-observations.md).
 
 Settings restores the state-branch SQLite ledger before projection. Last test
 result and test failure count are separate from signal delivery success/failures;
