@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { usePreference, isString, isBoolean } from '../lib/local-preferences';
 import { ArrowDown, ArrowUp } from 'lucide-react';
 
 export type SortField<T> = {
@@ -21,9 +21,9 @@ export function sortRows<T>(rows: readonly T[], field: SortField<T>, descending:
   });
 }
 
-export function useRowSort<T>(rows: readonly T[], fields: readonly SortField<T>[], initial: string) {
-  const [fieldId, setFieldId] = useState(initial);
-  const [descending, setDescending] = useState(true);
+export function useRowSort<T>(rows: readonly T[], fields: readonly SortField<T>[], initial: string, storageKey = initial) {
+  const [fieldId, setFieldId] = usePreference(`${storageKey}.sort`, initial, isString);
+  const [descending, setDescending] = usePreference(`${storageKey}.descending`, true, isBoolean);
   const field = fields.find((item) => item.id === fieldId) ?? fields[0];
   const choose = (id: string) => { setFieldId(id); setDescending(true); };
   const toggle = (id: string) => {

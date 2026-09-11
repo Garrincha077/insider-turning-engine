@@ -1,387 +1,133 @@
-import { useEffect, useState } from 'react';
-import {
-  Activity,
-  BellRing,
-  Building2,
-  ChevronDown,
-  CircleDollarSign,
-  DatabaseZap,
-  FlaskConical,
-  Gauge,
-  HeartPulse,
-  LineChart,
-  Radar,
-  Search,
-  Settings2,
-  ShieldCheck,
-  ShieldAlert,
-  ShoppingCart,
-  Target,
-  TrendingUp,
-  Users,
-} from 'lucide-react';
-import {
-  columnFilteringFeature,
-  createFilteredRowModel,
-  createSortedRowModel,
-  createColumnHelper,
-  filterFn_includesString,
-  globalFilteringFeature,
-  rowSortingFeature,
-  sortFn_alphanumeric,
-  tableFeatures,
-  type SortingState,
-  useTable,
-} from '@tanstack/react-table';
-
-import { SortControls, sortRows, useRowSort, type SortField } from '@/components/sort-controls';
-import { Badge } from '@/components/ui/badge';
-import { EChart } from '@/components/echart';
-import {
-  AlertCenterView,
-  DataCoverageView,
-  SettingsView,
-  SystemHealthView,
-} from '@/components/operations-views';
-import { Input } from '@/components/ui/input';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
-  type Candidate,
-  type Filing,
-  type DashboardData,
-} from '@/lib/dashboard-data';
-import { type PublicationManifest, type SettingsStatus } from '@/lib/operations-data';
+import { useEffect, useMemo, useState } from 'react';
+import { Activity, BellRing, Radar, ShieldAlert } from 'lucide-react';
+import type { DashboardData } from '@/lib/dashboard-data';
+import type { PublicationManifest, SettingsStatus } from '@/lib/operations-data';
 import { loadPublication } from '@/lib/load-publication';
+import { companyCatalog, instant, scoreLabel, controlClass } from '@/lib/research';
+import { isCikList, isTimezone, resetPreferences, usePreference } from '@/lib/local-preferences';
+import { AlertCenterView, DataCoverageView, SettingsView, SystemHealthView } from './operations-views';
+import { CompanyLab, CompanyTable, CostBasisView, ClusterView, MethodologyView, PulseView, TapeView, Panel, EmptyState } from './research-views';
 
-const views = [
-  { id: 'radar', label: 'Radar', icon: Radar },
-  { id: 'market-pulse', label: 'Market Pulse', icon: Gauge },
-  { id: 'turning-stocks', label: 'Turning Stocks', icon: TrendingUp },
-  { id: 'divergence', label: 'Divergence', icon: LineChart },
-  { id: 'smart-buys', label: 'Smart Buys', icon: ShoppingCart },
-  { id: 'clusters', label: 'Clusters', icon: Users },
-  { id: 'cost-basis', label: 'Cost Basis', icon: CircleDollarSign },
-  { id: 'live-sec-tape', label: 'Live SEC Tape', icon: DatabaseZap },
-  { id: 'company-lab', label: 'Company Lab', icon: Building2 },
-  { id: 'backtest-lab', label: 'Backtest Lab', icon: FlaskConical },
-  { id: 'system-health', label: 'System Health', icon: HeartPulse },
-  { id: 'data-coverage', label: 'Data Coverage', icon: ShieldAlert },
-  { id: 'alert-center', label: 'Alert Center', icon: BellRing },
-  { id: 'settings', label: 'Settings', icon: Settings2 },
-] as const;
-
-type ViewId = (typeof views)[number]['id'];
-
-const candidateFeatures = tableFeatures({
-  columnFilteringFeature,
-  globalFilteringFeature,
-  filteredRowModel: createFilteredRowModel(),
-  filterFns: { includesString: filterFn_includesString },
-  rowSortingFeature,
-  sortedRowModel: createSortedRowModel(),
-  sortFns: { alphanumeric: sortFn_alphanumeric },
-});
-const candidateColumn = createColumnHelper<typeof candidateFeatures, Candidate>();
-const candidateColumns = candidateColumn.columns([
-  candidateColumn.accessor((row) => `${row.ticker} ${row.company}`, { id: 'ticker', header: 'Ticker', cell: (info) => <div><div className="font-mono font-semibold text-emerald-200">{info.row.original.ticker}</div><div className="max-w-36 truncate text-[10px] text-muted-foreground">{info.row.original.company}</div></div> }),
-  candidateColumn.accessor('total', { header: 'Total', cell: (info) => <Score value={info.getValue()} strong /> }),
-  candidateColumn.accessor('insider', { header: 'Insider', cell: (info) => <Score value={info.getValue()} /> }),
-  candidateColumn.accessor('divergence', { header: 'Divergence', cell: (info) => <Score value={info.getValue()} /> }),
-  candidateColumn.accessor('turn', { header: 'Turn', cell: (info) => <Score value={info.getValue()} /> }),
-  candidateColumn.accessor('marketRs', { header: 'MRS Mkt', cell: (info) => <span className={(info.getValue() ?? 0) >= 0 ? 'font-mono text-xs text-emerald-300' : 'font-mono text-xs text-rose-300'}>{signed(info.getValue())}</span> }),
-  candidateColumn.accessor((row) => costReturn(row), { id: 'costPl', header: 'Cost P/L', cell: (info) => <span className="font-mono text-xs text-amber-200">{signed(info.getValue())}{info.getValue() === null ? '' : '%'}</span> }),
-  candidateColumn.accessor('state', { header: 'State', cell: (info) => <StateBadge state={info.getValue()} /> }),
-]);
-
-
-const candidateSortFields: SortField<Candidate>[] = [
-  { id: 'total', label: 'Total', value: (row) => row.total },
-  { id: 'insider', label: 'Insider', value: (row) => row.insider },
-  { id: 'turn', label: 'Turn', value: (row) => row.turn },
-  { id: 'divergence', label: 'Divergence', value: (row) => row.divergence },
-  { id: 'marketRs', label: 'MRS Mkt', value: (row) => row.marketRs },
-  { id: 'costPl', label: 'Cost P/L', value: costReturn },
-  { id: 'ticker', label: 'Ticker', value: (row) => row.ticker },
-  { id: 'state', label: 'State', value: (row) => row.state },
+const groups = [
+  { label: 'Overview', views: [['radar', 'Radar'], ['market-pulse', 'Market Pulse'], ['live-sec-tape', 'Live SEC Tape']] },
+  { label: 'Research', views: [['turning-stocks', 'Turning Stocks'], ['divergence', 'Divergence'], ['smart-buys', 'Insider Buys'], ['clusters', 'Clusters'], ['cost-basis', 'Cost Basis'], ['company-lab', 'Company Lab'], ['backtest-lab', 'Methodology & Validation']] },
+  { label: 'Operations', views: [['system-health', 'System Health'], ['data-coverage', 'Data Coverage'], ['alert-center', 'Alert Center'], ['settings', 'Settings']] },
 ];
-const filingSortFields: SortField<Filing>[] = [
-  { id: 'value', label: 'Value', value: (row) => row.value },
-  { id: 'filedAt', label: 'Filed UTC', value: (row) => Date.parse(row.filedAt.replace(' ', 'T') + (/(Z|[+-]\d{2}:\d{2})$/.test(row.filedAt) ? '' : 'Z')) },
-  ...(['ticker', 'owner', 'role', 'side', 'accession'] as const).map((id) => ({
-    id, label: { ticker: 'Ticker', owner: 'Reporting owner', role: 'Role', side: 'Side', accession: 'Accession' }[id],
-    value: (row: Filing) => row[id],
-  })),
-];
-const clusterSortFields: SortField<Candidate>[] = [
-  { id: 'cluster', label: 'Cluster score', value: (row) => row.cluster },
-  ...candidateSortFields.filter((field) => ['total', 'ticker'].includes(field.id)),
-];
-const costSortFields: SortField<Candidate>[] = [
-  { id: 'costPl', label: 'Cost P/L', value: costReturn },
-  { id: 'insiderCost', label: 'Insider cost', value: (row) => row.insiderCost },
-  { id: 'currentPrice', label: 'Current price', value: (row) => row.currentPrice },
-  { id: 'ticker', label: 'Ticker', value: (row) => row.ticker },
-];
+const views = groups.flatMap((group) => group.views);
+const descriptions: Record<string, string> = {
+  radar: 'Explore the companies in this snapshot. Missing scores do not hide SEC activity.',
+  'market-pulse': 'Observed activity in the exported population — not a census of the US market.',
+  'live-sec-tape': 'Source-linked SEC records, including companies without complete research scores.',
+  'turning-stocks': 'Recorded accumulation, base and turn states. These are research classifications, not trade recommendations.',
+  divergence: 'Adjust the visible screening thresholds without changing the score methodology.',
+  'smart-buys': 'Observed open-market purchases, largest first. This is not a recommendation list.',
+  clusters: 'Independent reporting-owner evidence is required; a high cluster score alone is not proof.',
+  'cost-basis': 'Observed purchase prices, not insiders’ complete holdings or a price target.',
+  'company-lab': 'Explore one company and open the underlying SEC records.',
+  'backtest-lab': 'What the scores measure, what is missing, and what has actually been validated.',
+  'system-health': 'Publication integrity, source coverage, delivery and research readiness are separate.',
+  'data-coverage': 'Actual denominators and source dates. Selected-universe coverage is not market coverage.',
+  'alert-center': 'Factual daily summaries are separate from predictive alerts.',
+  settings: 'Local display preferences and secure, read-only delivery configuration.',
+};
+
+function readRoute() {
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  return { view: views.some(([id]) => id === params.get('view')) ? params.get('view')! : 'radar', issuer: params.get('issuer') ?? '', ticker: params.get('ticker') ?? '' };
+}
 
 export function EngineDashboard() {
-  const [view, setView] = useState<ViewId>('radar');
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [manifest, setManifest] = useState<PublicationManifest | null>(null);
-  const [settings, setSettings] = useState<SettingsStatus | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [selectedTicker, setSelectedTicker] = useState('');
-  const [clockNow, setClockNow] = useState(() => Date.now());
+  const [route, setRoute] = useState(readRoute);
+  const [publication, setPublication] = useState<{ data: DashboardData; manifest: PublicationManifest; settings: SettingsStatus } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [watchlist, setWatchlist] = usePreference('watchlist', [], isCikList);
+  const [timezone, setTimezone] = usePreference('timezone', 'Europe/Zagreb', isTimezone);
+  const [previousView, setPreviousView] = useState('radar');
+  const [selected, setSelected] = useState('');
+  const catalog = useMemo(() => publication ? companyCatalog(publication.data) : [], [publication]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setClockNow(Date.now()), 60_000);
-    return () => window.clearInterval(timer);
+    const listener = () => setRoute(readRoute());
+    window.addEventListener('hashchange', listener);
+    return () => window.removeEventListener('hashchange', listener);
   }, []);
-
   useEffect(() => {
-    document.documentElement.dataset.hydrated = 'true';
     const controller = new AbortController();
-    loadPublication(controller.signal)
-      .then(({ data: snapshot, manifest: publication, settings: settingsStatus }) => {
-        if (!Array.isArray(snapshot.candidates) || !snapshot.schemaVersion) {
-          throw new Error('Invalid dashboard snapshot');
-        }
-        if (!publication.quality || !settingsStatus.channels) {
-          throw new Error('Operational status is incomplete');
-        }
-        setData(snapshot);
-        setManifest(publication);
-        setSettings(settingsStatus);
-        setSelectedTicker(snapshot.candidates[0]?.ticker ?? '');
-      })
-      .catch((error: unknown) => {
-        if (controller.signal.aborted) return;
-        setLoadError(error instanceof Error ? error.message : 'Snapshot unavailable');
-      });
+    loadPublication(controller.signal).then((value) => {
+      setPublication(value); document.documentElement.dataset.hydrated = 'true';
+    }).catch((reason: unknown) => {
+      if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : 'Snapshot unavailable');
+    });
     return () => controller.abort();
   }, []);
 
-  if (loadError) return <SnapshotError message={loadError} />;
-  if (!data || !manifest || !settings) return <SnapshotLoading />;
+  function navigate(view: string, ticker?: string) {
+    const company = catalog.find((item) => item.ticker === ticker);
+    const params = new URLSearchParams({ view });
+    if (company?.issuerCik) params.set('issuer', company.issuerCik);
+    else if (ticker) params.set('ticker', ticker);
+    // Watchlist and local filters deliberately never enter a shared URL.
+    window.location.hash = params.toString();
+    setRoute({ view, issuer: company?.issuerCik ?? '', ticker: company?.issuerCik ? '' : ticker ?? '' });
+  }
+  function openCompany(ticker: string) {
+    if (route.view !== 'company-lab') setPreviousView(route.view);
+    setSelected(ticker); navigate('company-lab', ticker);
+  }
+  function toggleWatch(cik: string) {
+    if (/^\d{10}$/.test(cik)) setWatchlist((previous) => previous.includes(cik) ? previous.filter((id) => id !== cik) : [...previous, cik]);
+  }
 
-  const selected = data.candidates.find((candidate) => candidate.ticker === selectedTicker) ?? data.candidates[0];
-  const title = views.find((item) => item.id === view)?.label ?? 'Radar';
-  const ageDays = (clockNow - Date.parse(data.generatedAt)) / 86_400_000;
-  const stale = ageDays > 4 || data.status === 'STALE';
-  const validated = !stale && data.status === 'VALIDATED' && manifest.quality.disposition === 'PASS';
-  const effectiveSettings = stale ? { ...settings, alertsAllowed: false, blockingReasons: [...settings.blockingReasons, 'SNAPSHOT_STALE'] } : settings;
+  if (error) return <main className="grid min-h-screen place-items-center p-6"><Panel title="Dashboard snapshot unavailable" subtitle="No sample data is substituted."><ShieldAlert className="text-rose-300" /><p className="my-4 text-sm" role="alert">{error}</p><button className={controlClass} onClick={() => window.location.reload()}>Retry snapshot</button></Panel></main>;
+  if (!publication) return <main className="grid min-h-screen place-items-center p-6"><output>Checking snapshot schema and integrity…</output></main>;
+  const { data, manifest, settings } = publication;
+  const view = route.view;
+  const company = catalog.find((item) => route.issuer ? item.issuerCik === route.issuer : item.ticker === (route.ticker || selected)) ?? (!route.issuer && !route.ticker ? catalog[0] : undefined);
+  const title = views.find(([id]) => id === view)?.[1] ?? 'Radar';
+  const tableProps = { data, catalog, watchlist, toggleWatch, openCompany, timezone };
 
-  return (
-    <main className="min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-30 border-b border-border/80 bg-background/90 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-[1600px] items-center justify-between gap-5 px-4 sm:px-7">
-          <button onClick={() => setView('radar')} className="flex min-w-0 items-center gap-3 text-left">
-            <div className="grid size-9 shrink-0 place-items-center rounded-lg border border-emerald-400/30 bg-emerald-400/10 text-emerald-300"><Radar className="size-5" /></div>
-            <div className="min-w-0"><p className="truncate text-sm font-semibold tracking-tight">Insider Turning Engine</p><p className="truncate text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Market intelligence · Daily close</p></div>
-          </button>
-          <div className="hidden items-center gap-6 text-xs text-muted-foreground md:flex">
-            <span className="flex items-center gap-2"><DatabaseZap className="size-3.5 text-sky-300" /> Snapshot loaded</span>
-            <span className="flex items-center gap-2"><ShieldCheck className={`size-3.5 ${validated ? 'text-emerald-300' : 'text-amber-300'}`} /> {validated ? 'Quality gates passed' : 'Experimental · not validated'}</span>
-            <span className="font-mono">{new Date(data.generatedAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }).toUpperCase()}</span>
-          </div>
-          <button onClick={() => setView('alert-center')} className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-3 text-xs font-medium transition hover:border-emerald-400/40 hover:bg-accent"><BellRing className={`size-3.5 ${settings.alertsAllowed ? 'text-emerald-300' : 'text-amber-300'}`} /> Alerts</button>
-        </div>
-        <div className="scrollbar-none flex gap-1 overflow-x-auto border-t border-border/50 px-3 py-2 xl:hidden">
-          {views.map((item) => <NavButton key={item.id} item={item} active={view === item.id} onClick={() => setView(item.id)} compact />)}
-        </div>
-      </header>
-
-      <div className="mx-auto grid max-w-[1600px] grid-cols-1 gap-7 px-4 py-6 sm:px-7 xl:grid-cols-[215px_minmax(0,1fr)]">
-        <aside className="hidden xl:block">
-          <nav aria-label="Dashboard sections" className="sticky top-24 space-y-1">
-            {views.map((item) => <NavButton key={item.id} item={item} active={view === item.id} onClick={() => setView(item.id)} />)}
-            <div className="mt-6 rounded-lg border border-border bg-card/70 p-3 text-[10px] leading-4 text-muted-foreground">
-              <p className="font-semibold uppercase tracking-wider text-slate-300">Research build</p>
-              <p className="mt-2">Free-market data carries coverage and survivorship limitations. Signals are not investment advice.</p>
-            </div>
-          </nav>
-        </aside>
-
-        <section className="min-w-0 space-y-6">
-          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-            <div>
-              <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.16em] text-emerald-300"><Activity className="size-3.5" /> {title} / {validated ? 'validated close' : 'experimental snapshot'}</div>
-              <h1 className="text-2xl font-semibold tracking-[-0.03em] sm:text-3xl">{view === 'radar' ? 'The market is still cautious. Insiders are not.' : title}</h1>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{view === 'radar' ? 'Qualified open-market buying where price weakness is beginning to meet improving relative strength.' : viewDescription(view)}</p>
-            </div>
-            <Badge className="h-7 border border-amber-300/25 bg-amber-300/10 px-3 text-amber-200">{data.status} · {data.scoreVersion}</Badge>
-          </div>
-
-          {data.status === 'EXPERIMENTAL' && <div className="rounded-lg border border-amber-300/20 bg-amber-300/8 px-4 py-3 text-xs leading-5 text-amber-100">Live experimental snapshot: official SEC ownership filings with a rolling window and Yahoo adjusted chart data as a temporary market fallback. Scores are research candidates, not validated signals or investment advice.</div>}
-
-          {view === 'radar' && <RadarView data={data} selected={selected} onSelect={setSelectedTicker} onOpenLab={() => setView('company-lab')} />}
-          {view === 'market-pulse' && <MarketPulseView data={data} />}
-          {view === 'turning-stocks' && <CandidateList data={data} mode="turning" selectedTicker={selectedTicker} onSelect={setSelectedTicker} />}
-          {view === 'divergence' && <CandidateList data={data} mode="divergence" selectedTicker={selectedTicker} onSelect={setSelectedTicker} />}
-          {view === 'smart-buys' && <SmartBuysView data={data} />}
-          {view === 'clusters' && <ClusterView data={data} selectedTicker={selectedTicker} onSelect={setSelectedTicker} />}
-          {view === 'cost-basis' && <CostBasisView data={data} />}
-          {view === 'live-sec-tape' && <SecTapeView data={data} />}
-          {view === 'company-lab' && selected && <CompanyLab data={data} candidate={selected} onTicker={setSelectedTicker} />}
-          {view === 'backtest-lab' && <BacktestLab data={data} />}
-          {view === 'system-health' && <SystemHealthView manifest={manifest} />}
-          {view === 'data-coverage' && <DataCoverageView manifest={manifest} />}
-          {stale && <output className="block rounded-lg border border-rose-300/30 p-4 text-sm text-rose-200">Snapshot is {Math.floor(ageDays)} days old. Data through {manifest.watermarks.marketSessionThrough ?? 'unknown session'}; alert readiness is suspended.</output>}
-          {view === 'alert-center' && <AlertCenterView settings={effectiveSettings} />}
-          {view === 'settings' && <SettingsView settings={settings} />}
-        </section>
+  return <main className="min-h-screen text-foreground">
+    <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur-xl">
+      <div className="mx-auto flex h-16 max-w-[1680px] items-center justify-between gap-4 px-4 sm:px-7">
+        <button onClick={() => navigate('radar')} className="flex items-center gap-3 text-left"><Radar className="size-7 text-emerald-300" /><span><span className="block text-sm font-semibold">Insider Turning Engine</span><span className="hidden text-xs text-muted-foreground sm:block">SEC research · daily close</span></span></button>
+        <div className="hidden text-xs text-muted-foreground lg:block">SEC through {instant(manifest.watermarks.secAcceptedThrough, timezone)} · {timezone}</div>
+        <button className={controlClass} onClick={() => navigate('alert-center')}><BellRing className="mr-2 inline size-4" />Alerts</button>
       </div>
-    </main>
-  );
-}
-
-function NavButton({ item, active, onClick, compact = false }: { item: (typeof views)[number]; active: boolean; onClick: () => void; compact?: boolean }) {
-  const Icon = item.icon;
-  return <button onClick={onClick} className={`flex shrink-0 items-center gap-2 rounded-lg text-xs transition ${compact ? 'px-3 py-2' : 'w-full px-3 py-2.5'} ${active ? 'border border-emerald-400/20 bg-emerald-400/10 font-semibold text-emerald-200' : 'border border-transparent text-muted-foreground hover:bg-card hover:text-foreground'}`}><Icon className="size-3.5" />{item.label}{active && !compact && <span className="ml-auto size-1.5 rounded-full bg-emerald-300 shadow-[0_0_10px_var(--pulse)]" />}</button>;
-}
-
-function RadarView({ data, selected, onSelect, onOpenLab }: { data: DashboardData; selected?: Candidate; onSelect: (ticker: string) => void; onOpenLab: () => void }) {
-  return <>
-    <PulseCards data={data} />
-    <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_340px]">
-      <CandidateTable candidates={data.candidates} selectedTicker={selected?.ticker} onSelect={onSelect} />
-      {selected ? <ReasonPanel candidate={selected} onOpen={onOpenLab} /> : <EmptyState message="No issuer has a complete, point-in-time score for this snapshot." />}
+      <label className="flex items-center gap-3 border-t border-border px-4 py-2 text-xs xl:hidden">Section
+        <select aria-label="Dashboard section" className={`${controlClass} min-w-0 flex-1`} value={view} onChange={(event) => navigate(event.target.value)}>
+          {groups.map((group) => <optgroup key={group.label} label={group.label}>{group.views.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</optgroup>)}
+        </select>
+      </label>
+    </header>
+    <div className="mx-auto grid max-w-[1680px] gap-7 px-4 py-6 sm:px-7 xl:grid-cols-[220px_minmax(0,1fr)]">
+      <aside className="hidden xl:block"><nav aria-label="Dashboard sections" className="sticky top-24 space-y-5">
+        {groups.map((group) => <div key={group.label}><p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{group.label}</p>{group.views.map(([id, label]) => <button key={id} aria-current={view === id ? 'page' : undefined} onClick={() => navigate(id)} className={`mb-1 w-full rounded-lg px-3 py-2.5 text-left text-sm ${view === id ? 'bg-emerald-400/10 font-semibold text-emerald-200' : 'text-muted-foreground hover:bg-card'}`}>{label}</button>)}</div>)}
+      </nav></aside>
+      <section className="min-w-0 space-y-6">
+        <div><p className="mb-2 flex items-center gap-2 text-xs text-emerald-300"><Activity className="size-4" />Daily research workspace</p><h1 className="text-3xl font-semibold tracking-tight">{title}</h1><p className="mt-2 max-w-4xl text-sm leading-6 text-muted-foreground">{descriptions[view]}</p></div>
+        <div className="flex flex-wrap gap-x-5 gap-y-2 border-y border-border py-3 text-xs text-muted-foreground">
+          <span className="text-amber-200">{scoreLabel}</span><span>{data.scoreVersion}</span><span>Score snapshot: {instant(manifest.asOf, timezone)}</span><span>Market through: {manifest.watermarks.marketSessionThrough ?? 'unavailable'}</span>
+          {data.status === 'STALE' && <output className="text-rose-300">Source reports stale data. Check System Health.</output>}
+        </div>
+        {view === 'radar' && <CompanyTable {...tableProps} mode="radar" />}
+        {view === 'turning-stocks' && <CompanyTable key="turning" {...tableProps} mode="turning" />}
+        {view === 'divergence' && <CompanyTable key="divergence" {...tableProps} mode="divergence" />}
+        {view === 'market-pulse' && <PulseView data={data} />}
+        {view === 'smart-buys' && <TapeView key="buys" data={data} openCompany={openCompany} timezone={timezone} buysOnly />}
+        {view === 'live-sec-tape' && <TapeView key="tape" data={data} openCompany={openCompany} timezone={timezone} />}
+        {view === 'clusters' && <ClusterView />}
+        {view === 'cost-basis' && <CostBasisView catalog={catalog} openCompany={openCompany} />}
+        {view === 'company-lab' && <><button className={controlClass} onClick={() => navigate(previousView)}>← Back to {views.find(([id]) => id === previousView)?.[1]}</button>{company ? <CompanyLab {...tableProps} company={company} /> : <EmptyState title="Company not in this snapshot" detail="This shared issuer link cannot be resolved from the published company catalogue. Return to Radar to choose an available company." />}</>}
+        {view === 'backtest-lab' && <MethodologyView data={data} manifest={manifest} />}
+        {view === 'system-health' && <SystemHealthView manifest={manifest} />}
+        {view === 'data-coverage' && <DataCoverageView manifest={manifest} />}
+        {view === 'alert-center' && <AlertCenterView settings={settings} />}
+        {view === 'settings' && <><Panel title="Local display preferences" subtitle="Saved only in this browser. They never change Telegram recipients, policy or selection.">
+          <label className="flex flex-wrap items-center gap-3 text-sm">Display timezone<select aria-label="Display timezone" className={controlClass} value={timezone} onChange={(event) => setTimezone(event.target.value)}>{['Europe/Zagreb', 'America/New_York', 'UTC'].map((zone) => <option key={zone}>{zone}</option>)}</select></label>
+          <p className="my-4 text-sm">Watchlist: {watchlist.length ? watchlist.map((id) => catalog.find((item) => item.issuerCik === id)?.ticker ?? id).join(', ') : 'No companies saved'}</p><button className={controlClass} onClick={resetPreferences}>Reset local preferences and watchlist</button>
+        </Panel><SettingsView settings={settings} /></>}
+        <footer className="border-t border-border pt-4 text-xs leading-5 text-muted-foreground">Public read-only research. Coverage and survivorship limitations apply. Not investment advice. Published source dates remain unchanged by display filters.</footer>
+      </section>
     </div>
-  </>;
+  </main>;
 }
-
-function PulseCards({ data }: { data: DashboardData }) {
-  const buys = data.filings.filter((filing) => filing.side === 'BUY');
-  const issuerCount = new Set(data.filings.map((filing) => filing.ticker)).size;
-  const buyIssuerCount = new Set(buys.map((filing) => filing.ticker)).size;
-  const metrics = [
-    { label: 'Relevant filings', value: String(data.filings.length), detail: 'P/S in live window' },
-    { label: 'Unique insiders', value: String(new Set(data.filings.map((filing) => filing.owner)).size), detail: 'normalized owners' },
-    { label: 'Buy value', value: `$${compactMoney(buys.reduce((sum, filing) => sum + filing.value, 0))}`, detail: 'qualified purchases' },
-    { label: 'Buy breadth', value: issuerCount ? `${(buyIssuerCount / issuerCount * 100).toFixed(1)}%` : '—', detail: `${buyIssuerCount} of ${issuerCount} issuers` },
-  ];
-  return <div className="grid gap-4 lg:grid-cols-[1.3fr_repeat(4,1fr)]">
-    <div className="relative overflow-hidden rounded-xl border border-emerald-400/20 bg-[linear-gradient(135deg,rgba(20,184,166,.17),rgba(15,23,42,.2))] p-5">
-      <div className="absolute -right-10 -top-16 size-40 rounded-full bg-emerald-300/10 blur-3xl" /><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-200">Market Insider Pulse</p>
-      <div className="mt-4 flex items-end gap-3"><span className="font-mono text-5xl font-semibold tracking-[-0.06em]">{formatMetric(data.marketPulse)}</span>{data.marketPulse !== null && <span className="mb-1.5 text-xs font-semibold text-emerald-300">Point-in-time composite</span>}</div>
-      <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-slate-950/50"><div className="h-full rounded-full bg-gradient-to-r from-sky-400 via-emerald-400 to-lime-300" style={{ width: `${data.marketPulse ?? 0}%` }} /></div><p className="mt-2 text-xs text-slate-400">{data.pulsePercentile === null ? 'Insufficient prior history' : `${data.pulsePercentile.toFixed(1)}th historical percentile`}</p>
-    </div>
-    {metrics.map((metric) => <div key={metric.label} className="rounded-xl border border-border bg-card p-4"><p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-muted-foreground">{metric.label}</p><p className="mt-5 font-mono text-2xl font-semibold">{metric.value}</p><p className="mt-2 text-xs text-muted-foreground">{metric.detail}</p></div>)}
-  </div>;
-}
-
-function CandidateTable({ candidates, selectedTicker, onSelect, initialSort = 'total' }: { candidates: Candidate[]; selectedTicker?: string; onSelect: (ticker: string) => void; initialSort?: string }) {
-  const [sorting, setSorting] = useState<SortingState>([{ id: initialSort, desc: true }]);
-  const [search, setSearch] = useState('');
-  const table = useTable({
-    data: sortRows(candidates, candidateSortFields.find((field) => field.id === sorting[0]?.id) ?? candidateSortFields[0], sorting[0]?.desc ?? true),
-    manualSorting: true,
-    sortDescFirst: true,
-    enableSortingRemoval: false,
-    columns: candidateColumns,
-    features: candidateFeatures,
-    state: { sorting, globalFilter: search },
-    onSortingChange: setSorting,
-    onGlobalFilterChange: setSearch,
-    globalFilterFn: 'includesString',
-  });
-  return <section className="overflow-hidden rounded-xl border border-border bg-card">
-    <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-sm font-semibold">Ranked candidates</h2><p className="mt-1 text-xs text-muted-foreground">Click headers to sort · rows to inspect</p></div><div className="relative"><Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Ticker or company" className="h-8 w-full pl-8 text-xs sm:w-48" /></div></div>
-    <div className="px-5 pt-4"><SortControls fields={candidateSortFields} fieldId={sorting[0]?.id ?? initialSort} descending={sorting[0]?.desc ?? true} onField={(id) => setSorting([{ id, desc: true }])} onReverse={() => setSorting((previous) => [{ id: previous[0]?.id ?? initialSort, desc: !(previous[0]?.desc ?? true) }])} /></div>
-    <Table><TableHeader>{table.getHeaderGroups().map((group) => <TableRow key={group.id} className="hover:bg-transparent">{group.headers.map((header, index) => <TableHead key={header.id} aria-sort={header.column.getIsSorted() === 'desc' ? 'descending' : header.column.getIsSorted() === 'asc' ? 'ascending' : 'none'} className={index === 0 ? 'pl-5' : ''}><button className="flex items-center gap-1" onClick={header.column.getToggleSortingHandler()}>{header.isPlaceholder ? null : <table.FlexRender header={header} />}{header.column.getIsSorted() && <ChevronDown className={`size-3 transition ${header.column.getIsSorted() === 'asc' ? 'rotate-180' : ''}`} />}</button></TableHead>)}</TableRow>)}</TableHeader>
-      <TableBody>{table.getRowModel().rows.map((row) => <TableRow key={row.id} data-state={row.original.ticker === selectedTicker ? 'selected' : undefined} onClick={() => onSelect(row.original.ticker)} className="cursor-pointer">{row.getAllCells().map((cell, index) => <TableCell key={cell.id} className={index === 0 ? 'pl-5' : ''}><table.FlexRender cell={cell} /></TableCell>)}</TableRow>)}</TableBody>
-    </Table>
-  </section>;
-}
-
-function ReasonPanel({ candidate, onOpen }: { candidate: Candidate; onOpen: () => void }) {
-  const pnl = costReturn(candidate);
-  return <aside className="rounded-xl border border-border bg-card p-5"><div className="flex items-center justify-between"><p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">Why ranked #{candidate.total >= 90 ? 1 : '—'}</p><Target className="size-4 text-emerald-300" /></div><div className="mt-3 flex items-end gap-2"><span className="font-mono text-3xl font-semibold text-emerald-200">{candidate.ticker}</span><span className="mb-1 text-xs text-muted-foreground">Total {candidate.total}</span></div><div className="mt-5 space-y-3 text-xs leading-5 text-slate-300">{candidate.reasons.map((reason) => <div key={reason} className="flex gap-2"><span className="mt-2 size-1 shrink-0 rounded-full bg-emerald-300" /><span>{reason}</span></div>)}</div><div className="mt-6 rounded-lg border border-border bg-background/55 p-3"><p className="text-[10px] uppercase tracking-wider text-muted-foreground">90D insider cost</p><div className="mt-2 flex items-end justify-between"><span className="font-mono text-xl font-semibold">{candidate.insiderCost === null ? 'Unavailable' : `$${candidate.insiderCost.toFixed(2)}`}</span><span className="text-xs text-amber-200">{pnl === null ? 'Insufficient data' : `${Math.abs(pnl).toFixed(1)}% ${pnl < 0 ? 'below' : 'above'}`}</span></div></div><button onClick={onOpen} className="mt-4 w-full rounded-lg border border-emerald-400/25 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-400/15">Open Company Lab</button></aside>;
-}
-
-function MarketPulseView({ data }: { data: DashboardData }) {
-  const option = darkChart({ tooltip: { trigger: 'axis' }, legend: { data: ['Market', 'Technology', 'Financials'], textStyle: { color: '#8fa3b7' } }, xAxis: { type: 'category', data: data.pulseHistory.map((point) => point.date) }, yAxis: { type: 'value', min: 0, max: 100 }, series: [{ name: 'Market', type: 'line', smooth: true, data: data.pulseHistory.map((point) => point.market), lineStyle: { color: '#5eead4', width: 3 }, itemStyle: { color: '#5eead4' } }, { name: 'Technology', type: 'line', smooth: true, data: data.pulseHistory.map((point) => point.technology), lineStyle: { color: '#38bdf8' }, itemStyle: { color: '#38bdf8' } }, { name: 'Financials', type: 'line', smooth: true, data: data.pulseHistory.map((point) => point.financials), lineStyle: { color: '#fbbf24' }, itemStyle: { color: '#fbbf24' } }] });
-  return <><PulseCards data={data} /><Panel title="Market and sector pulse history" subtitle="Composite percentile, point-in-time"><EChart option={option} style={{ height: 360 }} /></Panel></>;
-}
-
-function CandidateList({ data, mode, selectedTicker, onSelect }: { data: DashboardData; mode: 'turning' | 'divergence'; selectedTicker: string; onSelect: (ticker: string) => void }) {
-  const sorted = [...data.candidates].sort((a, b) => mode === 'turning' ? b.turn - a.turn : b.divergence - a.divergence);
-  const selected = sorted.find((candidate) => candidate.ticker === selectedTicker) ?? sorted[0];
-  return <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_340px]"><CandidateTable key={mode} initialSort={mode === 'turning' ? 'turn' : 'divergence'} candidates={sorted} selectedTicker={selectedTicker} onSelect={onSelect} />{selected ? <ReasonPanel candidate={selected} onOpen={() => undefined} /> : <EmptyState message="No complete candidates are available for this view." />}</div>;
-}
-
-function SmartBuysView({ data }: { data: DashboardData }) {
-  const sort = useRowSort(data.filings.filter((filing) => filing.side === 'BUY'), filingSortFields, 'value');
-  const buys = sort.rows;
-  return <Panel title="Qualified insider purchases" subtitle="Qualified open-market buys only"><SortControls fields={filingSortFields} fieldId={sort.fieldId} descending={sort.descending} onField={sort.choose} onReverse={sort.reverse} />{buys.length === 0 ? <EmptyState message="No qualified open-market purchase is available in this live window." /> : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{buys.map((filing) => <div key={`${filing.accession}:${filing.owner}`} className="rounded-lg border border-border bg-background/35 p-4"><div className="flex items-center justify-between"><span className="font-mono text-lg font-semibold text-emerald-200">{filing.ticker}</span><Badge className="bg-emerald-400/10 text-emerald-200">BUY</Badge></div><p className="mt-4 text-sm font-medium">{filing.owner}</p><p className="text-xs text-muted-foreground">{filing.role}</p><p className="mt-4 font-mono text-2xl font-semibold">${compactMoney(filing.value)}</p><p className="mt-1 text-[10px] text-muted-foreground">Filed {filing.filedAt} UTC</p></div>)}</div>}</Panel>;
-}
-
-function ClusterView({ data, selectedTicker, onSelect }: { data: DashboardData; selectedTicker: string; onSelect: (ticker: string) => void }) {
-  const sort = useRowSort(data.candidates, clusterSortFields, 'cluster');
-  return <div><div><SortControls fields={clusterSortFields} fieldId={sort.fieldId} descending={sort.descending} onField={sort.choose} onReverse={sort.reverse} /></div><div className="grid gap-6 lg:grid-cols-2">{sort.rows.map((candidate) => <button key={candidate.ticker} onClick={() => onSelect(candidate.ticker)} className={`rounded-xl border p-5 text-left transition ${selectedTicker === candidate.ticker ? 'border-emerald-400/35 bg-emerald-400/8' : 'border-border bg-card hover:border-slate-500'}`}><div className="flex items-center justify-between"><span className="font-mono text-xl font-semibold text-emerald-200">{candidate.ticker}</span><Score value={candidate.cluster} strong /></div><p className="mt-1 text-xs text-muted-foreground">{candidate.company}</p><div className="mt-5 flex gap-2"><Badge variant="outline">{candidate.cluster >= 90 ? 'CEO_CFO_CLUSTER' : '3_PLUS_BUYERS'}</Badge>{candidate.reasons.some((item) => item.toLowerCase().includes('sales')) && <Badge variant="outline">NO_SELLS_90D</Badge>}</div></button>)}</div></div>;
-}
-
-function CostBasisView({ data }: { data: DashboardData }) {
-  const sort = useRowSort(data.candidates, costSortFields, 'costPl');
-  const available = sort.rows.flatMap((candidate) => { const pnl = costReturn(candidate); return pnl === null ? [] : [{ candidate, pnl }]; });
-  return <Panel title="Insider weighted cost basis" subtitle="Qualified purchases in the trailing 90 days"><SortControls fields={costSortFields} fieldId={sort.fieldId} descending={sort.descending} onField={sort.choose} onReverse={sort.reverse} />{available.length === 0 ? <EmptyState message="No candidate has both a current price and a qualified 90D insider basis." /> : <div className="space-y-3">{available.map(({ candidate, pnl }) => <div key={candidate.ticker} className="grid grid-cols-[70px_1fr_auto_auto] items-center gap-4 rounded-lg border border-border bg-background/35 p-4"><span className="font-mono font-semibold text-emerald-200">{candidate.ticker}</span><div className="h-1.5 overflow-hidden rounded-full bg-slate-800"><div className={`h-full rounded-full ${pnl >= 0 ? 'bg-emerald-400' : 'bg-amber-300'}`} style={{ width: `${Math.min(100, 45 + Math.abs(pnl) * 4)}%` }} /></div><span className="font-mono text-xs">${candidate.insiderCost?.toFixed(2)}</span><span className={`w-16 text-right font-mono text-xs ${pnl >= 0 ? 'text-emerald-300' : 'text-amber-200'}`}>{signed(pnl)}%</span></div>)}</div>}</Panel>;
-}
-
-function SecTapeView({ data }: { data: DashboardData }) {
-  const sort = useRowSort(data.filings, filingSortFields, 'value');
-  const columns = ['ticker', 'value', 'side', 'owner', 'role', 'filedAt', 'accession'];
-  return <Panel title="Relevant SEC filings" subtitle="Normalized and deduplicated SEC tape">
-    <SortControls fields={filingSortFields} fieldId={sort.fieldId} descending={sort.descending} onField={sort.choose} onReverse={sort.reverse} />
-    {sort.rows.length === 0 ? <EmptyState message="No normalized P/S filing is available in this snapshot." /> :
-      <Table><TableHeader><TableRow>{columns.map((id) => {
-        const field = filingSortFields.find((item) => item.id === id)!;
-        const active = sort.fieldId === id;
-        return <TableHead key={id} aria-sort={active ? sort.descending ? 'descending' : 'ascending' : 'none'}>
-          <button type="button" className="flex items-center gap-1 py-2 focus-visible:outline-2 focus-visible:outline-emerald-300" onClick={() => sort.toggle(id)}>
-            {field.label}<span aria-hidden="true">{active ? sort.descending ? '↓' : '↑' : '↕'}</span>
-          </button>
-        </TableHead>;
-      })}</TableRow></TableHeader><TableBody>{sort.rows.map((filing, index) =>
-        <TableRow key={`${filing.accession}:${filing.owner}:${filing.side}:${index}`}>
-          <TableCell className="font-mono font-semibold text-emerald-200">{filing.ticker}</TableCell>
-          <TableCell data-value={filing.value} title={filing.value.toLocaleString('en-US', { style: 'currency', currency: 'USD' })} className="font-mono">${compactMoney(filing.value)}</TableCell>
-          <TableCell><Badge className={filing.side === 'BUY' ? 'bg-emerald-400/10 text-emerald-200' : 'bg-rose-400/10 text-rose-200'}>{filing.side}</Badge></TableCell>
-          <TableCell>{filing.owner}</TableCell><TableCell className="text-muted-foreground">{filing.role}</TableCell>
-          <TableCell className="font-mono text-xs text-muted-foreground">{filing.filedAt}</TableCell>
-          <TableCell className="font-mono text-[10px] text-muted-foreground">{filing.accession}</TableCell>
-        </TableRow>)}</TableBody></Table>}
-  </Panel>;
-}
-
-function CompanyLab({ data, candidate, onTicker }: { data: DashboardData; candidate: Candidate; onTicker: (ticker: string) => void }) {
-  const series = data.companySeries.filter((point) => point.ticker === candidate.ticker);
-  const option = darkChart({ tooltip: { trigger: 'axis' }, legend: { data: ['Price', 'Insider cost', 'Mansfield RS'], textStyle: { color: '#8fa3b7' } }, xAxis: { type: 'category', data: series.map((point) => point.date) }, yAxis: [{ type: 'value', position: 'left' }, { type: 'value', position: 'right' }], series: [{ name: 'Price', type: 'line', smooth: true, data: series.map((point) => point.price), lineStyle: { color: '#5eead4', width: 3 }, itemStyle: { color: '#5eead4' } }, { name: 'Insider cost', type: 'line', data: series.map((point) => point.cost), lineStyle: { color: '#fbbf24', type: 'dashed' }, itemStyle: { color: '#fbbf24' } }, { name: 'Mansfield RS', type: 'bar', yAxisIndex: 1, data: series.map((point) => point.mansfield), itemStyle: { color: '#38bdf855' } }] });
-  return <><div className="flex flex-wrap gap-2">{data.candidates.map((item) => <button key={item.ticker} onClick={() => onTicker(item.ticker)} className={`rounded-lg border px-3 py-2 font-mono text-xs ${candidate.ticker === item.ticker ? 'border-emerald-400/35 bg-emerald-400/10 text-emerald-200' : 'border-border bg-card text-muted-foreground'}`}>{item.ticker}</button>)}</div><div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_330px]"><Panel title={`${candidate.ticker} · price, cost basis, and relative strength`} subtitle={candidate.company}>{series.length === 0 ? <EmptyState message="No market series is available for this issuer." /> : <EChart option={option} style={{ height: 420 }} />}</Panel><ReasonPanel candidate={candidate} onOpen={() => undefined} /></div></>;
-}
-
-function BacktestLab({ data }: { data: DashboardData }) {
-  const option = darkChart({ tooltip: { trigger: 'axis' }, legend: { data: ['Full engine', 'Cluster buys', 'Simple ratio'], textStyle: { color: '#8fa3b7' } }, xAxis: { type: 'category', data: data.backtest.map((item) => item.horizon) }, yAxis: { type: 'value', name: 'Median excess %' }, series: [{ name: 'Full engine', type: 'bar', data: data.backtest.map((item) => item.fullEngine), itemStyle: { color: '#5eead4' } }, { name: 'Cluster buys', type: 'bar', data: data.backtest.map((item) => item.clusterBuy), itemStyle: { color: '#38bdf8' } }, { name: 'Simple ratio', type: 'bar', data: data.backtest.map((item) => item.simpleRatio), itemStyle: { color: '#64748b' } }] });
-  return <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_330px]"><Panel title="Forward excess returns vs SPY" subtitle="No synthetic results are shown">{data.backtest.length === 0 ? <EmptyState message="The sealed OOS backtest has not been run. Live scores remain experimental." /> : <EChart option={option} style={{ height: 410 }} />}</Panel><Panel title="Validation gate" subtitle="Sealed OOS: 2023–latest"><div className="space-y-4 text-xs text-slate-300"><Metric label="OOS events" value="— / 200" /><Metric label="Primary horizon" value="6M" /><Metric label="Current outcome" value="NOT RUN" accent /><p className="rounded-lg border border-amber-300/20 bg-amber-300/8 p-3 leading-5 text-amber-100">Telegram remains off until the point-in-time backtest meets the formal PASS criteria.</p></div></Panel></div>;
-}
-
-function SnapshotLoading() { return <main className="grid min-h-screen place-items-center bg-background p-6 text-foreground"><div className="rounded-xl border border-border bg-card p-8 text-center"><Radar className="mx-auto size-8 animate-pulse text-emerald-300" /><h1 className="mt-4 text-lg font-semibold">Loading validated snapshot</h1><p className="mt-2 text-xs text-muted-foreground">Checking dashboard, manifest, hashes, and operational settings.</p></div></main>; }
-function SnapshotError({ message }: { message: string }) { return <main className="grid min-h-screen place-items-center bg-background p-6 text-foreground"><div className="max-w-lg rounded-xl border border-rose-400/25 bg-card p-8 text-center"><ShieldAlert className="mx-auto size-8 text-rose-300" /><h1 className="mt-4 text-lg font-semibold">Dashboard snapshot unavailable</h1><p className="mt-3 text-sm leading-6 text-muted-foreground">The app will not substitute sample or stale data. The previous atomic Pages deployment may be incomplete or its contract no longer matches this UI.</p><p className="mt-4 rounded-lg bg-background/60 p-3 font-mono text-xs text-rose-200">{message}</p></div></main>; }
-
-
-function Panel({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) { return <section className="overflow-hidden rounded-xl border border-border bg-card"><div className="border-b border-border px-5 py-4"><h2 className="text-sm font-semibold">{title}</h2><p className="mt-1 text-xs text-muted-foreground">{subtitle}</p></div><div className="p-5">{children}</div></section>; }
-function EmptyState({ message }: { message: string }) { return <div className="grid min-h-36 place-items-center rounded-xl border border-dashed border-border bg-card/50 p-6 text-center text-xs leading-5 text-muted-foreground">{message}</div>; }
-function Metric({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) { return <div className="flex items-center justify-between border-b border-border pb-3"><span className="text-muted-foreground">{label}</span><span className={`font-mono font-semibold ${accent ? 'text-amber-200' : 'text-slate-100'}`}>{value}</span></div>; }
-function Score({ value, strong = false }: { value: number; strong?: boolean }) { return <span className={`font-mono text-sm font-semibold ${strong ? 'text-emerald-200' : value >= 85 ? 'text-sky-200' : 'text-slate-200'}`}>{value}</span>; }
-function StateBadge({ state }: { state: Candidate['state'] }) { return <span className="rounded-md border border-sky-300/20 bg-sky-300/10 px-2 py-1 text-[9px] font-semibold tracking-wide text-sky-200">{state.replaceAll('_', ' ')}</span>; }
-function signed(value: number | null) { return value === null ? '—' : `${value >= 0 ? '+' : ''}${value.toFixed(1)}`; }
-function formatMetric(value: number | null) { return value === null ? '—' : value.toFixed(1); }
-function costReturn(candidate: Candidate) { return candidate.currentPrice === null || candidate.insiderCost === null || candidate.insiderCost <= 0 ? null : (candidate.currentPrice / candidate.insiderCost - 1) * 100; }
-function compactMoney(value: number) { return value >= 1_000_000 ? `${(value / 1_000_000).toFixed(1)}M` : `${Math.round(value / 1_000)}K`; }
-function viewDescription(view: ViewId) { const descriptions: Record<ViewId, string> = { radar: '', 'market-pulse': 'Market-wide and sector-wide insider activity, normalized against point-in-time history.', 'turning-stocks': 'Candidates advancing through the price/volume state machine.', divergence: 'The strongest gaps between weak price action and qualified insider accumulation.', 'smart-buys': 'Individual purchases with the highest estimated information content.', clusters: 'Independent insiders buying the same issuer inside a compact window.', 'cost-basis': 'Where current price sits relative to qualified insider purchase costs.', 'live-sec-tape': 'The newest normalized filings that survived classification and quality checks.', 'company-lab': 'A single-issuer view of price, insider cost basis, RS, scores, and reasons.', 'backtest-lab': 'Forward-return evidence, simple benchmarks, and the sealed validation gate.', 'system-health': 'Fail-closed production checks, methodology status, and current release blockers.', 'data-coverage': 'Observed source coverage, quality denominators, and immutable data watermarks.', 'alert-center': 'Channel health, delivery readiness, and global suppression reasons.', settings: 'Read-only production policy and secure GitHub secret-configuration status.' }; return descriptions[view]; }
-function darkChart(option: Record<string, unknown>) { return { backgroundColor: 'transparent', textStyle: { color: '#cbd5e1', fontFamily: 'var(--font-geist-mono)' }, grid: { left: 45, right: 35, top: 48, bottom: 32 }, xAxis: { axisLine: { lineStyle: { color: '#334155' } }, axisLabel: { color: '#8093a7' }, splitLine: { show: false } }, yAxis: { axisLine: { show: false }, axisLabel: { color: '#8093a7' }, splitLine: { lineStyle: { color: '#263446' } } }, ...option }; }

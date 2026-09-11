@@ -30,12 +30,16 @@ export function SystemHealthView({ manifest }: { manifest: PublicationManifest }
   ];
   return <div className="space-y-6">
     <div className="grid gap-4 md:grid-cols-3">
-      <StatusCard label="Publication" value={manifest.status} pass={manifest.status === 'SUCCEEDED'} />
-      <StatusCard label="Quality disposition" value={quality.disposition} pass={quality.disposition === 'PASS'} />
+      <StatusCard label="Dashboard integrity" value="VERIFIED ON LOAD" pass />
+      <StatusCard label="Predictive model gate" value={quality.disposition} pass={quality.disposition === 'PASS'} />
       <StatusCard label="Run" value={manifest.runId} pass={quality.canonicalValid} mono />
     </div>
-    <Panel title="Production gate" subtitle="Every required check is fail-closed">
+    <Panel title="Data and research checks" subtitle="Research gate failures do not turn verified SEC facts into unavailable data.">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{checks.map((check) => <div key={check.label} className="rounded-lg border border-border bg-background/35 p-4"><div className="flex items-center gap-2">{check.pass ? <CheckCircle2 className="size-4 text-emerald-300" /> : <AlertTriangle className="size-4 text-amber-300" />}<span className="text-sm font-semibold">{check.label}</span></div><p className="mt-2 text-xs text-muted-foreground">{check.detail}</p></div>)}</div>
+    </Panel>
+    <Panel title="Workflow evidence" subtitle="The published data is not proof that the latest scheduled refresh succeeded.">
+      <p className="text-sm leading-6 text-muted-foreground">Published snapshot: {formatInstant(manifest.asOf)}. Last attempt and run duration are not included in this v1 manifest. If dates stop advancing, inspect the latest Actions run and its acquisition diagnostics; do not assume a newly deployed UI refreshed the data.</p>
+      <a href="https://github.com/Garrincha077/insider-turning-engine/actions" target="_blank" rel="noreferrer" className="mt-4 inline-block text-sm text-emerald-200 underline">Inspect workflow runs and failures</a>
     </Panel>
     <Panel title="Open blockers" subtitle="These reasons prevent a validated production claim">
       {quality.issues.length === 0 ? <SuccessMessage text="No publication-quality blockers are recorded." /> : <ReasonList reasons={quality.issues} />}
@@ -47,26 +51,27 @@ export function DataCoverageView({ manifest }: { manifest: PublicationManifest }
   const measurements = [
     ['SEC parse success', manifest.quality.parseSuccess],
     ['Market coverage', manifest.quality.marketCoverage],
-    ['Core branch coverage', manifest.quality.coreBranchCoverage],
   ] as const;
   return <div className="space-y-6">
     <div className="grid gap-4 sm:grid-cols-3">
       <StatusCard label="Active issuers" value={String(manifest.universe.issuerCount)} pass={manifest.universe.issuerCount > 0} />
       <StatusCard label="Relevant transactions" value={String(manifest.universe.activeTransactionCount)} pass={manifest.universe.activeTransactionCount > 0} />
-      <StatusCard label="Signals" value={String(manifest.universe.signalCount)} pass={manifest.universe.signalCount > 0} />
+      <StatusCard label="Complete research scores" value={String(manifest.universe.signalCount)} pass={manifest.universe.signalCount > 0} />
     </div>
-    <Panel title="Coverage evidence" subtitle="Observed numerators, denominators, and locked gates">
+    <Panel title="Coverage evidence" subtitle="Market denominator is the selected fetch universe, not all US-listed companies.">
       <div className="space-y-4">{measurements.map(([label, value]) => <div key={label} className="grid gap-3 rounded-lg border border-border bg-background/35 p-4 sm:grid-cols-[1fr_auto_auto] sm:items-center"><div><p className="text-sm font-semibold">{label}</p><p className="mt-1 text-xs text-muted-foreground">{value.numerator.toLocaleString()} / {value.denominator.toLocaleString()} observed</p></div><span className="font-mono text-sm">{rateLabel(value)}</span><ResultBadge result={value.result} /></div>)}</div>
     </Panel>
     <Panel title="Source watermarks" subtitle="Latest data represented in this immutable snapshot">
-      <div className="grid gap-4 md:grid-cols-3"><Watermark label="SEC accepted through" value={manifest.watermarks.secAcceptedThrough} /><Watermark label="Market session through" value={manifest.watermarks.marketSessionThrough} /><Watermark label="Fundamentals through" value={manifest.watermarks.fundamentalsAvailableThrough} /></div>
+      <div className="grid gap-4 md:grid-cols-2"><Watermark label="SEC accepted through" value={manifest.watermarks.secAcceptedThrough} /><Watermark label="Market session through" value={manifest.watermarks.marketSessionThrough} /></div>
     </Panel>
+    <Panel title="Coverage gaps" subtitle="A missing measurement is not 100% coverage."><p className="text-sm leading-6 text-muted-foreground">Discovered filings, resolved identities, covered SEC days and exclusion counts are not fully represented in the legacy public manifest. A 90-day window is not yet verified. These measurements require the canonical v2 export; no market-wide completeness is claimed here.</p></Panel>
   </div>;
 }
 
 export function AlertCenterView({ settings }: { settings: SettingsStatus }) {
   const channels = Object.entries(settings.channels) as Array<[string, ChannelStatus]>;
   return <div className="space-y-6">
+    <Panel title="Informational daily digest" subtitle="A separate channel policy, independent of experimental scores."><p className="text-sm leading-6 text-muted-foreground">Not enabled by this legacy snapshot. A trustworthy preview needs independent economic transactions, the latest complete SEC day and a durable day-level delivery claim. No message or “no new purchases” assertion is generated from incomplete v1 owner groups.</p><p className="mt-3 text-xs text-muted-foreground">Planned content: up to five new open-market purchases of at least $250,000, with SEC source links. No scores or trade recommendations.</p></Panel>
     <div className={`rounded-xl border p-5 ${settings.alertsAllowed ? 'border-emerald-400/25 bg-emerald-400/8' : 'border-amber-300/20 bg-amber-300/8'}`}><div className="flex items-start gap-3">{settings.alertsAllowed ? <ShieldCheck className="mt-0.5 size-5 text-emerald-300" /> : <BellOff className="mt-0.5 size-5 text-amber-300" />}<div><h2 className="text-sm font-semibold">{settings.alertsAllowed ? 'Actionable alerts enabled' : 'Actionable alerts blocked'}</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">Delivery requires a PASS snapshot, enabled policy, configured channel, and healthy outbox.</p></div></div></div>
     <div className="grid gap-4 md:grid-cols-2">{channels.map(([name, channel]) => <ChannelCard key={name} name={name} status={channel} />)}</div>
     <Panel title="Suppression reasons" subtitle="No blocked candidate is silently discarded">
@@ -87,11 +92,11 @@ export function SettingsView({ settings }: { settings: SettingsStatus }) {
     <Panel title="Delivery channels" subtitle="Secrets stay in the protected GitHub production environment">
       <div className="grid gap-4 md:grid-cols-2"><ChannelCard name="telegram" status={settings.channels.telegram} /><ChannelCard name="email" status={settings.channels.email} /></div>
       <a href={setupUrl} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center gap-2 rounded-lg border border-emerald-400/25 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-400/15">Open GitHub Environment settings <ExternalLink className="size-3.5" /></a>
-      <p className="mt-3 text-[11px] leading-5 text-muted-foreground">Required secrets: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, EMAIL_API_KEY, ALERT_EMAIL_FROM, and ALERT_EMAIL_TO. Values are never emitted into Pages data.</p>
+      <p className="mt-3 text-[11px] leading-5 text-muted-foreground">Telegram secrets: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID. Optional email: EMAIL_API_KEY, ALERT_EMAIL_FROM and ALERT_EMAIL_TO. Values are never emitted into Pages data. This page cannot save server settings.</p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">{Object.entries(settings.channels).map(([name, channel]) => <div key={name} className="rounded-lg border border-border p-3 text-xs"><p className="font-semibold capitalize">{name} delivery test: {channel.lastTestStatus ?? 'NOT TESTED'}</p><p className="mt-1 text-muted-foreground">Failed or uncertain tests: {channel.testFailureCount ?? 0}. Configuration alone does not confirm delivery.</p></div>)}</div>
       <a className="mt-4 inline-block text-xs text-emerald-200 underline" href="https://github.com/Garrincha077/insider-turning-engine/actions/workflows/test-alert-delivery.yml" target="_blank" rel="noreferrer">Open delivery test workflow</a>
     </Panel>
-    <Panel title="Alert policy" subtitle={`Versioned configuration · ${settings.environment}`}>
+    <Panel title="Predictive alert policy" subtitle={`Versioned configuration · ${settings.environment} · separate from the factual digest`}>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><PolicyMetric label="Delivery switch" value={settings.policy.deliveryEnabled ? 'ENABLED' : 'OFF'} /><PolicyMetric label="Minimum severity" value={settings.policy.minimumSeverity} /><PolicyMetric label="Cooldown" value={`${settings.policy.cooldownDays} days`} /><PolicyMetric label="Timezone" value={settings.policy.timezone} /></div>
       <div className="mt-4 flex flex-wrap gap-2">{settings.policy.alertTypes.map((type) => <Badge key={type} variant="outline">{humanReason(type)}</Badge>)}</div>
     </Panel>

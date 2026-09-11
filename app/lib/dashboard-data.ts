@@ -1,4 +1,5 @@
 export type EngineState =
+  | 'UNKNOWN'
   | 'FALLING'
   | 'INSIDER_ACCUMULATION'
   | 'BASE_FORMING'
@@ -10,17 +11,19 @@ export type Candidate = {
   issuerCik: string;
   company: string;
   sector: string;
-  total: number;
-  insider: number;
-  divergence: number;
-  turn: number;
-  cluster: number;
+  total: number | null;
+  insider: number | null;
+  divergence: number | null;
+  turn: number | null;
+  cluster: number | null;
   marketRs: number | null;
   sectorRs: number | null;
   insiderCost: number | null;
   currentPrice: number | null;
   state: EngineState;
   reasons: string[];
+  stateChangedAt?: string | null;
+  sourceReferences?: Record<string, unknown>;
 };
 
 export type Filing = {
@@ -31,6 +34,7 @@ export type Filing = {
   value: number;
   filedAt: string;
   accession: string;
+  sourceReferences?: { url?: string };
 };
 
 export type DashboardData = {
