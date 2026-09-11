@@ -4,7 +4,8 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: "15 3 * * 2-6"
+    # Prior Eastern SEC day is complete; durable acquisition starts at 06:30 UTC.
+    - cron: "15 7 * * 2-6"
   workflow_dispatch:
     inputs:
       refresh_data:
@@ -27,6 +28,11 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write # immutable identity Releases; never raw/cache or state branch
+      pages: write
+      id-token: write
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
     steps:
       - uses: actions/checkout@v4
@@ -53,13 +59,25 @@ jobs:
           }
       - name: Build real-data live experimental snapshot
         if: github.event_name == 'schedule' || inputs.refresh_data == true
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: >-
           uv run python -m insider_turning_engine.pipeline.live_experimental
           --output app/public/data
           --cache-dir data/cache/live-experimental
-          --lookback-business-days 1
+          --lookback-business-days 5
           --max-symbols 0
+          --identity-repository "$GITHUB_REPOSITORY"
+          --identity-target "$GITHUB_SHA"
           --execute
+      - name: Preserve compact identity acquisition diagnostics
+        if: always() && (github.event_name == 'schedule' || inputs.refresh_data == true)
+        uses: actions/upload-artifact@v4
+        with:
+          name: identity-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: data/cache/live-experimental/identity-observations/*/identity-manifest.json
+          if-no-files-found: warn
+          retention-days: 90
       - name: Restore durable delivery history
         run: uv run python -m insider_turning_engine.notifications.state_store restore
       - name: Export masked operational settings

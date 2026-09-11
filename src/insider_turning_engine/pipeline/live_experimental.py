@@ -8,6 +8,7 @@ the score engine, but never creates alerts or a validation/backtest claim.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 from collections import defaultdict
@@ -16,6 +17,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import polars as pl
 
@@ -30,18 +32,25 @@ from insider_turning_engine.ingestion.market import (
     YahooChartProvider,
 )
 from insider_turning_engine.ingestion.sec import (
-    SECCompanyTickerSource,
     SECDailyIndexSource,
     parse_sec_filing,
 )
 from insider_turning_engine.ingestion.sec.historical import validate_sec_user_agent
+from insider_turning_engine.ingestion.sec.identity_store import ReleaseIdentityStore
 from insider_turning_engine.normalization.amendments import resolve_amendments
 from insider_turning_engine.notifications import build_settings_status, load_notification_policy
 from insider_turning_engine.pipeline.daily import _technical_contexts
 from insider_turning_engine.pipeline.dashboard_input import build_dashboard_input
+from insider_turning_engine.pipeline.identity_observations import acquire_identity_observations
+from insider_turning_engine.pipeline.live_inputs import _identity_candidates
 from insider_turning_engine.pipeline.scoring import assemble_daily_scores
 
 _COMMON = re.compile(r"\b(?:common(?: stock| shares?)?|ordinary shares?)\b", re.IGNORECASE)
+_SECTORS = {
+    "XLB": "Materials", "XLC": "Communication services", "XLE": "Energy",
+    "XLF": "Financials", "XLI": "Industrials", "XLK": "Technology", "XLP": "Consumer staples",
+    "XLRE": "Real estate", "XLU": "Utilities", "XLV": "Healthcare", "XLY": "Consumer discretionary",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,14 +94,17 @@ def _measurement(numerator: int, denominator: int, threshold: float) -> dict[str
 
 
 def _qualifying_purchase(record: CanonicalTransaction, as_of: datetime) -> bool:
-    ticker = record.issuer.ticker or ""
     return (
-        bool(ticker)
-        and record.timestamps.accepted_at is not None
+        record.timestamps.accepted_at is not None
         and record.timestamps.accepted_at <= as_of
+        and record.timestamps.knowledge_at <= as_of
         and record.transaction.transaction_date >= as_of.date() - timedelta(days=365)
         and record.transaction.transaction_date <= as_of.date()
         and record.transaction.code == "P"
+        and record.transaction.acquired_disposed == "A"
+        and record.transaction.shares > 0
+        and record.transaction.price_per_share is not None
+        and record.transaction.price_per_share > 0
         and record.transaction.value is not None
         and record.security.table_type is TableType.NON_DERIVATIVE
         and _COMMON.search(record.security.title) is not None
@@ -101,46 +113,36 @@ def _qualifying_purchase(record: CanonicalTransaction, as_of: datetime) -> bool:
 
 def _select_issuers(
     records: Sequence[CanonicalTransaction],
-    identity_rows: Sequence[Any],
+    identity_rows: Sequence[Mapping[str, Any]],
     *,
     as_of: datetime,
     max_symbols: int,
 ) -> tuple[dict[str, str], list[dict[str, Any]]]:
     if max_symbols < 0:
         raise ValueError("max_symbols must be zero (all) or a positive integer")
-    current = {(row.cik, row.ticker): row for row in identity_rows}
+    titles = {record.issuer.cik: record.security.title for record in records
+              if _qualifying_purchase(record, as_of)}
+    current = _identity_candidates(identity_rows, as_of=as_of, common_stock_titles=titles)
     dollars: defaultdict[str, float] = defaultdict(float)
     tickers: dict[str, str] = {}
     for record in records:
         if not _qualifying_purchase(record, as_of):
             continue
-        ticker = str(record.issuer.ticker).upper()
-        key = (record.issuer.cik, ticker)
-        if key not in current:
+        identity = current.get(record.issuer.cik)
+        if identity is None:
             continue
         dollars[record.issuer.cik] += float(record.transaction.value or 0)
-        tickers[record.issuer.cik] = ticker
+        tickers[record.issuer.cik] = identity["ticker"]
     selected_ciks = sorted(dollars, key=lambda cik: (-dollars[cik], cik))
     if max_symbols:
         selected_ciks = selected_ciks[:max_symbols]
     ticker_by_cik = {cik: tickers[cik] for cik in selected_ciks}
     selected_identities: list[dict[str, Any]] = []
-    for cik, ticker in ticker_by_cik.items():
-        row = current[(cik, ticker)]
-        selected_identities.append(
-            {
-                "cik": cik,
-                "ticker": ticker,
-                "name": row.name,
-                "exchange": row.exchange,
-                "security_type": "COMMON_STOCK",
-                "knowledge_at": row.knowledge_at,
-                "sector": "Unmapped",
-                # Until the live path has a point-in-time SIC history, SPY is
-                # an explicit technical proxy rather than an invented sector.
-                "sector_etf": "SPY",
-            }
-        )
+    for cik in ticker_by_cik:
+        row = dict(current[cik])
+        etf = row["sector_etf"]
+        row["sector"] = f"{_SECTORS[etf]} / {etf} (SIC)" if etf in _SECTORS else "Unmapped"
+        selected_identities.append(row)
     return ticker_by_cik, selected_identities
 
 
@@ -267,8 +269,10 @@ def generate_live_experimental_dashboard(
     cache_dir: str | Path,
     user_agent: str,
     lookback_business_days: int = 5,
-    max_symbols: int = 40,
+    max_symbols: int = 0,
     now: datetime | None = None,
+    identity_repository: str | None = None,
+    identity_target: str | None = None,
 ) -> LiveExperimentalResult:
     """Fetch real inputs and atomically publish one experimental snapshot."""
 
@@ -276,7 +280,17 @@ def generate_live_experimental_dashboard(
     validated_user_agent = validate_sec_user_agent(user_agent)
     run_id = f"run_live_{point:%Y%m%dT%H%M%SZ}"
     root = Path(cache_dir)
-    filing_days = _business_days(point.date() - timedelta(days=1), lookback_business_days)
+    if bool(identity_repository) != bool(identity_target):
+        raise ValueError("identity repository and full commit target must be supplied together")
+    requested_days = _business_days(
+        point.astimezone(ZoneInfo("America/New_York")).date() - timedelta(days=1),
+        lookback_business_days,
+    )
+    discovery = SECDailyIndexSource(validated_user_agent)
+    try:
+        filing_days = discovery.discover_days(requested_days[0], requested_days[-1])
+    finally:
+        discovery.close()
     (
         records,
         sec_parsed,
@@ -294,24 +308,41 @@ def generate_live_experimental_dashboard(
     if not records:
         raise RuntimeError("live SEC window produced no canonical ownership rows")
 
-    identity_source = SECCompanyTickerSource(
-        validated_user_agent,
-        cache_dir=root / "sec-identity",
+    active_ciks = sorted({record.issuer.cik for record in records
+                          if _qualifying_purchase(record, point)})
+    if not active_ciks:
+        raise RuntimeError("live SEC window has no qualified purchases")
+    store = (ReleaseIdentityStore(identity_repository, target=identity_target)
+             if identity_repository and identity_target else None)
+    previous_rows = store.latest() if store else None
+    identity_root = root / "identity-observations" / run_id
+    previous_path = root / f"{run_id}-prior-identities.json"
+    if previous_rows is not None:
+        previous_path.parent.mkdir(parents=True, exist_ok=True)
+        previous_path.write_text(json.dumps(previous_rows, sort_keys=True), encoding="utf-8")
+    identity_report = acquire_identity_observations(
+        active_ciks, user_agent=validated_user_agent, run_id=run_id, output=identity_root,
+        previous=previous_path if previous_rows is not None else None,
     )
-    try:
-        identity_result = identity_source.fetch()
-    finally:
-        identity_source.close()
+    identity_history = json.loads((identity_root / "identities.json").read_text(encoding="utf-8"))
+    identity_receipt = store.persist(identity_history) if store else None
+    # This preview is a current materialization, NOT a historical daily-close
+    # backtest. Never move current identity evidence back to the SEC filing day.
+    point = max(point, datetime.fromisoformat(identity_report["observedThrough"]))
     ticker_by_cik, identity_rows = _select_issuers(
         records,
-        identity_result.records,
+        identity_history,
         as_of=point,
         max_symbols=max_symbols,
     )
     if not ticker_by_cik:
         raise RuntimeError("live SEC window has no exchange-mapped common-stock purchases")
 
-    requested_symbols = {*ticker_by_cik.values(), "SPY"}
+    requested_candidates = len(ticker_by_cik)
+    sector_by_symbol = {row["ticker"]: row["sector_etf"] for row in identity_rows
+                        if row["sector_etf"] in _SECTORS}
+    benchmarks = {"SPY", *sector_by_symbol.values()}
+    requested_symbols = {*ticker_by_cik.values(), *benchmarks}
     fetched_market, market_failures, market_sources, cross_validated = _fetch_market(
         requested_symbols, cache_dir=root / "market"
     )
@@ -324,9 +355,12 @@ def generate_live_experimental_dashboard(
         for symbol, rows in fetched_market.items()
     }
     market = {symbol: rows for symbol, rows in market.items() if rows}
-    if "SPY" not in market:
-        raise RuntimeError("SPY benchmark is unavailable; live snapshot is blocked")
+    if not benchmarks <= market.keys():
+        raise RuntimeError("required market/sector benchmark unavailable; live snapshot blocked")
     available_tickers = {symbol for symbol in ticker_by_cik.values() if symbol in market}
+    coverage = _measurement(len(available_tickers), requested_candidates, 0.90)
+    if coverage["result"] != "PASS":
+        raise RuntimeError("live market coverage below 90%; previous snapshot preserved")
     ticker_by_cik = {
         cik: ticker for cik, ticker in ticker_by_cik.items() if ticker in available_tickers
     }
@@ -334,7 +368,6 @@ def generate_live_experimental_dashboard(
     selected_records = [record for record in records if record.issuer.cik in ticker_by_cik]
     all_bars = [bar for rows in market.values() for bar in rows]
     price_frame = price_features(all_bars, as_of=point)
-    sector_by_symbol = {ticker: "SPY" for ticker in ticker_by_cik.values()}
     rs_frame = relative_strength_features(
         all_bars,
         as_of=point,
@@ -357,8 +390,6 @@ def generate_live_experimental_dashboard(
         quality={"quality_gate_passed": False},
     )
 
-    requested_candidates = len(requested_symbols) - 1
-    coverage = _measurement(len(available_tickers), requested_candidates, 0.90)
     parse_quality = _measurement(
         sec_parsed,
         sec_parsed + sec_quarantines + sec_failures,
@@ -366,13 +397,22 @@ def generate_live_experimental_dashboard(
     )
     latest_market = max(bar.date for symbol in available_tickers for bar in market[symbol])
     spy_latest = max(bar.date for bar in market["SPY"])
-    benchmark_fresh = spy_latest >= latest_market and (point.date() - spy_latest).days <= 4
+    spy_sessions = sorted({bar.date for bar in market["SPY"]})
+    previous_session = spy_sessions[max(0, len(spy_sessions) - 2)]
+    benchmark_fresh = (
+        spy_latest >= latest_market and (point.date() - spy_latest).days <= 4
+        and all(max(bar.date for bar in market[symbol]) >= previous_session
+                for symbol in benchmarks)
+    )
+    if not benchmark_fresh:
+        raise RuntimeError("stale market/sector benchmark; previous snapshot preserved")
     issues = {
         "BACKTEST_NOT_RUN",
         "CURRENT_TICKER_MAP_SURVIVORSHIP_BIAS",
         "LIVE_EXPERIMENTAL_ROLLING_WINDOW",
         "SCORING_METHODOLOGY_INCOMPLETE",
-        "SECTOR_RS_PROXY_SPY",
+        "CURRENT_SIC_SECTOR_PROXY_V1_1",
+        "PURCHASE_ACTIVE_WINDOW_SELECTION_BIAS",
     }
     if any(source == "yahoo-chart-experimental" for source in market_sources.values()):
         issues.add("YAHOO_MARKET_DATA_FALLBACK")
@@ -386,6 +426,12 @@ def generate_live_experimental_dashboard(
         issues.add("SEC_FILING_DAY_FAILURE")
     if market_failures:
         issues.add("MARKET_SYMBOL_FAILURES")
+    if identity_report["unresolvedIssuerCount"]:
+        issues.add("UNRESOLVED_CURRENT_IDENTITIES_EXCLUDED")
+    if len(sector_by_symbol) < requested_candidates:
+        issues.add("UNMAPPED_SECTOR_NO_SCORE")
+    if identity_receipt is None:
+        issues.add("IDENTITY_HISTORY_LOCAL_ONLY")
     quality = {
         "disposition": "DEGRADED",
         "canonicalValid": True,
@@ -412,11 +458,22 @@ def generate_live_experimental_dashboard(
     candidates = list(dashboard["candidates"])
     if not candidates:
         raise RuntimeError("live inputs produced no complete experimental score candidates")
+    identity_by_ticker = {row["ticker"]: row for row in identity_rows}
     for candidate in candidates:
-        candidate["sector"] = "Unmapped / SPY proxy"
         candidate["reasons"] = list(
-            dict.fromkeys([*candidate["reasons"], "LIVE_EXPERIMENTAL", "SECTOR_RS_PROXY_SPY"])
+            dict.fromkeys(["LIVE_EXPERIMENTAL", "CURRENT_SIC_SECTOR_PROXY_V1_1",
+                           *candidate["reasons"]])
         )[:6]
+        identity = identity_by_ticker[candidate["ticker"]]
+        candidate["sourceReferences"].update({
+            "identityKnownAt": identity["knowledge_at"],
+            "identitySource": identity["provenance"]["metadata_url"],
+            "identityHash": identity["provenance"]["metadata_hash"],
+            "sectorMappingVersion": identity["provenance"]["sector_mapping_version"],
+            "sectorMappingHash": identity["provenance"]["sector_mapping_hash"],
+        })
+        if identity_receipt:
+            candidate["sourceReferences"]["identityRelease"] = identity_receipt["url"]
     dashboard["companySeries"] = _company_series(rs_frame, candidates)
     dashboard["backtest"] = []
     dashboard["quality"] = quality
@@ -464,6 +521,8 @@ def main() -> None:
     parser.add_argument("--cache-dir", type=Path, default=Path("data/cache/live-experimental"))
     parser.add_argument("--lookback-business-days", type=int, default=5)
     parser.add_argument("--max-symbols", type=int, default=0)
+    parser.add_argument("--identity-repository")
+    parser.add_argument("--identity-target")
     parser.add_argument("--execute", action="store_true")
     args = parser.parse_args()
     if not args.execute:
@@ -475,6 +534,8 @@ def main() -> None:
         user_agent=os.environ.get("SEC_USER_AGENT", ""),
         lookback_business_days=args.lookback_business_days,
         max_symbols=args.max_symbols,
+        identity_repository=args.identity_repository,
+        identity_target=args.identity_target,
     )
     print(
         f"LIVE_EXPERIMENTAL {result.run_id}: {result.candidates} candidates, "

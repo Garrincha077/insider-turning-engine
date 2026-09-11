@@ -24,7 +24,8 @@ change a cursor, publish Pages, or send alerts.
   planner still requires a point-in-time non-derivative common-stock title from
   canonical ownership data. Multiple share classes need a future explicit
   security-level contract; they are not resolved by lexical ticker sorting.
-- SIC maps through `config/sic-sector.v1.yaml`; its version and hash are retained.
+- New live observations map through `config/sic-sector.v1.1.yaml`; its version and hash are retained.
+  The old `sic-sector.v1.yaml` remains unchanged for replay.
   Unknown sectors stay `UNKNOWN`, never SPY. SIC is a sector proxy, not historical GICS.
 
 ## Run locally
@@ -83,13 +84,47 @@ The ignored bundle is `work/identity-probe-20260911`; no raw responses entered g
 
 ## Remaining production work
 
-This producer is tested but **not yet wired to scheduled durable identity storage**.
-Store append-only identity snapshots durably before connecting the full live run;
-do not put raw payloads or history into the operational `state` branch. The current
-command is sequential and has no cross-run per-CIK resume; large inventories need
-bounded sharding/resume before unattended use.
+The **Experimental Pages workflow now uses this adapter**. On each refresh it
+restores the latest checksum-verified identity history from a non-latest prerelease,
+appends current observations for purchase-active issuers in the selected SEC window,
+and uploads an immutable `sec-identity-v1-<SHA256>` Release. A read-back check must
+succeed before the new dashboard is produced. No prior observation may be discarded.
+Only allow-listed public issuer metadata and source hashes enter these Releases;
+raw payloads and the operational `state` branch remain separate.
+
+Pages refresh runs at **07:15 UTC Tuesday–Saturday**, after the previous Eastern
+SEC day is complete. It reads actually published indices within the trailing five
+weekday window, not assumed holiday files, and has a 30-minute timeout. UI-only
+deploys still preserve source dates and do not refresh identity history. There is
+one serialized Pages writer; do not run independent concurrent identity publishers.
+
+The standalone observation command remains local-only and sequential. Large
+365-day inventories still need bounded sharding/resume before unattended use.
 
 Current observations cannot repair missing historical ticker/sector evidence for
 backtests. The full SEC history/amendment gate, historical identity coverage,
 methodology freeze and sealed OOS remain separate release blockers. Identity/universe
 selection must be included in the final methodology lineage audit before freezing.
+
+## SIC v1.1 scoped correction
+
+The reviewed [SEC industry descriptions](https://www.sec.gov/search-filings/standard-industrial-classification-sic-code-list)
+identify 1040 as gold/silver ores, 1623 as heavy infrastructure construction,
+2320 as apparel, and 2510 as household furniture. The previous table put all
+1000–1399 into Energy and omitted the latter three categories. The new live-only
+mapping uses Materials (XLB) for metal mining 1000–1099, Industrials (XLI) for
+1600–1699, and Consumer Discretionary (XLY) for 2300–2399 and 2510–2519.
+This sector-ETF assignment is the engine's documented proxy inference, not an
+official SEC or GICS classification. Other broad rules are inherited, not newly certified.
+
+The five affected issuer observations in the 20-CIK probe can now map without
+inventing company-specific overrides. Golden tests check the changed boundaries
+and preserve the original v1.0 result for historical replay. The public preview
+now fetches actual sector ETFs; it never substitutes SPY for an unknown sector.
+Missing required sector benchmarks or <90% selected-symbol price coverage block
+publication. Unknown-sector issuers cannot receive a complete technical score.
+
+The preview remains a current materialization over a limited purchase-active window,
+not a sealed historical daily-close backtest or a full 365-day insider-active universe.
+Every candidate carries identity time, source hash, sector version/hash and the
+immutable identity Release link in `sourceReferences`. Alerts stay off.

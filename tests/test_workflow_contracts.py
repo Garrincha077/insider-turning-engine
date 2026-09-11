@@ -149,7 +149,7 @@ def test_tagged_dashboard_release_is_deterministic_and_immutable() -> None:
 
 
 def test_pages_validates_manifest_and_hashes_before_upload() -> None:
-    _, text = _workflow(PAGES)
+    workflow, text = _workflow(PAGES)
     assert "manifest.json" in text
     assert "validate_dashboard_directory" in text
     assert "dashboard_publication_policy" in text
@@ -163,6 +163,16 @@ def test_pages_validates_manifest_and_hashes_before_upload() -> None:
     assert "--max-symbols 50" not in text
     assert "require_settings=True" in text
     assert text.index("npm run test:e2e") < text.index("actions/upload-pages-artifact@v3")
+    assert "15 7 * * 2-6" in text
+    assert "--lookback-business-days 5" in text
+    assert '--identity-repository "$GITHUB_REPOSITORY"' in text
+    assert '--identity-target "$GITHUB_SHA"' in text
+    assert workflow["jobs"]["build"]["timeout-minutes"] == 30
+    assert workflow["jobs"]["build"]["permissions"]["contents"] == "write"
+    assert "GH_TOKEN: ${{ github.token }}" in text
+    assert (
+        "path: data/cache/live-experimental/identity-observations/*/identity-manifest.json" in text
+    )
 
 
 def test_delivery_workflow_is_explicit_main_only_and_rejects_reruns() -> None:

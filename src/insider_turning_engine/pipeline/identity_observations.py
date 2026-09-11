@@ -39,6 +39,7 @@ _US_STATES = frozenset(
     "AL AK AZ AR CA CO CT DE FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT "
     "NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY DC".split()
 )
+LIVE_SIC_MAPPING_PATH = DEFAULT_SIC_MAPPING_PATH.with_name("sic-sector.v1.1.yaml")
 
 
 def _cik(value: object) -> str:
@@ -92,7 +93,7 @@ def identity_observation(
             "metadata_url": SEC_SUBMISSIONS_URL.format(cik=cik),
             "metadata_hash": _digest(metadata) if metadata is not None else None,
             "metadata_observed_at": _utc(observed_at).isoformat(),
-            "sector_mapping_hash": _digest(DEFAULT_SIC_MAPPING_PATH.read_bytes()),
+            "sector_mapping_hash": _digest(LIVE_SIC_MAPPING_PATH.read_bytes()),
         },
     }
     reason = None
@@ -125,7 +126,9 @@ def identity_observation(
                     or normalize_ticker(ticker) is None):
                     reason = "SOURCE_LISTING_DISAGREEMENT"
                 else:
-                    sector = map_sic_to_sector_etf(profile["sic"])
+                    sector = map_sic_to_sector_etf(
+                        profile["sic"], mapping_path=LIVE_SIC_MAPPING_PATH,
+                    )
                     row.update(ticker=ticker, exchange=exchange, sic=profile["sic"],
                                country="US", sector_etf=sector.sector_etf)
                     row["provenance"]["sector_mapping_version"] = sector.mapping_version

@@ -14,8 +14,10 @@ from insider_turning_engine.ingestion.sec.identity import (
     COMPANY_TICKERS_EXCHANGE_URL,
     parse_company_tickers_exchange,
 )
+from insider_turning_engine.normalization.identity import map_sic_to_sector_etf
 from insider_turning_engine.pipeline.daily import _ticker_by_cik
 from insider_turning_engine.pipeline.identity_observations import (
+    LIVE_SIC_MAPPING_PATH,
     acquire_identity_observations,
     identity_observation,
     merge_observations,
@@ -182,3 +184,16 @@ def test_cli_preview_needs_no_network_or_sec_credentials(tmp_path, monkeypatch):
     assert result.exit_code == 0, result.output
     assert json.loads(result.stdout)["issuerCount"] == 2
     assert not (tmp_path / "out").exists()
+
+
+@pytest.mark.parametrize("sic,expected", [
+    ("1040", "XLB"), ("1099", "XLB"), ("1100", "UNKNOWN"), ("1221", "XLE"),
+    ("1311", "XLE"), ("1623", "XLI"), ("1699", "XLI"), ("1700", "UNKNOWN"),
+    ("2320", "XLY"), ("2510", "XLY"), ("2519", "XLY"), ("2520", "UNKNOWN"),
+    ("2834", "XLV"), ("3840", "XLV"), ("3852", "XLI"), ("9999", "UNKNOWN"),
+])
+def test_live_sector_v11_golden_boundaries_preserve_old_replay(sic, expected):
+    result = map_sic_to_sector_etf(sic, mapping_path=LIVE_SIC_MAPPING_PATH)
+    assert result.sector_etf == expected
+    assert result.mapping_version == "1.1.0"
+    assert map_sic_to_sector_etf("1040").sector_etf == "XLE"  # unchanged archived v1.0
