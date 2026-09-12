@@ -1,1 +1,14 @@
-{}
+{
+  "asOf": "2026-09-12T08:12:02.029791+00:00",
+  "canonicalCursorAdvanced": false,
+  "lastObservedSecDay": "2026-09-11",
+  "researchSnapshot": {
+    "runId": "run_research_20260912T080902Z",
+    "sha256": "b082d38077a25349c28134a8a96ae38b790b222705710370131bdad0420ca336",
+    "storageStatus": "VERIFIED",
+    "tag": "research-day-v2-2026-09-12-b082d38077a25349c28134a8a96ae38b790b222705710370131bdad0420ca336",
+    "url": "https://github.com/Garrincha077/insider-turning-engine/releases/tag/research-day-v2-2026-09-12-b082d38077a25349c28134a8a96ae38b790b222705710370131bdad0420ca336"
+  },
+  "runId": "run_research_20260912T080902Z",
+  "schemaVersion": "2.0.0"
+}
