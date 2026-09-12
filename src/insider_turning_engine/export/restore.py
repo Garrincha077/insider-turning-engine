@@ -49,7 +49,8 @@ def restore_publication(output: Path, client: httpx.Client) -> None:
             not isinstance(path, str) or not path or "\\" in path or ":" in path
             or PurePosixPath(path).is_absolute() or ".." in PurePosixPath(path).parts
             or path == "manifest.json" or path in names
-            or not isinstance(size, int) or not 0 < size <= 10_000_000
+            or not isinstance(size, int)
+            or not 0 < size <= (64 * 1024 * 1024 if path == "research-v2.json" else 10_000_000)
         ):
             raise DashboardExportError("unsafe published file inventory")
         names.add(path)

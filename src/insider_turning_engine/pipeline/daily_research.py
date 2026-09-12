@@ -145,6 +145,12 @@ def materialize_research(
         signals=scoring.signals, quality=quality, score_version="scoring.v1",
         include_legacy_pulse=False,
     )
+    # Watermarks describe available sources, not just fully scored companies.
+    accepted = [row.timestamps.accepted_at for row in available
+                if row.timestamps.accepted_at is not None]
+    legacy["watermarks"]["secAcceptedThrough"] = max(accepted).isoformat() if accepted else None
+    legacy["watermarks"]["marketSessionThrough"] = max(
+        (bar.date.isoformat() for rows in fresh.values() for bar in rows), default=None)
     states = {cik: dict(row) for cik, row in prior.items()}
     states.update({str(row["issuer_cik"]): {**prior.get(str(row["issuer_cik"]), {}),
                                           **dict(row)} for row in scoring.states})
