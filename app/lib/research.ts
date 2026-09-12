@@ -45,9 +45,22 @@ const reasonLabels: Record<string, string> = {
   INSUFFICIENT_COMPONENT_DATA: 'One or more required score inputs are unavailable.',
   LOW_CONFIDENCE_HISTORY: 'Limited prior history reduces confidence.',
   STALE_DATA_HOLD: 'State held because a required data source is stale.',
+  SAME_SESSION_STATE_REUSED: 'The recorded state is reused; rerunning one market session does not advance hysteresis.',
+  UNRESOLVED_IDENTITY: 'A unique eligible US common-stock identity is not yet resolved. SEC facts remain inspectable.',
+  UNRESOLVED_AMENDMENT: 'An unresolved correction prevents reliable issuer totals and scores.',
+  SOURCE_QUARANTINE: 'A filing for this issuer contains quarantined rows. Its totals and scores are withheld until repaired.',
+  JOINT_OWNER_SCORE_NOT_RECOMPUTED: 'Joint reporting owners are counted once in factual totals; the legacy score is withheld until its owner weighting is reconciled.',
   FIRST_BUY_3Y: 'First observed purchase in a three-year history.',
   INSIDER_REENTRY: 'Buying resumed after a prolonged gap.',
 };
+export function observedContext(data: DashboardData, company: Candidate): string {
+  if (!data.research) return 'Price drawdown history: not exported in v1.';
+  const rows = data.research.companySeries.filter((row) => row.issuerCik === company.issuerCik).sort((a, b) => a.date.localeCompare(b.date));
+  const latest = rows.at(-1);
+  const high = rows.length ? Math.max(...rows.map((row) => row.price)) : 0;
+  const buys = data.research.economicTransactions.filter((row) => row.issuerCik === company.issuerCik && row.aggregateEligible && row.side === 'BUY');
+  return `${latest && high > 0 ? `${metric((latest.price / high - 1) * 100)}% from observed price high · ${rows[0].date}–${latest.date}` : 'Price history unavailable'} · ${buys.length} observed purchases, ${money(buys.reduce((sum, row) => sum + (row.value ?? 0), 0), true)}. Window may be incomplete.`;
+}
 export function reasonText(value: string): string {
   return reasonLabels[value] ?? (/^[A-Z\d_: .-]+$/.test(value) ? value.replaceAll('_', ' ').toLowerCase().replace(/^\w/, (s) => s.toUpperCase()) : value);
 }

@@ -1,0 +1,207 @@
+{
+  "schemaVersion": "2.0.0",
+  "source": "canonical-sec-research",
+  "runId": "run_research_fixture_001",
+  "asOf": "2026-08-31T21:00:00Z",
+  "scoreVersion": "scoring.v1",
+  "companies": [
+    {
+      "issuerCik": "0001999001",
+      "ticker": "ACME",
+      "name": "Acme Synthetic Holdings",
+      "sector": "Technology",
+      "identityStatus": "RESOLVED",
+      "insiderStatus": "AVAILABLE",
+      "currentPrice": 11.0,
+      "basis": [
+        {
+          "days": 30,
+          "start": "2026-08-02",
+          "end": "2026-08-31",
+          "weightedBasis": 10.0,
+          "purchaseValue": 2000.0,
+          "purchaseCount": 2,
+          "coverage": "PARTIAL"
+        },
+        {
+          "days": 90,
+          "start": "2026-06-03",
+          "end": "2026-08-31",
+          "weightedBasis": 10.0,
+          "purchaseValue": 2000.0,
+          "purchaseCount": 2,
+          "coverage": "PARTIAL"
+        }
+      ]
+    }
+  ],
+  "economicTransactions": [
+    {
+      "eventId": "evt_f41361c095b79a144e9c5f08277ebbe4cd2baace417743f73e9815a4a6bca4ad",
+      "issuerCik": "0001999001",
+      "accession": "0001234567-26-000001",
+      "table": "NON_DERIVATIVE",
+      "rowSequence": 1,
+      "transactionDate": "2026-08-20",
+      "acceptedAt": "2026-08-28T21:00:00Z",
+      "knownAt": "2026-08-28T21:00:00Z",
+      "code": "P",
+      "side": "BUY",
+      "shares": 100.0,
+      "price": 10.0,
+      "value": 1000.0,
+      "ownership": "D",
+      "rule10b51": "false",
+      "sourceUrl": "https://www.sec.gov/Archives/test.xml",
+      "owners": [
+        {
+          "ownerCik": "0001999101",
+          "role": "Director"
+        },
+        {
+          "ownerCik": "0001999102",
+          "role": "Director"
+        }
+      ],
+      "processing": "EFFECTIVE",
+      "qualified": true,
+      "aggregateEligible": true
+    },
+    {
+      "eventId": "evt_47b796fcac8d63f22a7715e98d69f2b54c90bbdea63cc7c05782d30e9946b154",
+      "issuerCik": "0001999001",
+      "accession": "0001234567-26-000002",
+      "table": "NON_DERIVATIVE",
+      "rowSequence": 1,
+      "transactionDate": "2026-08-20",
+      "acceptedAt": "2026-08-28T21:00:00Z",
+      "knownAt": "2026-08-28T21:00:00Z",
+      "code": "P",
+      "side": "BUY",
+      "shares": 100.0,
+      "price": 10.0,
+      "value": 1000.0,
+      "ownership": "D",
+      "rule10b51": "false",
+      "sourceUrl": "https://www.sec.gov/Archives/test.xml",
+      "owners": [
+        {
+          "ownerCik": "0001999103",
+          "role": "Director"
+        }
+      ],
+      "processing": "EFFECTIVE",
+      "qualified": true,
+      "aggregateEligible": true
+    }
+  ],
+  "reportingOwners": [
+    {
+      "ownerCik": "0001999101",
+      "name": "Jordan Example"
+    },
+    {
+      "ownerCik": "0001999102",
+      "name": "Jordan Example"
+    },
+    {
+      "ownerCik": "0001999103",
+      "name": "Jordan Example"
+    }
+  ],
+  "researchScores": [
+    {
+      "issuerCik": "0001999001",
+      "total": null,
+      "insider": null,
+      "divergence": null,
+      "turn": null,
+      "cluster": null,
+      "marketRs": null,
+      "sectorRs": null,
+      "state": "UNKNOWN",
+      "stateChangedAt": null,
+      "reasons": [
+        "JOINT_OWNER_SCORE_NOT_RECOMPUTED"
+      ],
+      "scoreVersion": "scoring.v1",
+      "methodologyHash": null,
+      "configHash": null,
+      "runId": "run_research_fixture_001",
+      "asOf": "2026-08-31T21:00:00Z"
+    }
+  ],
+  "clusters": [
+    {
+      "clusterId": "clu_8ff27c50384ae02e4e03607e13e01eab2f94ca39a2ef05aae326e1bd75a63ce2",
+      "issuerCik": "0001999001",
+      "start": "2026-08-20",
+      "end": "2026-08-20",
+      "ownerCiks": [
+        "0001999101",
+        "0001999102",
+        "0001999103"
+      ],
+      "eventIds": [
+        "evt_47b796fcac8d63f22a7715e98d69f2b54c90bbdea63cc7c05782d30e9946b154",
+        "evt_f41361c095b79a144e9c5f08277ebbe4cd2baace417743f73e9815a4a6bca4ad"
+      ],
+      "purchaseValue": 2000.0
+    }
+  ],
+  "companySeries": [
+    {
+      "issuerCik": "0001999001",
+      "date": "2026-08-20",
+      "price": 9.0,
+      "volume": 10000.0,
+      "marketRs": null,
+      "sectorRs": null
+    },
+    {
+      "issuerCik": "0001999001",
+      "date": "2026-08-31",
+      "price": 11.0,
+      "volume": 12000.0,
+      "marketRs": 1.0,
+      "sectorRs": 2.0
+    }
+  ],
+  "coverage": {
+    "scope": "Observed SEC filings; not a census of the US market or complete 90D history",
+    "expectedSecDays": [],
+    "days": [],
+    "missingSecDays": [],
+    "canonicalOwnerRows": 3,
+    "economicEvents": 2,
+    "eligibleCompanies": 1,
+    "resolvedIdentities": 1,
+    "pricedCompanies": 1,
+    "completeScores": 0,
+    "unresolvedAmendmentIssuers": [],
+    "exclusions": {
+      "UNRESOLVED_IDENTITY": 0,
+      "UNRESOLVED_AMENDMENT": 0
+    }
+  },
+  "readiness": {
+    "dashboard": {
+      "status": "PARTIAL",
+      "reasons": [
+        "SEC_WINDOW_PARTIAL"
+      ]
+    },
+    "digest": {
+      "status": "BLOCKED",
+      "reasons": [
+        "DIGEST_POLICY_NOT_CONNECTED"
+      ]
+    },
+    "predictive": {
+      "status": "BLOCKED",
+      "reasons": [
+        "NOT_HISTORICALLY_VALIDATED"
+      ]
+    }
+  }
+}

@@ -1,5 +1,6 @@
 import type { DashboardData } from './dashboard-data';
 import type { PublicationManifest, SettingsStatus } from './operations-data';
+import { adaptResearch, validateResearch } from './research-v2';
 
 export async function loadPublication(signal: AbortSignal) {
   const root = `${import.meta.env.BASE_URL}data/`;
@@ -39,5 +40,7 @@ export async function loadPublication(signal: AbortSignal) {
       (settings.alertsAllowed && manifest.quality.disposition !== 'PASS')) {
     throw new Error('Publication readiness is inconsistent');
   }
-  return { data, manifest, settings };
+  const research = manifest.files.some((row) => row.path === 'research-v2.json')
+    ? validateResearch(await verified<unknown>('research-v2.json'), manifest) : null;
+  return { data: research ? adaptResearch(data, research) : data, manifest, settings };
 }

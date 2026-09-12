@@ -143,6 +143,7 @@ def build_dashboard_input(
     signals: Sequence[Mapping[str, Any]],
     quality: Mapping[str, Any],
     score_version: str,
+    include_legacy_pulse: bool = True,
 ) -> dict[str, Any]:
     """Return an exporter-ready, deterministic dashboard projection."""
 
@@ -201,7 +202,8 @@ def build_dashboard_input(
         for cik, ticker in ticker_by_cik.items()
         if ticker in sector_by_ticker
     }
-    pulse = _pulse_rows(records, as_of=as_of, sector_by_issuer=sector_by_issuer)
+    pulse = (_pulse_rows(records, as_of=as_of, sector_by_issuer=sector_by_issuer)
+             if include_legacy_pulse else [])
     weekly = [row for row in pulse if row.get("grain") == "weekly"]
     market_row = next((row for row in weekly if row.get("scope") == "market"), {})
     technology = next(

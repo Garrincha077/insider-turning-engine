@@ -1,0 +1,963 @@
+{
+  "$defs": {
+    "BasisWindow": {
+      "additionalProperties": false,
+      "properties": {
+        "days": {
+          "enum": [
+            30,
+            90
+          ],
+          "title": "Days",
+          "type": "integer"
+        },
+        "start": {
+          "format": "date",
+          "title": "Start",
+          "type": "string"
+        },
+        "end": {
+          "format": "date",
+          "title": "End",
+          "type": "string"
+        },
+        "weightedBasis": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Weightedbasis"
+        },
+        "purchaseValue": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Purchasevalue"
+        },
+        "purchaseCount": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Purchasecount"
+        },
+        "coverage": {
+          "enum": [
+            "OBSERVED_COMPLETE_SEC_WINDOW",
+            "PARTIAL",
+            "BLOCKED"
+          ],
+          "title": "Coverage",
+          "type": "string"
+        }
+      },
+      "required": [
+        "days",
+        "start",
+        "end",
+        "weightedBasis",
+        "purchaseValue",
+        "purchaseCount",
+        "coverage"
+      ],
+      "title": "BasisWindow",
+      "type": "object"
+    },
+    "Cluster": {
+      "additionalProperties": false,
+      "properties": {
+        "clusterId": {
+          "title": "Clusterid",
+          "type": "string"
+        },
+        "issuerCik": {
+          "pattern": "^\\d{10}$",
+          "title": "Issuercik",
+          "type": "string"
+        },
+        "start": {
+          "format": "date",
+          "title": "Start",
+          "type": "string"
+        },
+        "end": {
+          "format": "date",
+          "title": "End",
+          "type": "string"
+        },
+        "ownerCiks": {
+          "items": {
+            "pattern": "^\\d{10}$",
+            "type": "string"
+          },
+          "minItems": 2,
+          "title": "Ownerciks",
+          "type": "array"
+        },
+        "eventIds": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 2,
+          "title": "Eventids",
+          "type": "array"
+        },
+        "purchaseValue": {
+          "minimum": 0,
+          "title": "Purchasevalue",
+          "type": "number"
+        }
+      },
+      "required": [
+        "clusterId",
+        "issuerCik",
+        "start",
+        "end",
+        "ownerCiks",
+        "eventIds",
+        "purchaseValue"
+      ],
+      "title": "Cluster",
+      "type": "object"
+    },
+    "DayEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "day": {
+          "format": "date",
+          "title": "Day",
+          "type": "string"
+        },
+        "discoveredFilings": {
+          "minimum": 0,
+          "title": "Discoveredfilings",
+          "type": "integer"
+        },
+        "storedFilings": {
+          "minimum": 0,
+          "title": "Storedfilings",
+          "type": "integer"
+        },
+        "parseRows": {
+          "minimum": 0,
+          "title": "Parserows",
+          "type": "integer"
+        },
+        "quarantinedRows": {
+          "minimum": 0,
+          "title": "Quarantinedrows",
+          "type": "integer"
+        },
+        "failures": {
+          "minimum": 0,
+          "title": "Failures",
+          "type": "integer"
+        },
+        "complete": {
+          "title": "Complete",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "day",
+        "discoveredFilings",
+        "storedFilings",
+        "parseRows",
+        "quarantinedRows",
+        "failures",
+        "complete"
+      ],
+      "title": "DayEvidence",
+      "type": "object"
+    },
+    "EconomicEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "eventId": {
+          "title": "Eventid",
+          "type": "string"
+        },
+        "issuerCik": {
+          "pattern": "^\\d{10}$",
+          "title": "Issuercik",
+          "type": "string"
+        },
+        "accession": {
+          "title": "Accession",
+          "type": "string"
+        },
+        "table": {
+          "enum": [
+            "NON_DERIVATIVE",
+            "DERIVATIVE"
+          ],
+          "title": "Table",
+          "type": "string"
+        },
+        "rowSequence": {
+          "minimum": 1,
+          "title": "Rowsequence",
+          "type": "integer"
+        },
+        "transactionDate": {
+          "format": "date",
+          "title": "Transactiondate",
+          "type": "string"
+        },
+        "secDay": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Secday"
+        },
+        "securityTitle": {
+          "default": "",
+          "title": "Securitytitle",
+          "type": "string"
+        },
+        "acceptedAt": {
+          "format": "date-time",
+          "title": "Acceptedat",
+          "type": "string"
+        },
+        "knownAt": {
+          "format": "date-time",
+          "title": "Knownat",
+          "type": "string"
+        },
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "side": {
+          "enum": [
+            "BUY",
+            "SELL",
+            "OTHER"
+          ],
+          "title": "Side",
+          "type": "string"
+        },
+        "shares": {
+          "minimum": 0,
+          "title": "Shares",
+          "type": "number"
+        },
+        "price": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Price"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        },
+        "ownership": {
+          "enum": [
+            "D",
+            "I"
+          ],
+          "title": "Ownership",
+          "type": "string"
+        },
+        "rule10b51": {
+          "enum": [
+            "true",
+            "false",
+            "unknown"
+          ],
+          "title": "Rule10B51",
+          "type": "string"
+        },
+        "sourceUrl": {
+          "pattern": "^https://(?:www\\.)?sec\\.gov/",
+          "title": "Sourceurl",
+          "type": "string"
+        },
+        "owners": {
+          "items": {
+            "$ref": "#/$defs/OwnerLink"
+          },
+          "minItems": 1,
+          "title": "Owners",
+          "type": "array"
+        },
+        "processing": {
+          "enum": [
+            "EFFECTIVE",
+            "UNRESOLVED_AMENDMENT"
+          ],
+          "title": "Processing",
+          "type": "string"
+        },
+        "qualified": {
+          "title": "Qualified",
+          "type": "boolean"
+        },
+        "aggregateEligible": {
+          "title": "Aggregateeligible",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "eventId",
+        "issuerCik",
+        "accession",
+        "table",
+        "rowSequence",
+        "transactionDate",
+        "acceptedAt",
+        "knownAt",
+        "code",
+        "side",
+        "shares",
+        "price",
+        "value",
+        "ownership",
+        "rule10b51",
+        "sourceUrl",
+        "owners",
+        "processing",
+        "qualified",
+        "aggregateEligible"
+      ],
+      "title": "EconomicEvent",
+      "type": "object"
+    },
+    "Owner": {
+      "additionalProperties": false,
+      "properties": {
+        "ownerCik": {
+          "pattern": "^\\d{10}$",
+          "title": "Ownercik",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ownerCik",
+        "name"
+      ],
+      "title": "Owner",
+      "type": "object"
+    },
+    "OwnerLink": {
+      "additionalProperties": false,
+      "properties": {
+        "ownerCik": {
+          "pattern": "^\\d{10}$",
+          "title": "Ownercik",
+          "type": "string"
+        },
+        "role": {
+          "title": "Role",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ownerCik",
+        "role"
+      ],
+      "title": "OwnerLink",
+      "type": "object"
+    },
+    "Readiness": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "enum": [
+            "READY",
+            "PARTIAL",
+            "BLOCKED"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        }
+      },
+      "required": [
+        "status",
+        "reasons"
+      ],
+      "title": "Readiness",
+      "type": "object"
+    },
+    "ResearchCompany": {
+      "additionalProperties": false,
+      "properties": {
+        "issuerCik": {
+          "pattern": "^\\d{10}$",
+          "title": "Issuercik",
+          "type": "string"
+        },
+        "ticker": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ticker"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "sector": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sector"
+        },
+        "identityStatus": {
+          "enum": [
+            "RESOLVED",
+            "UNRESOLVED"
+          ],
+          "title": "Identitystatus",
+          "type": "string"
+        },
+        "insiderStatus": {
+          "enum": [
+            "AVAILABLE",
+            "UNRESOLVED_AMENDMENT",
+            "SOURCE_QUARANTINE"
+          ],
+          "title": "Insiderstatus",
+          "type": "string"
+        },
+        "currentPrice": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Currentprice"
+        },
+        "basis": {
+          "items": {
+            "$ref": "#/$defs/BasisWindow"
+          },
+          "title": "Basis",
+          "type": "array"
+        }
+      },
+      "required": [
+        "issuerCik",
+        "ticker",
+        "name",
+        "sector",
+        "identityStatus",
+        "insiderStatus",
+        "currentPrice",
+        "basis"
+      ],
+      "title": "ResearchCompany",
+      "type": "object"
+    },
+    "ResearchCoverage": {
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "title": "Scope",
+          "type": "string"
+        },
+        "expectedSecDays": {
+          "items": {
+            "format": "date",
+            "type": "string"
+          },
+          "title": "Expectedsecdays",
+          "type": "array"
+        },
+        "days": {
+          "items": {
+            "$ref": "#/$defs/DayEvidence"
+          },
+          "title": "Days",
+          "type": "array"
+        },
+        "missingSecDays": {
+          "items": {
+            "format": "date",
+            "type": "string"
+          },
+          "title": "Missingsecdays",
+          "type": "array"
+        },
+        "canonicalOwnerRows": {
+          "title": "Canonicalownerrows",
+          "type": "integer"
+        },
+        "economicEvents": {
+          "title": "Economicevents",
+          "type": "integer"
+        },
+        "eligibleCompanies": {
+          "title": "Eligiblecompanies",
+          "type": "integer"
+        },
+        "resolvedIdentities": {
+          "title": "Resolvedidentities",
+          "type": "integer"
+        },
+        "pricedCompanies": {
+          "title": "Pricedcompanies",
+          "type": "integer"
+        },
+        "completeScores": {
+          "title": "Completescores",
+          "type": "integer"
+        },
+        "unresolvedAmendmentIssuers": {
+          "items": {
+            "pattern": "^\\d{10}$",
+            "type": "string"
+          },
+          "title": "Unresolvedamendmentissuers",
+          "type": "array"
+        },
+        "exclusions": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Exclusions",
+          "type": "object"
+        }
+      },
+      "required": [
+        "scope",
+        "expectedSecDays",
+        "days",
+        "missingSecDays",
+        "canonicalOwnerRows",
+        "economicEvents",
+        "eligibleCompanies",
+        "resolvedIdentities",
+        "pricedCompanies",
+        "completeScores",
+        "unresolvedAmendmentIssuers",
+        "exclusions"
+      ],
+      "title": "ResearchCoverage",
+      "type": "object"
+    },
+    "ResearchReadiness": {
+      "additionalProperties": false,
+      "properties": {
+        "dashboard": {
+          "$ref": "#/$defs/Readiness"
+        },
+        "digest": {
+          "$ref": "#/$defs/Readiness"
+        },
+        "predictive": {
+          "$ref": "#/$defs/Readiness"
+        }
+      },
+      "required": [
+        "dashboard",
+        "digest",
+        "predictive"
+      ],
+      "title": "ResearchReadiness",
+      "type": "object"
+    },
+    "ResearchScore": {
+      "additionalProperties": false,
+      "properties": {
+        "issuerCik": {
+          "pattern": "^\\d{10}$",
+          "title": "Issuercik",
+          "type": "string"
+        },
+        "total": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Total"
+        },
+        "insider": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Insider"
+        },
+        "divergence": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Divergence"
+        },
+        "turn": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Turn"
+        },
+        "cluster": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cluster"
+        },
+        "marketRs": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Marketrs"
+        },
+        "sectorRs": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sectorrs"
+        },
+        "state": {
+          "enum": [
+            "UNKNOWN",
+            "FALLING",
+            "INSIDER_ACCUMULATION",
+            "BASE_FORMING",
+            "EARLY_TURN",
+            "CONFIRMED_TURN"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "stateChangedAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Statechangedat"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "scoreVersion": {
+          "title": "Scoreversion",
+          "type": "string"
+        },
+        "methodologyHash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Methodologyhash"
+        },
+        "configHash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Confighash"
+        },
+        "runId": {
+          "title": "Runid",
+          "type": "string"
+        },
+        "asOf": {
+          "format": "date-time",
+          "title": "Asof",
+          "type": "string"
+        }
+      },
+      "required": [
+        "issuerCik",
+        "total",
+        "insider",
+        "divergence",
+        "turn",
+        "cluster",
+        "marketRs",
+        "sectorRs",
+        "state",
+        "stateChangedAt",
+        "reasons",
+        "scoreVersion",
+        "methodologyHash",
+        "configHash",
+        "runId",
+        "asOf"
+      ],
+      "title": "ResearchScore",
+      "type": "object"
+    },
+    "SeriesPoint": {
+      "additionalProperties": false,
+      "properties": {
+        "issuerCik": {
+          "pattern": "^\\d{10}$",
+          "title": "Issuercik",
+          "type": "string"
+        },
+        "date": {
+          "format": "date",
+          "title": "Date",
+          "type": "string"
+        },
+        "price": {
+          "minimum": 0,
+          "title": "Price",
+          "type": "number"
+        },
+        "volume": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Volume"
+        },
+        "marketRs": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Marketrs"
+        },
+        "sectorRs": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sectorrs"
+        }
+      },
+      "required": [
+        "issuerCik",
+        "date",
+        "price",
+        "volume",
+        "marketRs",
+        "sectorRs"
+      ],
+      "title": "SeriesPoint",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": "2.0.0",
+      "default": "2.0.0",
+      "title": "Schemaversion",
+      "type": "string"
+    },
+    "source": {
+      "const": "canonical-sec-research",
+      "default": "canonical-sec-research",
+      "title": "Source",
+      "type": "string"
+    },
+    "runId": {
+      "title": "Runid",
+      "type": "string"
+    },
+    "asOf": {
+      "format": "date-time",
+      "title": "Asof",
+      "type": "string"
+    },
+    "scoreVersion": {
+      "title": "Scoreversion",
+      "type": "string"
+    },
+    "companies": {
+      "items": {
+        "$ref": "#/$defs/ResearchCompany"
+      },
+      "title": "Companies",
+      "type": "array"
+    },
+    "economicTransactions": {
+      "items": {
+        "$ref": "#/$defs/EconomicEvent"
+      },
+      "title": "Economictransactions",
+      "type": "array"
+    },
+    "reportingOwners": {
+      "items": {
+        "$ref": "#/$defs/Owner"
+      },
+      "title": "Reportingowners",
+      "type": "array"
+    },
+    "researchScores": {
+      "items": {
+        "$ref": "#/$defs/ResearchScore"
+      },
+      "title": "Researchscores",
+      "type": "array"
+    },
+    "clusters": {
+      "items": {
+        "$ref": "#/$defs/Cluster"
+      },
+      "title": "Clusters",
+      "type": "array"
+    },
+    "companySeries": {
+      "items": {
+        "$ref": "#/$defs/SeriesPoint"
+      },
+      "title": "Companyseries",
+      "type": "array"
+    },
+    "coverage": {
+      "$ref": "#/$defs/ResearchCoverage"
+    },
+    "readiness": {
+      "$ref": "#/$defs/ResearchReadiness"
+    }
+  },
+  "required": [
+    "runId",
+    "asOf",
+    "scoreVersion",
+    "companies",
+    "economicTransactions",
+    "reportingOwners",
+    "researchScores",
+    "clusters",
+    "companySeries",
+    "coverage",
+    "readiness"
+  ],
+  "title": "ResearchSnapshot",
+  "type": "object"
+}

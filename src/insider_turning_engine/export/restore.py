@@ -84,6 +84,9 @@ def restore_publication(output: Path, client: httpx.Client) -> None:
             dashboard["settingsStatus"] = json.loads(
                 (root / "settings-status.json").read_text("utf-8")
             )
+        if (root / "research-v2.json").exists():
+            dashboard["researchSnapshot"] = json.loads(
+                (root / "research-v2.json").read_text("utf-8"))
         export_dashboard(
             dashboard, output, run_id=checked["runId"], as_of=checked["asOf"],
             generated_at=checked["generatedAt"], chunk_by_ticker=True,

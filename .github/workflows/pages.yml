@@ -4,12 +4,12 @@ on:
   push:
     branches: [main]
   schedule:
-    # Prior Eastern SEC day is complete; durable acquisition starts at 06:30 UTC.
+    # One daily graph: restore -> SEC -> market -> snapshot -> Pages (digest separate gate).
     - cron: "15 7 * * 2-6"
   workflow_dispatch:
     inputs:
       refresh_data:
-        description: Refresh the experimental SEC/market snapshot (otherwise preserve source dates)
+        description: Refresh canonical daily research (otherwise preserve published source dates)
         type: boolean
         default: false
 
@@ -19,7 +19,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  group: daily-research-pipeline
   cancel-in-progress: false
 
 env:
@@ -28,9 +28,9 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
-      contents: write # immutable identity Releases; never raw/cache or state branch
+      contents: write # immutable normalized Releases and small allow-listed operational state
       pages: write
       id-token: write
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
@@ -43,6 +43,12 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --all-groups --frozen
+      - name: Restore durable delivery and score state
+        id: state
+        shell: bash
+        run: |
+          uv run python -m insider_turning_engine.notifications.state_store restore
+          echo "head=$(git -C work/notification-state rev-parse --verify HEAD 2>/dev/null || true)" >> "$GITHUB_OUTPUT"
       - name: Preserve published data for UI-only deploys
         if: github.event_name != 'schedule' && inputs.refresh_data != true
         run: >-
@@ -57,29 +63,44 @@ jobs:
             echo "SEC_USER_AGENT repository variable is required"
             exit 1
           }
-      - name: Build real-data live experimental snapshot
+      - uses: actions/cache@v4
+        if: github.event_name == 'schedule' || inputs.refresh_data == true
+        with:
+          path: work/daily-research/market
+          key: daily-market-v2-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: daily-market-v2-${{ runner.os }}-
+      - name: Acquire latest SEC days and materialize canonical daily research
         if: github.event_name == 'schedule' || inputs.refresh_data == true
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
-          uv run python -m insider_turning_engine.pipeline.live_experimental
+          uv run python -m insider_turning_engine.pipeline.daily_research
           --output app/public/data
-          --cache-dir data/cache/live-experimental
-          --lookback-business-days 5
-          --max-symbols 0
-          --identity-repository "$GITHUB_REPOSITORY"
-          --identity-target "$GITHUB_SHA"
+          --work work/daily-research
+          --prior-state work/notification-state/prior-states.json
+          --repository "$GITHUB_REPOSITORY"
+          --target "$GITHUB_SHA"
           --execute
-      - name: Preserve compact identity acquisition diagnostics
+      - name: Persist state only after verified immutable snapshot storage
+        if: github.event_name == 'schedule' || inputs.refresh_data == true
+        env:
+          EXPECTED_STATE_HEAD: ${{ steps.state.outputs.head }}
+        run: >-
+          uv run python -m insider_turning_engine.notifications.state_store sync
+          --store work/research-state-commit
+          --incoming work/daily-research/incoming-state
+          --expected-head "$EXPECTED_STATE_HEAD"
+      - name: Preserve compact acquisition and daily diagnostics
         if: always() && (github.event_name == 'schedule' || inputs.refresh_data == true)
         uses: actions/upload-artifact@v4
         with:
-          name: identity-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
-          path: data/cache/live-experimental/identity-observations/*/identity-manifest.json
+          name: daily-research-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            work/daily-research/identities/identity-manifest.json
+            work/daily-research/acquisition/acquisition-status.json
+            work/daily-research/daily-report.json
           if-no-files-found: warn
           retention-days: 90
-      - name: Restore durable delivery history
-        run: uv run python -m insider_turning_engine.notifications.state_store restore
       - name: Export masked operational settings
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -128,25 +149,7 @@ jobs:
           test -s app/dist/index.html
           test -s app/dist/data/dashboard.json
           test -s app/dist/data/manifest.json
-          uv run python - <<'PY'
-          import json
-          from pathlib import Path
-
-          from insider_turning_engine.export import (
-              dashboard_experimental_publication_policy,
-              dashboard_publication_policy,
-              validate_dashboard_directory,
-          )
-
-          manifest = validate_dashboard_directory(Path("app/dist/data"), require_settings=True)
-          publishable, _ = dashboard_publication_policy(manifest)
-          if publishable:
-              raise SystemExit(0)
-          experimental, alerts = dashboard_experimental_publication_policy(manifest)
-          if not experimental or alerts:
-              raise SystemExit("live dashboard does not satisfy experimental Pages policy")
-          print("Deploying LIVE_EXPERIMENTAL snapshot; validated alerts remain disabled")
-          PY
+          uv run python -m insider_turning_engine.export.research_policy --directory app/dist/data
       - uses: actions/configure-pages@v5
         with:
           enablement: true

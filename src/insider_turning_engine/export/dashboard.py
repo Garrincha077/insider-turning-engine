@@ -26,6 +26,7 @@ from typing import Any, cast
 from jsonschema import Draft202012Validator, FormatChecker
 from jsonschema.exceptions import SchemaError
 
+from insider_turning_engine.domain.research import ResearchSnapshot
 from insider_turning_engine.domain.scoring_lock import ScoringLockError, load_scoring_lock
 
 
@@ -148,6 +149,11 @@ def export_dashboard(
     try:
         _write_bytes(temporary / "dashboard.json", dashboard_bytes)
         files: list[dict[str, Any]] = [_file_record(temporary, "dashboard.json")]
+        if data.get("researchSnapshot") is not None:
+            research = _validate_research(data["researchSnapshot"], publication_run_id,
+                                          as_of_text, str(dashboard["scoreVersion"]))
+            _write_bytes(temporary / "research-v2.json", _canonical_bytes(research))
+            files.append(_file_record(temporary, "research-v2.json"))
         settings_status = data.get("settingsStatus") or _default_settings_status(generated)
         if not isinstance(settings_status, Mapping):
             raise DashboardExportError("settingsStatus must be an object")
@@ -671,6 +677,10 @@ def validate_dashboard_directory(
     if not isinstance(dashboard, Mapping):
         raise DashboardExportError("dashboard.json must contain an object")
     _validate_dashboard(dashboard)
+    if "research-v2.json" in expected_paths:
+        _validate_research(json.loads((root / "research-v2.json").read_text(encoding="utf-8")),
+                           str(manifest["runId"]), str(manifest["asOf"]),
+                           str(manifest["scoreVersion"]))
     if dashboard["scoreVersion"] != manifest["scoreVersion"]:
         raise DashboardExportError("dashboard and manifest score versions disagree")
     if (dashboard["status"] == "VALIDATED") != (manifest["status"] == "SUCCEEDED"):
@@ -690,6 +700,19 @@ def validate_dashboard_directory(
     ):
         raise DashboardExportError("settings cannot enable alerts for a non-PASS snapshot")
     return manifest
+
+
+def _validate_research(value: Any, run_id: str, as_of: str, score_version: str) -> dict[str, Any]:
+    try:
+        snapshot = ResearchSnapshot.model_validate(value)
+    except ValueError as exc:
+        raise DashboardExportError("research v2 contract invalid") from exc
+    if (snapshot.run_id != run_id or snapshot.as_of != datetime.fromisoformat(as_of)
+            or snapshot.score_version != score_version):
+        raise DashboardExportError("research v2 publication lineage mismatch")
+    public = snapshot.model_dump(mode="json", by_alias=True)
+    _validate_schema(public, "research-snapshot.v2.schema.json", "research v2")
+    return public
 
 
 def dashboard_publication_policy(manifest: Mapping[str, Any]) -> tuple[bool, bool]:

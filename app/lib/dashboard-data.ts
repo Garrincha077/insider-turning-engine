@@ -1,3 +1,5 @@
+import type { ResearchSnapshot } from './research-v2';
+
 export type EngineState =
   | 'UNKNOWN'
   | 'FALLING'
@@ -31,10 +33,19 @@ export type Filing = {
   owner: string;
   role: string;
   side: 'BUY' | 'SELL';
-  value: number;
+  value: number | null;
   filedAt: string;
   accession: string;
   sourceReferences?: { url?: string };
+  eventId?: string;
+  issuerCik?: string;
+  transactionDate?: string;
+  shares?: number;
+  price?: number | null;
+  rule10b51?: 'true' | 'false' | 'unknown';
+  processing?: 'EFFECTIVE' | 'UNRESOLVED_AMENDMENT';
+  qualified?: boolean;
+  aggregateEligible?: boolean;
 };
 
 export type DashboardData = {
@@ -42,13 +53,14 @@ export type DashboardData = {
   scoreVersion: string;
   generatedAt: string;
   status: 'VALIDATED' | 'EXPERIMENTAL' | 'STALE';
+  research?: ResearchSnapshot;
   marketPulse: number | null;
   pulsePercentile: number | null;
   pulseHistory: Array<{ date: string; market: number | null; technology: number | null; financials: number | null }>;
   candidates: Candidate[];
   filings: Filing[];
   backtest: Array<{ horizon: string; fullEngine: number; clusterBuy: number; simpleRatio: number }>;
-  companySeries: Array<{ ticker: string; date: string; price: number; cost: number | null; mansfield: number | null }>;
+  companySeries: Array<{ ticker: string; date: string; price: number; cost: number | null; mansfield: number | null; sectorMansfield?: number | null; volume?: number | null }>;
 };
 
 export const sampleDashboardData: DashboardData = {

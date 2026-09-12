@@ -23,13 +23,12 @@ dates/shares/10b5-1, coverage windows or state-change dates. Those remain visibl
 unavailable until Package 2. Price history shows only actual exported dates, with
 today's basis explicitly marked as a current reference line.
 
-Verification: frontend lint/typecheck/build; 18 Playwright checks across desktop
-and mobile; rendered desktop/mobile review. Full GitHub CI and public readback are
-required before this package is considered published.
+Published as `6de541e`: full branch/main CI and Pages passed; public desktop/mobile
+readback showed 68 known companies and no JavaScript errors or horizontal overflow.
 
 ## Package 2 — canonical v2 producer
 
-Next: versioned company/event/owner/score/series/cluster/coverage export; economic
+Implemented: versioned company/event/owner/score/series/cluster/coverage export; economic
 event key includes accession, table and source row (never cross-filing fuzzy
 deduplication). All owner links retained. Unresolved amendments suppress only
 affected issuer aggregates and digest eligibility. Transaction-only companies
@@ -39,7 +38,27 @@ Reuse immutable normalized SEC Release checkpoints, process current days before
 resumable 90-day backfill, persist prior states and daily history, and consolidate
 the daily graph at 07:15 UTC Tue–Sat. Retire duplicate acquisition schedule only
 after replacement is connected. Use a pinned exchange calendar for market
-freshness. Snapshot/hash/run validation remains atomic and fail-closed.
+freshness (`exchange-calendars==4.13.2`, XNYS holidays and early closes).
+Snapshot/hash/run validation remains atomic and fail-closed. UI-only restore and
+settings attachment preserve the optional v2 document.
+
+Factual snapshots are archived as immutable `research-day-v2-*` Releases with
+read-back verification before allow-listed prior state is committed. Repeated
+runs for the same market session do not advance state hysteresis. Joint-owner
+facts count once, but legacy scores with unreconciled owner weights are withheld.
+Unresolved identities and non-common-stock transactions remain inspectable but
+are excluded from common-stock aggregates. No-market and stale-benchmark cases
+retain valid SEC facts; predictive delivery remains blocked.
+
+The existing per-day immutable SEC checkpoint ledger tracks resumable progress.
+Publishing a partial factual snapshot does **not** advance the older global
+canonical cursor or claim that the full 90-day window is complete. The manual
+SEC acquisition workflow remains available for bounded historical batches.
+
+Verification: replay/economic grain/amendment/partial history/holiday calendar/
+outage state/hash/schema/archive/restore and workflow contracts; 24 desktop and
+mobile Playwright checks. CI and a real daily run are still required to confirm
+the live integration, not inferred from offline fixtures.
 
 ## Package 3 — factual digest and operational acceptance
 

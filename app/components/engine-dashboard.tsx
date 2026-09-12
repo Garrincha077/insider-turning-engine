@@ -7,6 +7,7 @@ import { companyCatalog, instant, scoreLabel, controlClass } from '@/lib/researc
 import { isCikList, isTimezone, resetPreferences, usePreference } from '@/lib/local-preferences';
 import { AlertCenterView, DataCoverageView, SettingsView, SystemHealthView } from './operations-views';
 import { CompanyLab, CompanyTable, CostBasisView, ClusterView, MethodologyView, PulseView, TapeView, Panel, EmptyState } from './research-views';
+import { ActivityV2, BasisV2, ClustersV2, CoverageV2 } from './v2-views';
 
 const groups = [
   { label: 'Overview', views: [['radar', 'Radar'], ['market-pulse', 'Market Pulse'], ['live-sec-tape', 'Live SEC Tape']] },
@@ -112,16 +113,16 @@ export function EngineDashboard() {
         {view === 'radar' && <CompanyTable {...tableProps} mode="radar" />}
         {view === 'turning-stocks' && <CompanyTable key="turning" {...tableProps} mode="turning" />}
         {view === 'divergence' && <CompanyTable key="divergence" {...tableProps} mode="divergence" />}
-        {view === 'market-pulse' && <PulseView data={data} />}
+        {view === 'market-pulse' && (data.research ? <ActivityV2 data={data.research} /> : <PulseView data={data} />)}
         {view === 'smart-buys' && <TapeView key="buys" data={data} openCompany={openCompany} timezone={timezone} buysOnly />}
         {view === 'live-sec-tape' && <TapeView key="tape" data={data} openCompany={openCompany} timezone={timezone} />}
-        {view === 'clusters' && <ClusterView />}
-        {view === 'cost-basis' && <CostBasisView catalog={catalog} openCompany={openCompany} />}
+        {view === 'clusters' && (data.research ? <ClustersV2 data={data.research} openCompany={openCompany} /> : <ClusterView />)}
+        {view === 'cost-basis' && (data.research ? <BasisV2 data={data.research} openCompany={openCompany} /> : <CostBasisView catalog={catalog} openCompany={openCompany} />)}
         {view === 'company-lab' && <><button className={controlClass} onClick={() => navigate(previousView)}>← Back to {views.find(([id]) => id === previousView)?.[1]}</button>{company ? <CompanyLab {...tableProps} company={company} /> : <EmptyState title="Company not in this snapshot" detail="This shared issuer link cannot be resolved from the published company catalogue. Return to Radar to choose an available company." />}</>}
         {view === 'backtest-lab' && <MethodologyView data={data} manifest={manifest} />}
-        {view === 'system-health' && <SystemHealthView manifest={manifest} />}
-        {view === 'data-coverage' && <DataCoverageView manifest={manifest} />}
-        {view === 'alert-center' && <AlertCenterView settings={settings} />}
+        {view === 'system-health' && <SystemHealthView manifest={manifest} research={data.research} />}
+        {view === 'data-coverage' && (data.research ? <CoverageV2 data={data.research} /> : <DataCoverageView manifest={manifest} />)}
+        {view === 'alert-center' && <AlertCenterView settings={settings} research={data.research} />}
         {view === 'settings' && <><Panel title="Local display preferences" subtitle="Saved only in this browser. They never change Telegram recipients, policy or selection.">
           <label className="flex flex-wrap items-center gap-3 text-sm">Display timezone<select aria-label="Display timezone" className={controlClass} value={timezone} onChange={(event) => setTimezone(event.target.value)}>{['Europe/Zagreb', 'America/New_York', 'UTC'].map((zone) => <option key={zone}>{zone}</option>)}</select></label>
           <p className="my-4 text-sm">Watchlist: {watchlist.length ? watchlist.map((id) => catalog.find((item) => item.issuerCik === id)?.ticker ?? id).join(', ') : 'No companies saved'}</p><button className={controlClass} onClick={resetPreferences}>Reset local preferences and watchlist</button>

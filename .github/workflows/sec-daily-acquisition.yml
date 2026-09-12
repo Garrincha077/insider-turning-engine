@@ -1,9 +1,7 @@
 name: Durable SEC daily acquisition
 
 on:
-  # After midnight Eastern in both DST regimes; never seals an active SEC day.
-  schedule:
-    - cron: "30 6 * * 2-6"
+  # Resumable manual backfill/repair only. Scheduled acquisition lives in pages.yml.
   workflow_dispatch:
     inputs:
       start:

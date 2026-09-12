@@ -151,9 +151,7 @@ def test_tagged_dashboard_release_is_deterministic_and_immutable() -> None:
 def test_pages_validates_manifest_and_hashes_before_upload() -> None:
     workflow, text = _workflow(PAGES)
     assert "manifest.json" in text
-    assert "validate_dashboard_directory" in text
-    assert "dashboard_publication_policy" in text
-    assert "uv run python - <<'PY'" in text
+    assert "export.research_policy --directory app/dist/data" in text
     assert "uv sync --all-groups --frozen" in text
     assert "actions/setup-python@v5" in text
     assert text.index("Validate atomic live snapshot") < text.index(
@@ -161,18 +159,20 @@ def test_pages_validates_manifest_and_hashes_before_upload() -> None:
     )
     assert "PAGES_BASE_PATH" in text
     assert "--max-symbols 50" not in text
-    assert "require_settings=True" in text
     assert text.index("npm run test:e2e") < text.index("actions/upload-pages-artifact@v3")
     assert "15 7 * * 2-6" in text
-    assert "--lookback-business-days 5" in text
-    assert '--identity-repository "$GITHUB_REPOSITORY"' in text
-    assert '--identity-target "$GITHUB_SHA"' in text
-    assert workflow["jobs"]["build"]["timeout-minutes"] == 30
+    assert "pipeline.daily_research" in text and "pipeline.live_experimental" not in text
+    assert '--repository "$GITHUB_REPOSITORY"' in text
+    assert '--target "$GITHUB_SHA"' in text
+    assert workflow["jobs"]["build"]["timeout-minutes"] == 45
     assert workflow["jobs"]["build"]["permissions"]["contents"] == "write"
     assert "GH_TOKEN: ${{ github.token }}" in text
-    assert (
-        "path: data/cache/live-experimental/identity-observations/*/identity-manifest.json" in text
-    )
+    assert "work/daily-research/identities/identity-manifest.json" in text
+    assert workflow["concurrency"]["group"] == "daily-research-pipeline"
+    assert text.index("Restore durable delivery and score state") < text.index(
+        "pipeline.daily_research")
+    assert text.index("pipeline.daily_research") < text.index("notifications.state_store sync")
+    assert '--expected-head "$EXPECTED_STATE_HEAD"' in text
 
 
 def test_delivery_workflow_is_explicit_main_only_and_rejects_reruns() -> None:
@@ -188,14 +188,15 @@ def test_delivery_workflow_is_explicit_main_only_and_rejects_reruns() -> None:
     assert "--test-id" in text
     assert "notifications.state_store persist" in text
     _, pages = _workflow(PAGES)
-    assert pages.index("Restore durable delivery history") < pages.index("Export masked")
+    assert pages.index("Restore durable delivery and score state") < pages.index("Export masked")
 
 
 def test_sec_acquisition_workflow_has_no_state_secrets_alerts_or_pages_writes() -> None:
     workflow, text = _workflow(ROOT / ".github/workflows/sec-daily-acquisition.yml")
     assert workflow["permissions"] == {"contents": "read"}
     assert workflow["concurrency"]["group"] == "daily-research-pipeline"
-    assert "30 6 * * 2-6" in text
+    trigger = workflow.get("on", workflow.get(True))
+    assert "schedule" not in trigger
     assert "github.ref == 'refs/heads/main'" in text
     assert "environment" not in workflow["jobs"]["acquire"]
     assert "insider-turning acquire-sec-daily" in text

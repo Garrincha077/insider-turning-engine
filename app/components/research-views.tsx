@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { Star, ExternalLink } from 'lucide-react';
 import type { Candidate, DashboardData, Filing } from '@/lib/dashboard-data';
 import type { PublicationManifest } from '@/lib/operations-data';
-import { controlClass, costReturn, downloadCsv, instant, metric, money, reasonText, secUrl, timestamp } from '@/lib/research';
+import { controlClass, costReturn, downloadCsv, instant, metric, money, observedContext, reasonText, secUrl, timestamp } from '@/lib/research';
 import { isBoolean, isString, usePreference } from '@/lib/local-preferences';
 import { SortControls, useRowSort, type SortField } from './sort-controls';
 import { EChart } from './echart';
+import { ClustersV2 } from './v2-views';
 
 type ResearchProps = {
   data: DashboardData; catalog: Candidate[]; watchlist: string[]; timezone: string;
@@ -56,7 +57,7 @@ export function CompanyTable({ data, catalog, watchlist, toggleWatch, openCompan
       <td className="p-3"><button aria-label={`Open ${row.ticker} in Company Lab`} onClick={() => openCompany(row.ticker)} className="text-left"><span className="font-mono font-semibold text-emerald-200">{row.ticker}</span><span className="block max-w-48 truncate text-xs text-muted-foreground" title={row.company}>{row.company}</span></button></td>
       {[row.total, row.insider, row.divergence, row.turn].map((value, index) => <td key={index} className="p-3 font-mono" title={value == null ? 'Required component data is unavailable' : String(value)}>{metric(value)}</td>)}
       <td className="p-3 text-xs"><State state={row.state} />{mode === 'turning' && <p className="mt-2 text-muted-foreground">Changed: {row.stateChangedAt ?? 'not recorded'}</p>}</td>
-      <td className="min-w-48 max-w-64 p-3 text-xs leading-5 text-muted-foreground">{reasonText(row.reasons[0] ?? 'No explanation exported')}{mode === 'divergence' && <p>Price drawdown history: not exported in v1.</p>}</td>
+      <td className="min-w-48 max-w-64 p-3 text-xs leading-5 text-muted-foreground">{reasonText(row.reasons[0] ?? 'No explanation exported')}{mode === 'divergence' && <p>{observedContext(data, row)}</p>}</td>
     </tr>)}</tbody></table></div>}
   </Panel>;
 }
@@ -70,12 +71,12 @@ export function TapeView({ data, openCompany, timezone, buysOnly = false, ticker
   const [windowDays, setWindowDays] = usePreference(`${key}.days`, 'all', isString);
   const [page, setPage] = useState(0);
   const cutoff = windowDays === 'all' ? -Infinity : timestamp(data.generatedAt) - Number(windowDays) * 86400000;
-  const filtered = data.filings.filter((row) => (!ticker || ticker === row.ticker) && (!buysOnly || row.side === 'BUY') && (!side || row.side === side) && row.ticker.toLowerCase().includes(query.toLowerCase()) && row.owner.toLowerCase().includes(owner.toLowerCase()) && row.value >= Number(minimum) && timestamp(row.filedAt) >= cutoff);
+  const filtered = data.filings.filter((row) => (!ticker || ticker === row.ticker) && (!buysOnly || row.side === 'BUY' && row.qualified !== false) && (!side || row.side === side) && row.ticker.toLowerCase().includes(query.toLowerCase()) && row.owner.toLowerCase().includes(owner.toLowerCase()) && (!minimum || row.value != null && row.value >= Number(minimum)) && timestamp(row.filedAt) >= cutoff);
   const sort = useRowSort(filtered, filingFields, 'value', key);
   const pages = Math.max(1, Math.ceil(sort.rows.length / 25));
   const currentPage = Math.min(page, pages - 1);
   function resetPage(setter: (v: string) => void, value: string) { setter(value); setPage(0); }
-  return <Panel title={buysOnly ? 'Qualified insider purchases' : 'SEC activity records'} subtitle="Legacy v1 groups rows by filing, reporting owner and side. Values are not independent-event totals; joint-owner duplicates may exist.">
+  return <Panel title={buysOnly ? 'Qualified insider purchases' : 'SEC activity records'} subtitle={data.research ? 'One economic event per SEC table row, with all reporting owners retained. Unresolved corrections are marked and excluded from issuer aggregates.' : 'Legacy v1 groups rows by filing, reporting owner and side. Values are not independent-event totals; joint-owner duplicates may exist.'}>
     <div className="mb-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
       <input aria-label="Filter ticker" placeholder="Ticker" className={controlClass} value={query} onChange={(event) => resetPage(setQuery, event.target.value)} />
       <input aria-label="Filter reporting owner" placeholder="Reporting owner" className={controlClass} value={owner} onChange={(event) => resetPage(setOwner, event.target.value)} />
@@ -84,11 +85,11 @@ export function TapeView({ data, openCompany, timezone, buysOnly = false, ticker
       <select aria-label="Acceptance date window" className={controlClass} value={windowDays} onChange={(event) => resetPage(setWindowDays, event.target.value)}><option value="all">All exported dates</option>{[7, 30, 90].map((days) => <option key={days} value={days}>Last {days} days</option>)}</select>
     </div>
     <p className="mb-4 text-xs text-muted-foreground">Date filter uses filing acceptance relative to the snapshot, not transaction date; it does not recalculate scores. Times: {timezone}.</p>
-    <div className="flex flex-wrap justify-between gap-2"><SortControls fields={filingFields} fieldId={sort.fieldId} descending={sort.descending} onField={(id) => { sort.choose(id); setPage(0); }} onReverse={sort.reverse} /><button className={controlClass} onClick={() => downloadCsv(buysOnly ? 'insider-buys.csv' : 'sec-tape.csv', ['Ticker', 'Value USD (grouped)', 'Side', 'Reporting owner', 'Role', 'Accepted', 'Accession', 'SEC URL'], sort.rows.map((row) => [row.ticker, row.value, row.side, row.owner, row.role, row.filedAt, row.accession, secUrl(row)]))}>Export filtered CSV</button></div>
+    <div className="flex flex-wrap justify-between gap-2"><SortControls fields={filingFields} fieldId={sort.fieldId} descending={sort.descending} onField={(id) => { sort.choose(id); setPage(0); }} onReverse={sort.reverse} /><button className={controlClass} onClick={() => downloadCsv(buysOnly ? 'insider-buys.csv' : 'sec-tape.csv', ['Ticker', data.research ? 'Value USD' : 'Value USD (grouped)', 'Side', 'Reporting owner', 'Role', 'Accepted', 'Accession', 'SEC URL', 'Transaction date', 'Shares', 'Price', '10b5-1', 'Processing'], sort.rows.map((row) => [row.ticker, row.value, row.side, row.owner, row.role, row.filedAt, row.accession, secUrl(row), row.transactionDate, row.shares, row.price, row.rule10b51, row.processing]))}>Export filtered CSV</button></div>
     {sort.rows.length === 0 ? <EmptyState title="No records match these filters" detail="This is not evidence that no transactions occurred outside the exported SEC window." /> : <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr>{['ticker', 'value', 'side', 'owner', 'role', 'filedAt'].map((id) => <SortHeader key={id} field={filingFields.find((field) => field.id === id)!} sort={sort} />)}<th className="p-3">Source & details</th></tr></thead><tbody>{sort.rows.slice(currentPage * 25, (currentPage + 1) * 25).map((row, index) => <tr key={`${row.accession}:${row.owner}:${row.side}:${index}`} className="border-t border-border">
       <td className="p-3"><button onClick={() => openCompany(row.ticker)} className="font-mono font-semibold text-emerald-200">{row.ticker}</button></td>
       <td className="whitespace-nowrap p-3 font-mono" data-value={row.value} title={money(row.value)}>{money(row.value, true)}</td><td className={`p-3 text-xs ${row.side === 'BUY' ? 'text-emerald-300' : 'text-rose-300'}`}>{row.side}</td><td className="min-w-44 p-3">{row.owner}</td><td className="p-3 text-xs text-muted-foreground">{row.role || 'Unknown'}</td>
-      <td className="whitespace-nowrap p-3 text-xs" data-timestamp={timestamp(row.filedAt)}>{instant(row.filedAt, timezone)}</td><td className="min-w-60 p-3 text-xs"><SecLink row={row} /><details className="mt-2"><summary>Record details</summary><dl className="mt-2 space-y-2 text-muted-foreground"><dt>Accession</dt><dd className="font-mono">{row.accession}</dd><dt>Exact grouped amount</dt><dd>{money(row.value)}</dd><dt>Transaction date, shares, price, 10b5-1 and amendment processing</dt><dd>Not exported in v1. Inspect the linked SEC document; unknown is not false.</dd></dl></details></td>
+      <td className="whitespace-nowrap p-3 text-xs" data-timestamp={timestamp(row.filedAt)}>{instant(row.filedAt, timezone)}</td><td className="min-w-60 p-3 text-xs"><SecLink row={row} />{row.processing === 'UNRESOLVED_AMENDMENT' && <p className="mt-2 text-amber-200">Unresolved amendment — excluded from aggregates</p>}<details className="mt-2"><summary>Record details</summary><dl className="mt-2 space-y-2 text-muted-foreground"><dt>Accession</dt><dd className="font-mono">{row.accession}</dd><dt>{data.research ? 'Exact economic amount' : 'Exact grouped amount'}</dt><dd>{money(row.value)}</dd>{data.research ? <><dt>Transaction date</dt><dd>{row.transactionDate}</dd><dt>Shares × reported price</dt><dd>{metric(row.shares, 6)} × {money(row.price)}</dd><dt>10b5-1 status</dt><dd>{row.rule10b51 ?? 'unknown'}</dd><dt>Processing</dt><dd>{row.processing}</dd></> : <><dt>Transaction date, shares, price, 10b5-1 and amendment processing</dt><dd>Not exported in v1. Inspect the linked SEC document; unknown is not false.</dd></>}</dl></details></td>
     </tr>)}</tbody></table></div>}
     <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground"><span>{filtered.length} matching records · page {currentPage + 1} of {pages}</span><div className="flex gap-2"><button className={controlClass} disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Previous</button><button className={controlClass} disabled={currentPage + 1 >= pages} onClick={() => setPage(currentPage + 1)}>Next</button></div></div>
   </Panel>;
@@ -132,27 +133,32 @@ export function CompanyLab({ data, catalog, company, watchlist, toggleWatch, ope
   const series = allSeries.filter((row) => timestamp(row.date) >= latest - Number(period) * 86400000).sort((a, b) => timestamp(a.date) - timestamp(b.date));
   const rank = catalog.filter((row) => row.total != null).findIndex((row) => row.ticker === company.ticker) + 1;
   const choices = catalog.filter((row) => `${row.ticker} ${row.company}`.toLowerCase().includes(query.toLowerCase()));
+  const pricesByDate = new Map(series.map((row) => [row.date, row.price]));
+  const markers = (data.research?.economicTransactions ?? []).filter((row) => row.issuerCik === company.issuerCik && row.aggregateEligible && pricesByDate.has(row.transactionDate)).map((row) => ({ name: row.side === 'BUY' ? 'Purchase' : 'Sale', value: money(row.value, true), coord: [row.transactionDate, pricesByDate.get(row.transactionDate)], symbol: row.side === 'BUY' ? 'triangle' : 'diamond', symbolSize: 10, itemStyle: { color: row.side === 'BUY' ? '#5eead4' : '#fb7185' } }));
   const option = {
     backgroundColor: 'transparent', textStyle: { color: '#cbd5e1', fontFamily: 'Segoe UI, sans-serif' },
-    tooltip: { trigger: 'axis' }, legend: { textStyle: { color: '#a8b6c5' }, data: ['Adjusted price', 'Mansfield market RS'] },
+    tooltip: { trigger: 'axis' }, legend: { textStyle: { color: '#a8b6c5' }, data: ['Adjusted price', 'Mansfield market RS', ...(data.research ? ['Mansfield sector RS'] : [])] },
     grid: { left: 60, right: 55, top: 50, bottom: 45 },
     xAxis: { type: 'category', data: series.map((row) => row.date), axisLabel: { color: '#a8b6c5' } },
     yAxis: [{ type: 'value', scale: true, name: 'USD', splitLine: { lineStyle: { color: '#263446' } } }, { type: 'value', name: 'RS', splitLine: { show: false } }],
     series: [{ name: 'Adjusted price', type: 'line', showSymbol: false, data: series.map((row) => row.price), itemStyle: { color: '#5eead4' },
+      markPoint: { label: { show: false }, data: markers },
       markLine: company.insiderCost == null ? undefined : { symbol: 'none', label: { formatter: 'Current observed basis', position: 'insideEndTop' }, lineStyle: { color: '#fbbf24', type: 'dashed' }, data: [{ yAxis: company.insiderCost }] } },
-    { name: 'Mansfield market RS', type: 'line', yAxisIndex: 1, showSymbol: false, data: series.map((row) => row.mansfield), itemStyle: { color: '#38bdf8' } }],
+    { name: 'Mansfield market RS', type: 'line', yAxisIndex: 1, showSymbol: false, connectNulls: true, data: series.map((row) => row.mansfield), itemStyle: { color: '#38bdf8' } },
+    ...(data.research ? [{ name: 'Mansfield sector RS', type: 'line', yAxisIndex: 1, showSymbol: false, connectNulls: true, data: series.map((row) => row.sectorMansfield ?? null), itemStyle: { color: '#c4b5fd' } }] : [])],
   };
   return <>
     <div className="flex flex-wrap gap-3"><input aria-label="Search companies" className={controlClass} placeholder="Search companies" value={query} onChange={(event) => setQuery(event.target.value)} /><select aria-label="Select company" className={`${controlClass} min-w-0 max-w-full flex-1`} value={choices.some((row) => row.ticker === company.ticker) ? company.ticker : ''} onChange={(event) => openCompany(event.target.value)}><option value="" disabled>{choices.length ? 'Choose company' : 'No matching companies'}</option>{choices.map((row) => <option key={row.ticker} value={row.ticker}>{row.ticker} · {row.company}</option>)}</select><WatchButton row={company} watched={watchlist.includes(company.issuerCik)} toggle={toggleWatch} /></div>
     <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_320px]">
       <Panel title={`${company.ticker} · price and relative strength`} subtitle={`${company.company} · ${company.sector} · ${company.issuerCik ? `CIK ${company.issuerCik}` : 'Identity not exported'}`}>
         <div className="mb-4 flex flex-wrap gap-2">{[['30', '1M'], ['90', '3M'], ['180', '6M'], ['365', '1Y']].map(([days, label]) => <button aria-pressed={period === days} key={days} className={`${controlClass} ${period === days ? 'text-emerald-200' : ''}`} onClick={() => setPeriod(days)}>{label}</button>)}</div>
-        {series.length < 2 ? <EmptyState title="Price series unavailable" detail="Insufficient exported observations for this period. SEC records remain available below." /> : <><EChart option={option} style={{ height: 350 }} /><p className="text-xs leading-5 text-muted-foreground">{series.length} exported observations · {series[0].date} to {series.at(-1)?.date}. The dashed line is today’s observed purchase basis, not a historical basis series. Volume, sector RS history and precise transaction markers are not exported in v1.</p></>}
+        {data.research && <p className="mb-4 text-xs leading-5 text-muted-foreground">Triangles = purchases; diamonds = sales, placed at the adjusted close on the reported transaction date (not trade execution price or filing availability). Only dates with an observed price receive a marker. RS lines join available weekly observations.</p>}
+        {series.length < 2 ? <EmptyState title="Price series unavailable" detail="Insufficient exported observations for this period. SEC records remain available below." /> : <><EChart option={option} style={{ height: 350 }} /><p className="text-xs leading-5 text-muted-foreground">{series.length} exported observations · {series[0].date} to {series.at(-1)?.date}. The dashed line is today’s observed purchase basis, not a historical basis series. {!data.research && 'Volume, sector RS history and precise transaction markers are not exported in v1.'}</p>{series.some((row) => row.volume != null) && <EChart style={{ height: 180 }} option={{ textStyle: { color: '#cbd5e1' }, grid: { left: 70, right: 25, bottom: 30 }, tooltip: { trigger: 'axis' }, xAxis: { type: 'category', data: series.map((row) => row.date) }, yAxis: { type: 'value', name: 'Volume' }, series: [{ type: 'bar', data: series.map((row) => row.volume ?? null), itemStyle: { color: '#38bdf866' } }] }} />}</>}
       </Panel>
       <Panel title={rank ? `Score explanation · rank #${rank}` : 'Score unavailable'} subtitle="Rank within this snapshot; no predictive performance claim."><div className="grid grid-cols-2 gap-2">{[['Total', company.total], ['Insider', company.insider], ['Divergence', company.divergence], ['Turn', company.turn]].map(([label, value]) => <Fact key={String(label)} label={String(label)} value={metric(value as number | null)} />)}</div><p className="my-4"><State state={company.state} /></p><ul className="list-disc space-y-2 pl-4 text-xs leading-5 text-muted-foreground">{company.reasons.map((reason) => <li key={reason}>{reasonText(reason)}</li>)}</ul><p className="mt-4 text-xs">Market RS: {metric(company.marketRs)} · Sector RS: {metric(company.sectorRs)}</p></Panel>
     </div>
     <TapeView key={company.ticker} data={data} ticker={company.ticker} openCompany={openCompany} timezone={timezone} />
-    <ClusterView />
+    {data.research ? <ClustersV2 data={data.research} issuer={company.issuerCik} openCompany={openCompany} /> : <ClusterView />}
   </>;
 }
 

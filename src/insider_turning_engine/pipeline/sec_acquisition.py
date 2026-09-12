@@ -21,6 +21,7 @@ class CheckpointStore(Protocol):
 def acquire_range(
     source: SECDailyIndexSource, store: CheckpointStore, *, start: date, end: date,
     root: Path, max_days: int = 3, max_filings: int = 750,
+    newest_first: bool = False,
 ) -> dict[str, Any]:
     """Restore, extend and verify each day's checkpoint before reporting storage success.
 
@@ -51,7 +52,7 @@ def acquire_range(
     if not days:
         report["issues"].append("NO_PUBLISHED_INDEX_IN_REQUESTED_RANGE")
     attempted_days = 0
-    for day in days:
+    for day in sorted(days, reverse=newest_first):
         day_root = root / "days" / day.isoformat()
         try:
             if time.monotonic() >= deadline:

@@ -15,6 +15,9 @@ def attach_settings(directory: Path, settings_path: Path) -> None:
     dashboard['settingsStatus'] = json.loads(settings_path.read_text(encoding='utf-8'))
     dashboard['quality'] = manifest['quality']
     dashboard['watermarks'] = manifest['watermarks']
+    if any(item['path'] == 'research-v2.json' for item in manifest['files']):
+        dashboard['researchSnapshot'] = json.loads(
+            (directory / 'research-v2.json').read_text(encoding='utf-8'))
     dashboard['signals'] = [
         json.loads((directory / item['uri']).read_text(encoding='utf-8'))
         for item in manifest['signals']

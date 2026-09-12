@@ -10,6 +10,8 @@ import {
 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
+import type { ResearchSnapshot } from '@/lib/research-v2';
+import { DigestPreviewV2, ReadinessV2 } from './v2-views';
 import {
   type ChannelStatus,
   type PublicationManifest,
@@ -18,7 +20,7 @@ import {
   rateLabel,
 } from '@/lib/operations-data';
 
-export function SystemHealthView({ manifest }: { manifest: PublicationManifest }) {
+export function SystemHealthView({ manifest, research }: { manifest: PublicationManifest; research?: ResearchSnapshot }) {
   const quality = manifest.quality;
   const checks = [
     { label: 'Canonical data', pass: quality.canonicalValid, detail: quality.canonicalValid ? 'Schema and hashes valid' : 'Canonical validation blocked' },
@@ -29,6 +31,7 @@ export function SystemHealthView({ manifest }: { manifest: PublicationManifest }
     { label: 'Core coverage', pass: quality.coreBranchCoverage.result === 'PASS', detail: `${rateLabel(quality.coreBranchCoverage)} · gate ${(quality.coreBranchCoverage.threshold * 100).toFixed(0)}%` },
   ];
   return <div className="space-y-6">
+    {research && <ReadinessV2 data={research} />}
     <div className="grid gap-4 md:grid-cols-3">
       <StatusCard label="Dashboard integrity" value="VERIFIED ON LOAD" pass />
       <StatusCard label="Predictive model gate" value={quality.disposition} pass={quality.disposition === 'PASS'} />
@@ -38,7 +41,7 @@ export function SystemHealthView({ manifest }: { manifest: PublicationManifest }
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{checks.map((check) => <div key={check.label} className="rounded-lg border border-border bg-background/35 p-4"><div className="flex items-center gap-2">{check.pass ? <CheckCircle2 className="size-4 text-emerald-300" /> : <AlertTriangle className="size-4 text-amber-300" />}<span className="text-sm font-semibold">{check.label}</span></div><p className="mt-2 text-xs text-muted-foreground">{check.detail}</p></div>)}</div>
     </Panel>
     <Panel title="Workflow evidence" subtitle="The published data is not proof that the latest scheduled refresh succeeded.">
-      <p className="text-sm leading-6 text-muted-foreground">Published snapshot: {formatInstant(manifest.asOf)}. Last attempt and run duration are not included in this v1 manifest. If dates stop advancing, inspect the latest Actions run and its acquisition diagnostics; do not assume a newly deployed UI refreshed the data.</p>
+      <p className="text-sm leading-6 text-muted-foreground">Published snapshot: {formatInstant(manifest.asOf)}. Last attempt and run duration are available in Actions diagnostics, not independently refreshed by this public snapshot. If dates stop advancing, inspect the latest run; do not assume a newly deployed UI refreshed the data.</p>
       <a href="https://github.com/Garrincha077/insider-turning-engine/actions" target="_blank" rel="noreferrer" className="mt-4 inline-block text-sm text-emerald-200 underline">Inspect workflow runs and failures</a>
     </Panel>
     <Panel title="Open blockers" subtitle="These reasons prevent a validated production claim">
@@ -68,10 +71,10 @@ export function DataCoverageView({ manifest }: { manifest: PublicationManifest }
   </div>;
 }
 
-export function AlertCenterView({ settings }: { settings: SettingsStatus }) {
+export function AlertCenterView({ settings, research }: { settings: SettingsStatus; research?: ResearchSnapshot }) {
   const channels = Object.entries(settings.channels) as Array<[string, ChannelStatus]>;
   return <div className="space-y-6">
-    <Panel title="Informational daily digest" subtitle="A separate channel policy, independent of experimental scores."><p className="text-sm leading-6 text-muted-foreground">Not enabled by this legacy snapshot. A trustworthy preview needs independent economic transactions, the latest complete SEC day and a durable day-level delivery claim. No message or “no new purchases” assertion is generated from incomplete v1 owner groups.</p><p className="mt-3 text-xs text-muted-foreground">Planned content: up to five new open-market purchases of at least $250,000, with SEC source links. No scores or trade recommendations.</p></Panel>
+    {research ? <DigestPreviewV2 data={research} /> : <Panel title="Informational daily digest" subtitle="A separate channel policy, independent of experimental scores."><p className="text-sm leading-6 text-muted-foreground">Not enabled by this legacy snapshot. A trustworthy preview needs independent economic transactions, the latest complete SEC day and a durable day-level delivery claim. No message or “no new purchases” assertion is generated from incomplete v1 owner groups.</p><p className="mt-3 text-xs text-muted-foreground">Planned content: up to five new open-market purchases of at least $250,000, with SEC source links. No scores or trade recommendations.</p></Panel>}
     <div className={`rounded-xl border p-5 ${settings.alertsAllowed ? 'border-emerald-400/25 bg-emerald-400/8' : 'border-amber-300/20 bg-amber-300/8'}`}><div className="flex items-start gap-3">{settings.alertsAllowed ? <ShieldCheck className="mt-0.5 size-5 text-emerald-300" /> : <BellOff className="mt-0.5 size-5 text-amber-300" />}<div><h2 className="text-sm font-semibold">{settings.alertsAllowed ? 'Actionable alerts enabled' : 'Actionable alerts blocked'}</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">Delivery requires a PASS snapshot, enabled policy, configured channel, and healthy outbox.</p></div></div></div>
     <div className="grid gap-4 md:grid-cols-2">{channels.map(([name, channel]) => <ChannelCard key={name} name={name} status={channel} />)}</div>
     <Panel title="Suppression reasons" subtitle="No blocked candidate is silently discarded">
