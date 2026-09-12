@@ -11,7 +11,7 @@ import json
 import os
 from collections.abc import Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -43,6 +43,21 @@ from insider_turning_engine.pipeline.research_snapshot import (
 )
 from insider_turning_engine.pipeline.scoring import assemble_daily_scores
 from insider_turning_engine.pipeline.sec_acquisition import acquire_range
+
+
+def discover_research_days(source: SECDailyIndexSource, *, end: date) -> tuple[date, ...]:
+    """Inventory a 90-day window within the adapter's 32-day request contract."""
+    first = end - timedelta(days=89)
+    cursor = end
+    days: set[date] = set()
+    while cursor >= first:
+        start = max(first, cursor - timedelta(days=31))
+        batch = source.discover_days(start, cursor)
+        if any(day < start or day > cursor for day in batch):
+            raise ValueError("SEC discovery returned a day outside the requested range")
+        days.update(batch)
+        cursor = start - timedelta(days=1)
+    return tuple(sorted(days))
 
 
 def market_shards(
@@ -244,11 +259,13 @@ def main() -> None:
         # Only current days are acquired here. Older gaps belong to resumable backfill.
         acquire_range(with_source, store, start=end - timedelta(days=6), end=end,
                       root=args.work / "acquisition", newest_first=True)
-        days = with_source.discover_days(end - timedelta(days=89), end)
+        days = discover_research_days(with_source, end=end)
     finally:
         with_source.close()
     checkpoints = [checkpoint for day in days if (checkpoint := store.latest(day)) is not None]
     history = research_history(checkpoints, expected_days=days)
+    print(f"SEC_INPUTS: {len(checkpoints)}/{len(days)} days, {len(history.records)} owner rows",
+          flush=True)
     if not history.records:
         raise RuntimeError("no verified canonical SEC facts; previous snapshot preserved")
     point = datetime.now(UTC)
@@ -256,6 +273,7 @@ def main() -> None:
     ciks = sorted({row.issuer.cik for row in history.records
                    if row.transaction.code in {"P", "S"}})
     identity_store = ReleaseIdentityStore(args.repository, target=args.target)
+    print(f"IDENTITY_REFRESH: {len(ciks)} requested issuers", flush=True)
     previous = identity_store.latest()
     previous_path = args.work / "prior-identities.json"
     if previous is not None:
@@ -269,7 +287,9 @@ def main() -> None:
     point = datetime.now(UTC)
     _active, _identity, symbols, benchmarks = _select_market_universe(
         history.records, identities, as_of=point)
+    print(f"MARKET_REFRESH: {len(symbols)} stocks, {len(benchmarks)} benchmarks", flush=True)
     market, failures = market_shards((*symbols, *benchmarks), cache_dir=args.work / "market")
+    print(f"MARKET_INPUTS: {len(market)} available, {len(failures)} failures", flush=True)
     prior = json.loads(args.prior_state.read_text("utf-8")) \
         if args.prior_state and args.prior_state.exists() else {}
     report = materialize_research(
@@ -279,6 +299,7 @@ def main() -> None:
     report["marketFailures"] = failures
     report["durationSeconds"] = round((datetime.now(UTC) - started).total_seconds(), 1)
     _write_json(args.work / "daily-report.json", report)
+    print("RESEARCH_VALIDATED: archiving before operational state commit", flush=True)
     # The snapshot must be independently recoverable BEFORE committing score state.
     receipt = ResearchArchive(args.repository, target=args.target).publish(args.output)
     report["archive"] = receipt

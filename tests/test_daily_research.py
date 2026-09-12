@@ -1,6 +1,7 @@
 import json
 from dataclasses import replace
 from datetime import timedelta
+from types import SimpleNamespace
 
 from test_identity_observations import _observation
 from test_live_experimental import POINT, _record, _rows
@@ -8,6 +9,23 @@ from test_live_experimental import POINT, _record, _rows
 from insider_turning_engine.domain.research import DayEvidence
 from insider_turning_engine.pipeline import daily_research
 from insider_turning_engine.pipeline.research_history import ResearchHistory
+
+
+def test_ninety_day_inventory_is_bounded_disjoint_and_newest_first():
+    calls = []
+
+    def discover(start, end):
+        assert (end - start).days <= 31
+        calls.append((start, end))
+        return [start + timedelta(days=i) for i in range((end - start).days + 1)]
+
+    result = daily_research.discover_research_days(SimpleNamespace(discover_days=discover),
+                                                   end=POINT.date())
+    assert len(result) == 90
+    assert result[0] == POINT.date() - timedelta(days=89) and result[-1] == POINT.date()
+    assert calls[0][1] == POINT.date()
+    assert len(calls) == 3
+    assert calls[1][1] == calls[0][0] - timedelta(days=1)
 
 
 def _inputs():
