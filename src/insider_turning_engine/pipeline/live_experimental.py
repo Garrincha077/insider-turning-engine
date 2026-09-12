@@ -102,11 +102,12 @@ def _qualifying_purchase(record: CanonicalTransaction, as_of: datetime) -> bool:
         and record.transaction.transaction_date <= as_of.date()
         and record.transaction.code == "P"
         and record.transaction.acquired_disposed == "A"
+        and record.security.table_type is TableType.NON_DERIVATIVE
+        and record.transaction.shares is not None
         and record.transaction.shares > 0
         and record.transaction.price_per_share is not None
         and record.transaction.price_per_share > 0
         and record.transaction.value is not None
-        and record.security.table_type is TableType.NON_DERIVATIVE
         and _COMMON.search(record.security.title) is not None
     )
 

@@ -84,7 +84,8 @@ def preview_digest(snapshot: ResearchSnapshot) -> DigestDraft:
         company = companies[row.issuer_cik]
         return (row.aggregate_eligible and row.qualified and row.processing == "EFFECTIVE"
                 and row.table == "NON_DERIVATIVE" and row.code == "P" and row.side == "BUY"
-                and row.shares > 0 and row.price is not None and row.price > 0
+                and row.shares is not None and row.shares > 0
+                and row.price is not None and row.price > 0
                 and row.value is not None and row.value >= 250000
                 and company.identity_status == "RESOLVED" and company.insider_status == "AVAILABLE")
 

@@ -44,7 +44,7 @@ def _qualified(row: CanonicalTransaction) -> bool:
     tx = row.transaction
     return (row.security.table_type is TableType.NON_DERIVATIVE
             and (tx.code, tx.acquired_disposed) in {("P", "A"), ("S", "D")}
-            and tx.shares > 0 and tx.price_per_share is not None
+            and tx.shares is not None and tx.shares > 0 and tx.price_per_share is not None
             and tx.price_per_share > 0 and tx.value is not None)
 
 
@@ -104,7 +104,8 @@ def economic_events(
             security_title=first.security.title,
             known_at=max(row.timestamps.knowledge_at for row in rows), code=tx.code,
             side="BUY" if tx.code == "P" else "SELL" if tx.code == "S" else "OTHER",
-            shares=float(tx.shares), price=float(tx.price_per_share)
+            shares=float(tx.shares) if tx.shares is not None else None,
+            price=float(tx.price_per_share)
             if tx.price_per_share is not None else None,
             value=float(tx.value) if tx.value is not None else None,
             ownership="D" if tx.ownership_nature == "D" else "I",
@@ -125,7 +126,7 @@ def _basis(
     buys = [row for row in events if row.aggregate_eligible and row.side == "BUY"
             and start <= row.transaction_date <= as_of.date()]
     value = sum(row.value or 0 for row in buys)
-    shares = sum(row.shares for row in buys)
+    shares = sum(row.shares for row in buys if row.shares is not None)
     relevant = {day for day in expected if start <= day <= as_of.date()}
     complete = (bool(expected) and min(expected) <= start and bool(relevant)
                 and all(day in evidence and evidence[day].complete for day in relevant))
@@ -259,6 +260,7 @@ def build_research_snapshot(
     missing = sorted(expected - evidence.keys())
     incomplete = missing or any(not row.complete for row in day_evidence) or not expected
     return ResearchSnapshot(
+        schema_version="2.1.0" if any(row.shares is None for row in events) else "2.0.0",
         run_id=run_id, as_of=as_of, score_version="scoring.v1", companies=companies,
         economic_transactions=events, reporting_owners=owners, research_scores=scores,
         clusters=_clusters(events, as_of=as_of), company_series=series,
@@ -281,7 +283,7 @@ def build_research_snapshot(
         readiness=ResearchReadiness(
             dashboard=Readiness(status="PARTIAL" if incomplete or blocked else "READY",
                                 reasons=["SEC_WINDOW_PARTIAL"] if incomplete else []),
-            digest=Readiness(status="BLOCKED", reasons=["DIGEST_POLICY_NOT_CONNECTED"]),
+            digest=Readiness(status="BLOCKED", reasons=["DIGEST_DELIVERY_CHECK_REQUIRED"]),
             predictive=Readiness(status="BLOCKED", reasons=["NOT_HISTORICALLY_VALIDATED"]),
         ),
     )

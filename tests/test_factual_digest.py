@@ -251,6 +251,8 @@ def test_derivative_total_value_is_never_invented_as_share_quantity():
     result = parse_sec_xml(xml.encode(), {"accession_number": "0001234567-26-000009",
         "source_url": "https://www.sec.gov/Archives/test.xml", "accepted_at": NOW,
         "observed_at": NOW, "run_id": "run_derivative_total_value_001"})
-    assert not result.records
-    assert result.quarantines[0].reason_code == "INVALID_TRANSACTION"
-    assert "shares are required" in result.quarantines[0].message
+    assert not result.quarantines
+    assert len(result.records) == 1
+    assert result.records[0].transaction.shares is None
+    assert result.records[0].transaction.value == 35000
+    assert result.records[0].transaction.value_derivation.value == "SOURCE"

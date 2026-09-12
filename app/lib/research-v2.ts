@@ -8,13 +8,13 @@ export type EconomicEvent = {
   eventId: string; issuerCik: string; accession: string; table: 'NON_DERIVATIVE' | 'DERIVATIVE'; rowSequence: number;
   transactionDate: string; acceptedAt: string; knownAt: string; code: string; side: 'BUY' | 'SELL' | 'OTHER';
   secDay?: string | null; securityTitle?: string;
-  shares: number; price: number | null; value: number | null; ownership: 'D' | 'I'; rule10b51: 'true' | 'false' | 'unknown';
+  shares: number | null; price: number | null; value: number | null; ownership: 'D' | 'I'; rule10b51: 'true' | 'false' | 'unknown';
   sourceUrl: string; owners: Array<{ ownerCik: string; role: string }>;
   processing: 'EFFECTIVE' | 'UNRESOLVED_AMENDMENT'; qualified: boolean; aggregateEligible: boolean;
 };
 export type BasisWindow = { days: 30 | 90; start: string; end: string; weightedBasis: number | null; purchaseValue: number | null; purchaseCount: number | null; coverage: 'OBSERVED_COMPLETE_SEC_WINDOW' | 'PARTIAL' | 'BLOCKED' };
 export type ResearchSnapshot = {
-  schemaVersion: '2.0.0'; source: 'canonical-sec-research'; runId: string; asOf: string; scoreVersion: string;
+  schemaVersion: '2.0.0' | '2.1.0'; source: 'canonical-sec-research'; runId: string; asOf: string; scoreVersion: string;
   companies: Array<{ issuerCik: string; ticker: string | null; name: string; sector: string | null; identityStatus: 'RESOLVED' | 'UNRESOLVED'; insiderStatus: 'AVAILABLE' | 'UNRESOLVED_AMENDMENT' | 'SOURCE_QUARANTINE'; currentPrice: number | null; basis: BasisWindow[] }>;
   economicTransactions: EconomicEvent[];
   reportingOwners: Array<{ ownerCik: string; name: string }>;
@@ -40,6 +40,7 @@ export function validateResearch(value: unknown, manifest: PublicationManifest):
     if (!companies.has(row.issuerCik) || row.owners.some((owner) => !owners.has(owner.ownerCik)) || new Set(row.owners.map((owner) => owner.ownerCik)).size !== row.owners.length) throw new Error('Research v2 broken event reference');
     if (Math.max(Date.parse(row.knownAt), Date.parse(row.acceptedAt)) > Date.parse(value.asOf) || row.transactionDate > value.asOf.slice(0, 10)) throw new Error('Research v2 future event');
     if (row.processing !== 'EFFECTIVE' && row.aggregateEligible) throw new Error('Research v2 unresolved aggregate');
+    if (row.shares == null && (value.schemaVersion !== '2.1.0' || row.table !== 'DERIVATIVE' || row.value == null || row.qualified || row.aggregateEligible)) throw new Error('Research v2 invalid amount-only event');
   }
   if (new Set(value.researchScores.map((row) => row.issuerCik)).size !== value.researchScores.length) throw new Error('Research v2 duplicate score');
   for (const row of value.researchScores) if (!companies.has(row.issuerCik) || row.runId !== value.runId || row.scoreVersion !== value.scoreVersion || Date.parse(row.asOf) !== Date.parse(value.asOf) || row.stateChangedAt != null && Date.parse(row.stateChangedAt) > Date.parse(value.asOf)) throw new Error('Research v2 mixed score lineage');

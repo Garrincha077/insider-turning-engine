@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic identities; amount/quantity structure from SEC 0001493152-26-042331. -->
+<ownershipDocument>
+  <schemaVersion>X0508</schemaVersion>
+  <documentType>4</documentType>
+  <periodOfReport>2026-08-20</periodOfReport>
+  <issuer>
+    <issuerCik>0001999001</issuerCik>
+    <issuerName>Acme Synthetic Holdings, Inc.</issuerName>
+    <issuerTradingSymbol>ACME</issuerTradingSymbol>
+  </issuer>
+  <reportingOwner>
+    <reportingOwnerId>
+      <rptOwnerCik>0001999103</rptOwnerCik>
+      <rptOwnerName>Casey Example</rptOwnerName>
+    </reportingOwnerId>
+    <reportingOwnerRelationship><isDirector>1</isDirector></reportingOwnerRelationship>
+  </reportingOwner>
+  <aff10b5One>0</aff10b5One>
+  <derivativeTable>
+    <derivativeTransaction>
+      <securityTitle><value>8% Unsecured Convertible Promissory Note</value></securityTitle>
+      <transactionDate><value>2026-08-20</value></transactionDate>
+      <transactionCoding><transactionCode>M</transactionCode></transactionCoding>
+      <transactionAmounts>
+        <transactionTotalValue><value>35000</value></transactionTotalValue>
+        <transactionPricePerShare><value>0</value></transactionPricePerShare>
+        <transactionAcquiredDisposedCode><value>D</value></transactionAcquiredDisposedCode>
+      </transactionAmounts>
+      <underlyingSecurity>
+        <underlyingSecurityTitle><value>Series D-1 Convertible Preferred Stock</value></underlyingSecurityTitle>
+        <underlyingSecurityShares><value>13216</value></underlyingSecurityShares>
+      </underlyingSecurity>
+      <postTransactionAmounts>
+        <valueOwnedFollowingTransaction><value>775000</value></valueOwnedFollowingTransaction>
+      </postTransactionAmounts>
+      <ownershipNature><directOrIndirectOwnership><value>D</value></directOrIndirectOwnership></ownershipNature>
+    </derivativeTransaction>
+    <derivativeTransaction>
+      <securityTitle><value>Series D-1 Convertible Preferred Stock</value></securityTitle>
+      <transactionDate><value>2026-08-20</value></transactionDate>
+      <transactionCoding><transactionCode>M</transactionCode></transactionCoding>
+      <transactionAmounts>
+        <transactionShares><value>13216</value></transactionShares>
+        <transactionPricePerShare><value>0</value></transactionPricePerShare>
+        <transactionAcquiredDisposedCode><value>A</value></transactionAcquiredDisposedCode>
+      </transactionAmounts>
+      <underlyingSecurity>
+        <underlyingSecurityTitle><value>Common Stock</value></underlyingSecurityTitle>
+        <underlyingSecurityShares><value>132160</value></underlyingSecurityShares>
+      </underlyingSecurity>
+      <postTransactionAmounts>
+        <sharesOwnedFollowingTransaction><value>2949493</value></sharesOwnedFollowingTransaction>
+      </postTransactionAmounts>
+      <ownershipNature><directOrIndirectOwnership><value>D</value></directOrIndirectOwnership></ownershipNature>
+    </derivativeTransaction>
+  </derivativeTable>
+</ownershipDocument>

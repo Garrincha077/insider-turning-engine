@@ -23,7 +23,7 @@
   ],
   "properties": {
     "schemaVersion": {
-      "const": "1.0.0"
+      "enum": ["1.0.0", "1.1.0"]
     },
     "runId": {
       "type": "string",
@@ -69,6 +69,33 @@
       "$ref": "#/$defs/quality"
     }
   },
+  "oneOf": [
+    {
+      "properties": {
+        "schemaVersion": {"const": "1.0.0"},
+        "transaction": {
+          "properties": {
+            "shares": {"$ref": "#/$defs/decimalNonNegative"}
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "schemaVersion": {"const": "1.1.0"},
+        "security": {
+          "properties": {"tableType": {"const": "DERIVATIVE"}}
+        },
+        "transaction": {
+          "properties": {
+            "shares": {"type": "null"},
+            "value": {"$ref": "#/$defs/decimalNonNegative"},
+            "valueDerivation": {"const": "SOURCE"}
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "decimalNonNegative": {
       "type": "string",
@@ -225,7 +252,10 @@
           ]
         },
         "shares": {
-          "$ref": "#/$defs/decimalNonNegative"
+          "oneOf": [
+            {"$ref": "#/$defs/decimalNonNegative"},
+            {"type": "null"}
+          ]
         },
         "pricePerShare": {
           "oneOf": [

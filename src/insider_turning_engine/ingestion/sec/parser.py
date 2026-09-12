@@ -648,6 +648,7 @@ def parse_sec_ownership_document(
         code = (_text(_first(row, "transactionCoding"), "transactionCode") or "").upper()
         amounts = _first(row, "transactionAmounts")
         shares_text = _value_text(amounts, "transactionShares")
+        total_value_text = _value_text(amounts, "transactionTotalValue")
         price_text = _value_text(amounts, "transactionPricePerShare")
         acquired = (
             _text(_first(amounts, "transactionAcquiredDisposedCode"), "value") or ""
@@ -686,8 +687,21 @@ def parse_sec_ownership_document(
                     raise ValueError("security title, transaction date, code, and A/D are required")
                 tx_date = date.fromisoformat(tx_date_text)
                 shares = _decimal(shares_text)
+                reported_value = None
                 if shares is None:
-                    raise ValueError("transaction shares are required and must be non-negative")
+                    # An absent derivative quantity may be reported as a total
+                    # amount instead. A present but invalid/empty shares node
+                    # must never take this alternative path.
+                    if (
+                        table_type is not TableType.DERIVATIVE
+                        or _first(amounts, "transactionShares") is not None
+                    ):
+                        raise ValueError("transaction shares are required and must be non-negative")
+                    reported_value = _decimal(total_value_text)
+                    if reported_value is None:
+                        raise ValueError(
+                            "derivative without transaction shares requires a valid total value"
+                        )
                 if _decimal(price_text) is None and price_text not in {None, ""}:
                     raise ValueError("transaction price is invalid")
                 price = _decimal(price_text)
@@ -698,7 +712,10 @@ def parse_sec_ownership_document(
                     raise ValueError("acquired/disposed code must be A or D")
                 if ownership not in {"D", "I"}:
                     raise ValueError("direct/indirect ownership must be D or I")
-                if price is not None:
+                if shares is None:
+                    value = reported_value
+                    derivation = ValueDerivation.SOURCE
+                elif price is not None:
                     value = shares * price
                     derivation = ValueDerivation.SHARES_TIMES_PRICE
                 else:
@@ -735,8 +752,10 @@ def parse_sec_ownership_document(
                             code="MISSING_PRICE",
                             severity=QualitySeverity.WARNING,
                             message=(
-                                "Transaction price per share was not reported; "
-                                "value is unavailable."
+                                "Transaction price per share was not reported; " + (
+                                    "value is unavailable." if value is None
+                                    else "reported total value is retained."
+                                )
                             ),
                             path="transaction.pricePerShare",
                         )
@@ -764,6 +783,7 @@ def parse_sec_ownership_document(
                 )
                 records.append(
                     CanonicalTransaction(
+                        schema_version="1.1.0" if shares is None else "1.0.0",
                         run_id=run_id,
                         ingested_at=recorded_at,
                         transaction_id=transaction_id,

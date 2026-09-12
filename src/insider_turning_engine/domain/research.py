@@ -41,7 +41,7 @@ class EconomicEvent(PublicModel):
     known_at: datetime
     code: str
     side: Literal["BUY", "SELL", "OTHER"]
-    shares: Amount
+    shares: Amount | None
     price: Amount | None
     value: Amount | None
     ownership: Literal["D", "I"]
@@ -158,7 +158,7 @@ class ResearchReadiness(PublicModel):
 
 
 class ResearchSnapshot(PublicModel):
-    schema_version: Literal["2.0.0"] = "2.0.0"
+    schema_version: Literal["2.0.0", "2.1.0"] = "2.0.0"
     source: Literal["canonical-sec-research"] = "canonical-sec-research"
     run_id: str
     as_of: datetime
@@ -193,6 +193,10 @@ class ResearchSnapshot(PublicModel):
                 raise ValueError("future economic event")
             if row.aggregate_eligible and (row.processing != "EFFECTIVE" or not row.qualified):
                 raise ValueError("unresolved event cannot enter aggregates")
+            if row.shares is None and (row.table != "DERIVATIVE" or row.value is None
+                                       or row.qualified or row.aggregate_eligible
+                                       or self.schema_version != "2.1.0"):
+                raise ValueError("unknown quantity requires a non-signal derivative amount")
         if len({row.issuer_cik for row in self.research_scores}) != len(self.research_scores):
             raise ValueError("duplicate score identity")
         for score in self.research_scores:

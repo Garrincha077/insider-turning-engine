@@ -245,7 +245,8 @@ def _flat_record(record: CanonicalTransaction) -> dict[str, Any]:
         "value_usd": float(record.transaction.value)
         if record.transaction.value is not None
         else None,
-        "shares": float(record.transaction.shares),
+        "shares": (float(record.transaction.shares)
+                   if record.transaction.shares is not None else None),
         "price_per_share": (
             float(record.transaction.price_per_share)
             if record.transaction.price_per_share is not None

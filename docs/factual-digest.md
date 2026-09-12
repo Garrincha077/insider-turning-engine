@@ -38,10 +38,19 @@ factual delivery switch; it is currently **OFF** pending clean SEC-day evidence.
 [SEC accession 0001493152-26-042331](https://www.sec.gov/Archives/edgar/data/315545/000149315226042331/ownership.xml).
 The convertible note uses `transactionTotalValue=35000` and has no
 `transactionShares`. Treating dollars or underlying shares as the reported
-derivative quantity would invent data. The regression test deliberately keeps
-this row quarantined until a typed quantity/unit contract can represent it.
-This is not an unresolved open-market purchase. Existing day-level completeness
-still blocks the digest; no quarantine was deleted or attested away.
+derivative quantity would invent data. Canonical schema 1.1 now represents a
+source-reported derivative total with null shares; public schema 2.1 carries the
+same distinction. This is not an open-market purchase and remains excluded from
+P/S aggregates and digest selection. The repair requires exact source/index
+hashes and preserves every existing canonical revision byte-for-byte.
+
+The explicit `ingestion.sec.repair_amounts` command publishes a new immutable
+`sec-day-v2` checkpoint, retaining the original `sec-day-v1` checkpoint and its
+ancestry hashes. Only recovered rows become known at repair time; unchanged rows
+keep their original observation/acceptance metadata. New-version corruption
+fails closed rather than falling back to an obsolete quarantine checkpoint.
+The source-verified dry run resolves the one September 11 quarantine. Production
+activation still requires the verified release and a fresh publication.
 
 The September 3 checkpoint stored 750/1,056 filings within its first bounded run.
 [The resumed run](https://github.com/Garrincha077/insider-turning-engine/actions/runs/34696916118)
@@ -51,9 +60,8 @@ facts enter Pages on the next data refresh, not through a UI-only deployment.
 
 ## Remaining activation checks
 
-1. Represent reported derivative amounts without fabricating shares; replay only
-   affected evidence into a new verified immutable checkpoint. Preserve prior
-   observation/acceptance times and original checkpoint provenance.
+1. Publish the source-verified derivative repair and refresh from its immutable
+   checkpoint. Preserve original evidence and repair-time availability.
 2. Verify clean latest-day selection, successful Telegram delivery test and
    persisted claim/result using production state. Set the separate digest policy
    enabled only after these checks; never toggle the predictive policy.

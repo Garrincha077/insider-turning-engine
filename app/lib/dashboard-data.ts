@@ -40,7 +40,7 @@ export type Filing = {
   eventId?: string;
   issuerCik?: string;
   transactionDate?: string;
-  shares?: number;
+  shares?: number | null;
   price?: number | null;
   rule10b51?: 'true' | 'false' | 'unknown';
   processing?: 'EFFECTIVE' | 'UNRESOLVED_AMENDMENT';

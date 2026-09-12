@@ -143,7 +143,7 @@ def materialize_research(
     if not benchmark_fresh:
         issues.add("BENCHMARK_UNAVAILABLE_TECHNICAL_SCORES_WITHHELD")
     if any(not day.complete for day in history.evidence):
-        issues.add("SEC_DAY_PARTIAL_DIGEST_BLOCKED")
+        issues.add("SEC_WINDOW_PARTIAL")
     if len(priced) != len(symbols):
         issues.add("MARKET_COVERAGE_PARTIAL")
     quality = {

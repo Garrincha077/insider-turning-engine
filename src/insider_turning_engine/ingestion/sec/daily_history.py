@@ -20,7 +20,9 @@ from .daily_index import SECDailyIndexSource
 from .historical import _write_json, sha256_file
 from .parser import parse_sec_filing
 
-PARSER_VERSION = "ownership-eastern-v2.1"
+LEGACY_PARSER_VERSION = "ownership-eastern-v2.1"
+PARSER_VERSION = "ownership-eastern-v2.2"
+SUPPORTED_PARSER_VERSIONS = {LEGACY_PARSER_VERSION, PARSER_VERSION}
 
 
 def _digest(value: Any) -> str:
@@ -38,7 +40,8 @@ def _load_filing(
             raise ValueError("invalid canonical filing cache")
         wrapper = json.loads(path.read_text("utf-8"))
         payload = wrapper["payload"]
-        if (wrapper["sha256"] != _digest(payload) or payload["parserVersion"] != PARSER_VERSION
+        if (wrapper["sha256"] != _digest(payload)
+            or payload["parserVersion"] not in SUPPORTED_PARSER_VERSIONS
             or payload["accession"] != accession or payload["indexHash"] != index_hash
             or (retry_quarantined and payload["quarantines"])):
             return None

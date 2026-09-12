@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from .checkpoint import MAX_BYTES, decode_checkpoint, encode_checkpoint
+from .daily_history import LEGACY_PARSER_VERSION, PARSER_VERSION
 
 
 class ReleaseCheckpointStore:
@@ -49,13 +50,15 @@ class ReleaseCheckpointStore:
         return self._inventory
 
     @staticmethod
-    def _prefix(day: date) -> str:
-        # Bump this namespace if the portable checkpoint/parser contract changes.
-        return f"sec-day-v1-{day.isoformat()}-"
+    def _prefix(day: date, parser_version: str = PARSER_VERSION) -> str:
+        version = 1 if parser_version == LEGACY_PARSER_VERSION else 2
+        return f"sec-day-v{version}-{day.isoformat()}-"
 
     def _download(self, release: dict[str, Any], *, day: date) -> dict[str, Any]:
         tag = release["tag_name"]
-        prefix = self._prefix(day)
+        legacy = tag.startswith(self._prefix(day, LEGACY_PARSER_VERSION))
+        parser_version = LEGACY_PARSER_VERSION if legacy else PARSER_VERSION
+        prefix = self._prefix(day, parser_version)
         if not re.fullmatch(re.escape(prefix) + r"[a-f0-9]{64}", tag):
             raise ValueError("invalid checkpoint release tag")
         name = f"checkpoint-{tag.removeprefix(prefix)}.json.gz"
@@ -70,21 +73,27 @@ class ReleaseCheckpointStore:
             path = Path(temporary) / name
             if path.is_symlink() or path.stat().st_size != assets[0]["size"]:
                 raise ValueError("downloaded checkpoint size mismatch")
-            return decode_checkpoint(name, path.read_bytes(), day=day)
+            value = decode_checkpoint(name, path.read_bytes(), day=day)
+            if value["parserVersion"] != parser_version:
+                raise ValueError("checkpoint namespace does not match parser evidence")
+            return value
 
     def latest(self, day: date) -> dict[str, Any] | None:
         releases = [item for item in self._releases()
-                    if item["tag_name"].startswith(self._prefix(day)) and not item["draft"]]
+                    if item["tag_name"].startswith((self._prefix(day),
+                        self._prefix(day, LEGACY_PARSER_VERSION))) and not item["draft"]]
         if not releases:
             return None
         # Do not silently fall back from corrupt newest evidence to older progress.
-        return self._download(max(releases, key=lambda item: int(item["id"])), day=day)
+        # A later old-runner v1 upload must not undo a reviewed v2 repair.
+        return self._download(max(releases, key=lambda item: (
+            item["tag_name"].startswith(self._prefix(day)), int(item["id"]))), day=day)
 
     def persist(self, checkpoint: dict[str, Any]) -> dict[str, str]:
         day = date.fromisoformat(checkpoint["day"])
         name, content = encode_checkpoint(checkpoint)
         digest = name.removeprefix("checkpoint-").removesuffix(".json.gz")
-        tag = self._prefix(day) + digest
+        tag = self._prefix(day, checkpoint["parserVersion"]) + digest
         existing = next((item for item in self._releases() if item["tag_name"] == tag), None)
         if existing is None:
             with tempfile.TemporaryDirectory(prefix="ite-sec-upload-") as temporary:

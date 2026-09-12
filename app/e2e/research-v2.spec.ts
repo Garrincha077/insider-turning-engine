@@ -5,8 +5,10 @@ import { ready, section } from './helpers';
 import originalSettings from './public/data/settings-status.json' with { type: 'json' };
 import type { SettingsStatus } from '../lib/operations-data';
 
-async function v2(page: Page, mutate?: (value: typeof fixture) => void, digest?: SettingsStatus['digest']) {
-  const data = structuredClone(fixture); mutate?.(data);
+type Fixture = Omit<typeof fixture, 'economicTransactions'> & { economicTransactions: Array<Omit<typeof fixture.economicTransactions[number], 'shares'> & { shares: number | null }> };
+
+async function v2(page: Page, mutate?: (value: Fixture) => void, digest?: SettingsStatus['digest']) {
+  const data: Fixture = structuredClone(fixture); mutate?.(data);
   const bytes = JSON.stringify(data);
   const settingsBytes = JSON.stringify({ ...originalSettings, digest });
   if (digest) await page.route('**/data/settings-status.json', (route) => route.fulfill({ body: settingsBytes, contentType: 'application/json' }));
@@ -62,6 +64,30 @@ test('v2 semantic corruption cannot fall back to the legacy snapshot', async ({ 
   await page.goto('/');
   await expect(page.getByText('Research v2 broken event reference')).toBeVisible();
   await expect(page.getByLabel('Ticker or company')).toHaveCount(0);
+});
+
+test('v2.1 source amounts with unknown derivative quantity do not enter purchase tape', async ({ page }) => {
+  await v2(page, (value) => {
+    value.schemaVersion = '2.1.0';
+    value.economicTransactions.push({ ...value.economicTransactions[0], eventId: 'event_amount_only',
+      table: 'DERIVATIVE', shares: null, value: 35000, price: 0, qualified: false, aggregateEligible: false });
+    value.coverage.economicEvents += 1;
+    value.coverage.canonicalOwnerRows += 2;
+  });
+  await ready(page);
+  await section(page, 'Live SEC Tape');
+  await expect(page.locator('tbody tr')).toHaveCount(2);
+  await section(page, 'Market Pulse');
+  await expect(page.getByText('$2,000.00', { exact: true })).toBeVisible();
+});
+
+test('unknown non-derivative quantity is rejected, not converted into zero', async ({ page }) => {
+  await v2(page, (value) => {
+    value.schemaVersion = '2.1.0';
+    value.economicTransactions[0].shares = null;
+  });
+  await page.goto('/');
+  await expect(page.getByText('Research v2 invalid amount-only event')).toBeVisible();
 });
 
 test('v2 missing fields and mixed-run scores fail closed even with matching bytes', async ({ page }) => {

@@ -146,7 +146,7 @@ class TransactionFacts(_Model):
     transaction_date: date
     code: str = Field(pattern=r"^[A-Z]$")
     acquired_disposed: str = Field(pattern=r"^[AD]$")
-    shares: Decimal
+    shares: Decimal | None
     price_per_share: Decimal | None = None
     value: Decimal | None = None
     value_derivation: ValueDerivation
@@ -318,7 +318,7 @@ class Quality(_Model):
 
 
 class CanonicalTransaction(_Model):
-    schema_version: str = Field(default="1.0.0", pattern=r"^1\.0\.0$")
+    schema_version: str = Field(default="1.0.0", pattern=r"^1\.[01]\.0$")
     run_id: str = Field(
         default="run_parser_default_20260830",
         pattern=r"^run_[A-Za-z0-9_-]{16,64}$",
@@ -335,6 +335,24 @@ class CanonicalTransaction(_Model):
     timestamps: Timestamps
     lifecycle: Lifecycle
     quality: Quality
+
+    @model_validator(mode="after")
+    def canonical_quantity(self) -> CanonicalTransaction:
+        # Version 1.0 remains byte-compatible for share-denominated rows.  The
+        # narrow 1.1 extension represents an SEC derivative reported as money.
+        if self.schema_version == "1.0.0":
+            if self.transaction.shares is None:
+                raise ValueError("canonical 1.0.0 requires transaction shares")
+        elif (
+            self.security.table_type is not TableType.DERIVATIVE
+            or self.transaction.shares is not None
+            or self.transaction.value is None
+            or self.transaction.value_derivation is not ValueDerivation.SOURCE
+        ):
+            raise ValueError(
+                "canonical 1.1.0 requires a derivative with null shares and a SOURCE value"
+            )
+        return self
 
     @model_validator(mode="after")
     def canonical_timestamps(self) -> CanonicalTransaction:
