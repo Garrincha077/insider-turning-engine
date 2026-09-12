@@ -188,7 +188,9 @@ def test_factual_digest_is_after_pages_uses_exact_artifact_and_separate_policy()
     assert "env" not in preview and "--execute" not in preview["run"]
     assert text.count("name: digest-publication-${{ github.run_id }}") == 2
     policy = json.loads((ROOT / "config/digest.v1.json").read_text())
-    assert policy["enabled"] is False  # deliberate rollout switch, not the predictive switch
+    assert policy["enabled"] is True  # factual rollout; predictive policy remains independent
+    predictive = yaml.safe_load((ROOT / "config/notifications.v1.yaml").read_text())
+    assert predictive["deliveryEnabled"] is False
 
 
 def test_delivery_workflow_is_explicit_main_only_and_rejects_reruns() -> None:

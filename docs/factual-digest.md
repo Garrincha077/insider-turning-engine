@@ -1,7 +1,9 @@
 # Factual daily digest (rollout)
 
 This is independent of predictive alerts. `config/digest.v1.json` is the sole
-factual delivery switch; it is currently **OFF** pending clean SEC-day evidence.
+factual delivery switch; it is now **ON** after verified clean latest-day evidence.
+Every send still requires a complete current SEC day, a valid fresh publication,
+configured production secrets, and a remotely durable unclaimed day.
 `config/notifications.v1.yaml` remains unchanged with predictive delivery OFF.
 
 ## Implemented
@@ -32,9 +34,9 @@ factual delivery switch; it is currently **OFF** pending clean SEC-day evidence.
   free-form provider error or provider message ID is public. History updates on
   the next publication. Current attempt diagnostics live in Actions artifacts.
 
-## Current concrete source blocker
+## Resolved source blocker and retained evidence
 
-2026-09-11 has 497/497 stored filings and one quarantined derivative row in
+2026-09-11 had 497/497 stored filings and one quarantined derivative row in
 [SEC accession 0001493152-26-042331](https://www.sec.gov/Archives/edgar/data/315545/000149315226042331/ownership.xml).
 The convertible note uses `transactionTotalValue=35000` and has no
 `transactionShares`. Treating dollars or underlying shares as the reported
@@ -49,8 +51,11 @@ The explicit `ingestion.sec.repair_amounts` command publishes a new immutable
 ancestry hashes. Only recovered rows become known at repair time; unchanged rows
 keep their original observation/acceptance metadata. New-version corruption
 fails closed rather than falling back to an obsolete quarantine checkpoint.
-The source-verified dry run resolves the one September 11 quarantine. Production
-activation still requires the verified release and a fresh publication.
+The [verified replacement checkpoint](https://github.com/Garrincha077/insider-turning-engine/releases/tag/sec-day-v2-2026-09-11-08ca96f94b980d8f91528a88c99b99157351e11a5fc628208c290eca29936fe6)
+resolves the September 11 quarantine with zero remaining fetch/parse failures.
+It was produced by source commit `99cbe623b95b6ba4ffe96b3f4a965a774489b375`
+after 467 Python tests, 32 desktop/mobile checks, and green CI. No canonical
+cursor was advanced. The earlier immutable release remains available.
 
 The September 3 checkpoint stored 750/1,056 filings within its first bounded run.
 [The resumed run](https://github.com/Garrincha077/insider-turning-engine/actions/runs/34696916118)
@@ -60,11 +65,11 @@ facts enter Pages on the next data refresh, not through a UI-only deployment.
 
 ## Remaining activation checks
 
-1. Publish the source-verified derivative repair and refresh from its immutable
-   checkpoint. Preserve original evidence and repair-time availability.
-2. Verify clean latest-day selection, successful Telegram delivery test and
-   persisted claim/result using production state. Set the separate digest policy
-   enabled only after these checks; never toggle the predictive policy.
+1. Refresh Pages from the verified repair. Verify the selected latest-day facts
+   and first remotely persisted claim/result; UI-only deploys never send.
+2. Telegram test delivery was successful in
+   [the September 9 test run](https://github.com/Garrincha077/insider-turning-engine/actions/runs/34404894965).
+   This establishes channel configuration, not proof of a factual daily cycle.
 3. Observe two distinct real daily cycles. Repeated runs of one SEC day do not
    establish multi-day operational readiness.
 
