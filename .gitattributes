@@ -1,0 +1,3 @@
+# Public fixture hashes describe bytes, regardless of the checkout platform.
+app/e2e/public/data/*.json -text
+app/public/data/*.json -text
