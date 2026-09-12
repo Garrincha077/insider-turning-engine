@@ -2,16 +2,21 @@ import { createHash } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 import fixture from './fixtures/research-v2.json' with { type: 'json' };
 import { ready, section } from './helpers';
+import originalSettings from './public/data/settings-status.json' with { type: 'json' };
+import type { SettingsStatus } from '../lib/operations-data';
 
-async function v2(page: Page, mutate?: (value: typeof fixture) => void) {
+async function v2(page: Page, mutate?: (value: typeof fixture) => void, digest?: SettingsStatus['digest']) {
   const data = structuredClone(fixture); mutate?.(data);
   const bytes = JSON.stringify(data);
+  const settingsBytes = JSON.stringify({ ...originalSettings, digest });
+  if (digest) await page.route('**/data/settings-status.json', (route) => route.fulfill({ body: settingsBytes, contentType: 'application/json' }));
   await page.route('**/data/research-v2.json', (route) => route.fulfill({ body: bytes, contentType: 'application/json' }));
   await page.route('**/data/manifest.json', async (route) => {
     const response = await route.fetch();
     const manifest = await response.json();
     manifest.runId = fixture.runId; manifest.asOf = fixture.asOf;
     manifest.files.push({ path: 'research-v2.json', size: Buffer.byteLength(bytes), sha256: createHash('sha256').update(bytes).digest('hex') });
+    if (digest) manifest.files = manifest.files.map((file: { path: string }) => file.path !== 'settings-status.json' ? file : { path: file.path, size: Buffer.byteLength(settingsBytes), sha256: createHash('sha256').update(settingsBytes).digest('hex') });
     await route.fulfill({ json: manifest });
   });
 }
@@ -63,4 +68,24 @@ test('v2 missing fields and mixed-run scores fail closed even with matching byte
   await v2(page, (value) => { value.researchScores[0].runId = 'run_another_day'; });
   await page.goto('/');
   await expect(page.getByText('Research v2 mixed score lineage')).toBeVisible();
+});
+
+test('digest policy and exact suppression are visible independently of predictive alerts', async ({ page }) => {
+  const day = [...fixture.coverage.expectedSecDays].sort((a: string, b: string) => a.localeCompare(b)).at(-1) ?? null;
+  await v2(page, undefined, { enabled: false, secDay: day, status: 'BLOCKED',
+    reasons: ['DIGEST_DISABLED_BY_POLICY', 'LATEST_SEC_DAY_INCOMPLETE'], eventIds: [], excludedIssuers: 0 });
+  await ready(page);
+  await section(page, 'Settings');
+  await expect(page.getByText('Informational digest policy', { exact: true })).toBeVisible();
+  await expect(page.getByText(/Telegram digest: OFF/)).toBeVisible();
+  await section(page, 'Alert Center');
+  await expect(page.getByText(/Server policy: OFF/)).toBeVisible();
+  await expect(page.getByText(/Delivery: BLOCKED.*latest sec day incomplete/i)).toBeVisible();
+});
+
+test('digest event references from another snapshot fail closed', async ({ page }) => {
+  await v2(page, undefined, { enabled: true, secDay: [...fixture.coverage.expectedSecDays].sort((a: string, b: string) => a.localeCompare(b)).at(-1) ?? null,
+    status: 'READY', reasons: [], eventIds: ['not-in-this-run'], excludedIssuers: 0 });
+  await page.goto('/');
+  await expect(page.getByText('Digest status does not match the research publication')).toBeVisible();
 });

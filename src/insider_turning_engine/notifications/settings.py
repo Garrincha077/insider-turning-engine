@@ -57,6 +57,7 @@ def build_settings_status(
     secrets: Mapping[str, str],
     delivery_history: Sequence[Mapping[str, Any]] = (),
     test_history: Sequence[Mapping[str, Any]] = (),
+    factual_history: Sequence[Mapping[str, Any]] = (),
     generated_at: datetime | None = None,
 ) -> dict[str, Any]:
     """Return a schema-ready status document containing no credential values."""
@@ -82,7 +83,7 @@ def build_settings_status(
     ) -> dict[str, Any]:
         failures = sum(
             1
-            for row in delivery_history
+            for row in [*delivery_history, *factual_history]
             if row.get("channel") == name and row.get("status") in {"FAILED", "UNCERTAIN"}
         )
         tests = sorted(
@@ -96,7 +97,8 @@ def build_settings_status(
             "lastTestAt": _latest(test_history, channel=name),
             "lastTestStatus": tests[-1]["status"] if tests else None,
             "testFailureCount": sum(row["status"] in {"FAILED", "UNCERTAIN"} for row in tests),
-            "lastSuccessAt": _latest(delivery_history, channel=name, status="SENT"),
+            "lastSuccessAt": _latest([*delivery_history, *factual_history],
+                                     channel=name, status="SENT"),
             "failureCount": failures,
         }
 
@@ -126,7 +128,8 @@ def build_settings_status(
             [
                 {"kind": kind, "channel": row["channel"], "status": row["status"],
                  "at": row["recorded_at"]}
-                for kind, history in (("TEST", test_history), ("SIGNAL", delivery_history))
+                for kind, history in (("TEST", test_history), ("SIGNAL", delivery_history),
+                                      ("DIGEST", factual_history))
                 for row in history
                 if row.get("channel") in {"telegram", "email"}
                 and row.get("status") in {"SENT", "FAILED", "UNCERTAIN", "SUPPRESSED", "CLAIMED"}

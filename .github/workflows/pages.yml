@@ -150,6 +150,13 @@ jobs:
           test -s app/dist/data/dashboard.json
           test -s app/dist/data/manifest.json
           uv run python -m insider_turning_engine.export.research_policy --directory app/dist/data
+      - name: Preserve exact validated inputs for the post-deploy factual digest
+        if: github.event_name == 'schedule' || inputs.refresh_data == true
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-publication-${{ github.run_id }}
+          path: app/dist/data
+          retention-days: 7
       - uses: actions/configure-pages@v5
         with:
           enablement: true
@@ -168,3 +175,48 @@ jobs:
       - name: Deploy validated artifact
         id: deployment
         uses: actions/deploy-pages@v4
+
+  digest:
+    # UI-only deploys and reruns never initiate real delivery. No predictive gate bypass.
+    if: >-
+      github.ref == 'refs/heads/main' && github.run_attempt == 1 &&
+      (github.event_name == 'schedule' || inputs.refresh_data == true)
+    needs: [build, deploy]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    permissions:
+      contents: write # persist a day claim before contacting Telegram
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - uses: actions/download-artifact@v4
+        with:
+          name: digest-publication-${{ github.run_id }}
+          path: work/digest-publication
+      - name: Offline factual preview without credentials
+        run: >-
+          uv run python -m insider_turning_engine.notifications.digest_cli
+          --directory work/digest-publication --output work/digest-preview.json
+      - name: Recheck factual gates and persist claim before delivery
+        env:
+          ITE_ENVIRONMENT: production
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: >-
+          uv run python -m insider_turning_engine.notifications.digest_cli
+          --directory work/digest-publication --execute
+      - name: Preserve safe factual-delivery diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: factual-digest-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            work/digest-preview.json
+            work/digest-status.json
+          if-no-files-found: warn
+          retention-days: 30

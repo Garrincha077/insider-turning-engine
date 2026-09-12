@@ -50,10 +50,15 @@ class TelegramHTTPChannel:
         return True
 
     def send(self, preview: NotificationPreview) -> SendResult:
+        return self.send_text(preview.text, parse_mode=preview.parse_mode or "HTML")
+
+    def send_text(self, text: str, *, parse_mode: str = "HTML") -> SendResult:
+        """Send factual text without inventing a score-based AlertCandidate."""
         payload = {
             "chat_id": self._chat_id,
-            "text": preview.text,
-            "parse_mode": preview.parse_mode or "HTML",
+            "text": text,
+            "parse_mode": parse_mode,
+            "link_preview_options": '{"is_disabled":true}',
         }
         try:
             response = self._transport(self._endpoint, payload)
@@ -81,6 +86,8 @@ class TelegramHTTPChannel:
                 return SendResult.sent(provider_id)
             if 200 <= status < 300:
                 return SendResult.uncertain("TELEGRAM_RECEIPT_MISSING")
+            if status >= 500:
+                return SendResult.uncertain("TELEGRAM_SERVER_ERROR")
             return SendResult.failed(f"telegram HTTP status {status}")
         except Exception as exc:  # transport outcome is ambiguous: never retry automatically
             return SendResult.uncertain(type(exc).__name__)

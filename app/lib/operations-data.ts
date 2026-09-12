@@ -54,8 +54,12 @@ export type SettingsStatus = {
   environment: 'local' | 'staging' | 'production';
   alertsAllowed: boolean;
   blockingReasons: string[];
+  digest?: {
+    enabled: boolean; secDay: string | null; status: 'READY' | 'BLOCKED';
+    reasons: string[]; eventIds: string[]; excludedIssuers: number;
+  };
   deliveryHistory?: Array<{
-    kind: 'TEST' | 'SIGNAL'; channel: 'telegram' | 'email';
+    kind: 'TEST' | 'SIGNAL' | 'DIGEST'; channel: 'telegram' | 'email';
     status: 'SENT' | 'FAILED' | 'UNCERTAIN' | 'SUPPRESSED' | 'CLAIMED'; at: string;
   }>;
   policy: {

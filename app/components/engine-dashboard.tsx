@@ -120,7 +120,7 @@ export function EngineDashboard() {
         {view === 'cost-basis' && (data.research ? <BasisV2 data={data.research} openCompany={openCompany} /> : <CostBasisView catalog={catalog} openCompany={openCompany} />)}
         {view === 'company-lab' && <><button className={controlClass} onClick={() => navigate(previousView)}>← Back to {views.find(([id]) => id === previousView)?.[1]}</button>{company ? <CompanyLab {...tableProps} company={company} /> : <EmptyState title="Company not in this snapshot" detail="This shared issuer link cannot be resolved from the published company catalogue. Return to Radar to choose an available company." />}</>}
         {view === 'backtest-lab' && <MethodologyView data={data} manifest={manifest} />}
-        {view === 'system-health' && <SystemHealthView manifest={manifest} research={data.research} />}
+        {view === 'system-health' && <SystemHealthView manifest={manifest} research={data.research} settings={settings} />}
         {view === 'data-coverage' && (data.research ? <CoverageV2 data={data.research} /> : <DataCoverageView manifest={manifest} />)}
         {view === 'alert-center' && <AlertCenterView settings={settings} research={data.research} />}
         {view === 'settings' && <><Panel title="Local display preferences" subtitle="Saved only in this browser. They never change Telegram recipients, policy or selection.">

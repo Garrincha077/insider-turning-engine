@@ -5,6 +5,7 @@ schedule, least-privilege permissions, fail-closed publication gate, and
 state-branch allow-list reviewable in normal CI.
 """
 
+import json
 from pathlib import Path
 
 import yaml
@@ -173,6 +174,21 @@ def test_pages_validates_manifest_and_hashes_before_upload() -> None:
         "pipeline.daily_research")
     assert text.index("pipeline.daily_research") < text.index("notifications.state_store sync")
     assert '--expected-head "$EXPECTED_STATE_HEAD"' in text
+
+
+def test_factual_digest_is_after_pages_uses_exact_artifact_and_separate_policy() -> None:
+    workflow, text = _workflow(PAGES)
+    job = workflow["jobs"]["digest"]
+    assert job["needs"] == ["build", "deploy"]
+    assert job["environment"] == "production"
+    assert "github.run_attempt == 1" in job["if"]
+    assert "inputs.refresh_data == true" in job["if"]
+    assert "refs/heads/main" in job["if"]
+    preview = next(step for step in job["steps"] if step.get("name", "").startswith("Offline"))
+    assert "env" not in preview and "--execute" not in preview["run"]
+    assert text.count("name: digest-publication-${{ github.run_id }}") == 2
+    policy = json.loads((ROOT / "config/digest.v1.json").read_text())
+    assert policy["enabled"] is False  # deliberate rollout switch, not the predictive switch
 
 
 def test_delivery_workflow_is_explicit_main_only_and_rejects_reruns() -> None:

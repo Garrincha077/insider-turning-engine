@@ -1291,6 +1291,11 @@ def export_settings_status(
     reasons = list(publication["quality"]["issues"])
     if not policy.delivery_enabled:
         reasons.append("DELIVERY_DISABLED_BY_POLICY")
+    # A settings export must never reset evidence needed for factual deduplication.
+    from insider_turning_engine.notifications.state_store import _validate_ledger
+
+    if outbox.exists():
+        _validate_ledger(outbox)
     outbox.parent.mkdir(parents=True, exist_ok=True)
     ledger = SQLiteOutbox(outbox, cooldown_days=policy.cooldown_days)
     try:
@@ -1300,6 +1305,15 @@ def export_settings_status(
             reasons.append("OUTBOX_CORRUPTION_RECOVERED")
     finally:
         ledger.close()
+    # The independent factual ledger is read-only here, not a predictive candidate.
+    from insider_turning_engine.domain.research import ResearchSnapshot
+    from insider_turning_engine.notifications.digest import (
+        digest_history,
+        load_digest_policy,
+        public_digest_status,
+    )
+
+    factual_history = digest_history(outbox)
     status = build_settings_status(
         policy,
         environment=environment,
@@ -1308,7 +1322,15 @@ def export_settings_status(
         secrets=os.environ,
         delivery_history=delivery_history,
         test_history=test_history,
+        factual_history=factual_history,
     )
+    if any(row["path"] == "research-v2.json" for row in publication["files"]):
+        research = ResearchSnapshot.model_validate_json(
+            (manifest.parent / "research-v2.json").read_bytes())
+        status["digest"] = public_digest_status(research, load_digest_policy(),
+            now=datetime.now(UTC), production=environment == "production",
+            configured=bool(os.environ.get("TELEGRAM_BOT_TOKEN")
+                            and os.environ.get("TELEGRAM_CHAT_ID")), outbox=outbox)
     _write_json(output, status)
     _echo({"command": "export-settings-status", "status": "SUCCEEDED", "output": str(output)})
 
