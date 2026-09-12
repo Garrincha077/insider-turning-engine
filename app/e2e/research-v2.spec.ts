@@ -17,6 +17,8 @@ async function v2(page: Page, mutate?: (value: typeof fixture) => void) {
 }
 
 test('v2 facts drive scoreless Radar, real clusters, basis and source-linked tape', async ({ page }) => {
+  const chartErrors: string[] = [];
+  page.on('console', (message) => { if (/component.*not imported/i.test(message.text())) chartErrors.push(message.text()); });
   await v2(page);
   await ready(page);
   await expect(page.locator('tbody tr')).toHaveCount(1);
@@ -44,6 +46,10 @@ test('v2 facts drive scoreless Radar, real clusters, basis and source-linked tap
   await section(page, 'Company Lab');
   await expect(page.getByLabel('Select company')).toHaveValue('ACME');
   await expect(page.locator('canvas').first()).toBeVisible();
+  await section(page, 'Alert Center');
+  await expect(page.getByText('Informational daily digest · draft preview', { exact: true })).toBeVisible();
+  await expect(page.getByText(/This preview does not send a message/)).toBeVisible();
+  expect(chartErrors).toEqual([]);
 });
 
 test('v2 semantic corruption cannot fall back to the legacy snapshot', async ({ page }) => {

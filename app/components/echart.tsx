@@ -3,6 +3,8 @@ import { BarChart, LineChart } from 'echarts/charts';
 import {
   GridComponent,
   LegendComponent,
+  MarkLineComponent,
+  MarkPointComponent,
   TooltipComponent,
 } from 'echarts/components';
 import { init, use as registerEChartsModules, type EChartsCoreOption } from 'echarts/core';
@@ -13,6 +15,8 @@ registerEChartsModules([
   LineChart,
   GridComponent,
   LegendComponent,
+  MarkLineComponent,
+  MarkPointComponent,
   TooltipComponent,
   CanvasRenderer,
 ]);
