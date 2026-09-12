@@ -56,7 +56,7 @@ export type SettingsStatus = {
   blockingReasons: string[];
   digest?: {
     enabled: boolean; secDay: string | null; status: 'READY' | 'BLOCKED';
-    reasons: string[]; eventIds: string[]; excludedIssuers: number;
+    reasons: string[]; eventIds: string[]; excludedIssuers: number | null;
   };
   deliveryHistory?: Array<{
     kind: 'TEST' | 'SIGNAL' | 'DIGEST'; channel: 'telegram' | 'email';

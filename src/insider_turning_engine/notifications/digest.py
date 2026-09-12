@@ -44,7 +44,7 @@ class DigestDraft(BaseModel):
     event_ids: tuple[str, ...] = ()
     reasons: tuple[str, ...] = ()
     text: str = ""
-    excluded_issuers: int = Field(default=0, ge=0)
+    excluded_issuers: int | None = Field(default=None, ge=0)
 
     @property
     def content_hash(self) -> str:

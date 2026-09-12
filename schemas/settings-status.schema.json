@@ -27,7 +27,7 @@
         "status": { "enum": ["READY", "BLOCKED"] },
         "reasons": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,63}$" } },
         "eventIds": { "type": "array", "maxItems": 5, "uniqueItems": true, "items": { "type": "string" } },
-        "excludedIssuers": { "type": "integer", "minimum": 0 }
+        "excludedIssuers": { "type": ["integer", "null"], "minimum": 0 }
       }
     },
     "deliveryHistory": {

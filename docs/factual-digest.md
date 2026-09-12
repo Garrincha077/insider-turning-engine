@@ -43,8 +43,11 @@ this row quarantined until a typed quantity/unit contract can represent it.
 This is not an unresolved open-market purchase. Existing day-level completeness
 still blocks the digest; no quarantine was deleted or attested away.
 
-The September 3 checkpoint stored 750/1,056 filings within its first bounded run;
-306 were pending and three rows quarantined. Storage success is not completeness.
+The September 3 checkpoint stored 750/1,056 filings within its first bounded run.
+[The resumed run](https://github.com/Garrincha077/insider-turning-engine/actions/runs/34696916118)
+now has 1,056/1,056 stored, 2,653 owner rows, no pending filings or fetch failures,
+and three quarantined rows. Storage success is not parse completeness. The extra
+facts enter Pages on the next data refresh, not through a UI-only deployment.
 
 ## Remaining activation checks
 

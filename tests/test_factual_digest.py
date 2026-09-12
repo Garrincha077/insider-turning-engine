@@ -65,6 +65,7 @@ def test_incomplete_latest_day_does_not_fall_back_or_assert_empty():
     data = snapshot(complete=False)
     draft = preview_digest(data)
     assert draft.reasons == ("LATEST_SEC_DAY_INCOMPLETE",)
+    assert draft.excluded_issuers is None  # not a measured zero when selection never ran
     assert not draft.text and not draft.event_ids
     data = snapshot()
     data.coverage.expected_sec_days.append(DAY + timedelta(days=1))
