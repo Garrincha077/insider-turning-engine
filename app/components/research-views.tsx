@@ -137,15 +137,16 @@ export function CompanyLab({ data, catalog, company, watchlist, toggleWatch, ope
   const markers = (data.research?.economicTransactions ?? []).filter((row) => row.issuerCik === company.issuerCik && row.aggregateEligible && pricesByDate.has(row.transactionDate)).map((row) => ({ name: row.side === 'BUY' ? 'Purchase' : 'Sale', value: money(row.value, true), coord: [row.transactionDate, pricesByDate.get(row.transactionDate)], symbol: row.side === 'BUY' ? 'triangle' : 'diamond', symbolSize: 10, itemStyle: { color: row.side === 'BUY' ? '#5eead4' : '#fb7185' } }));
   const option = {
     backgroundColor: 'transparent', textStyle: { color: '#cbd5e1', fontFamily: 'Segoe UI, sans-serif' },
-    tooltip: { trigger: 'axis' }, legend: { textStyle: { color: '#a8b6c5' }, data: ['Adjusted price', 'Mansfield market RS', ...(data.research ? ['Mansfield sector RS'] : [])] },
-    grid: { left: 60, right: 55, top: 50, bottom: 45 },
-    xAxis: { type: 'category', data: series.map((row) => row.date), axisLabel: { color: '#a8b6c5' } },
+    tooltip: { trigger: 'axis' }, legend: { top: 8, bottom: 'auto', left: 'center', type: 'scroll', textStyle: { color: '#a8b6c5' }, data: ['Adjusted price', 'Mansfield market RS', ...(data.research ? ['Mansfield sector RS'] : [])] },
+    grid: { left: 60, right: 55, top: 65, bottom: 45 },
+    xAxis: { type: 'category', data: series.map((row) => row.date), axisLabel: { color: '#a8b6c5', hideOverlap: true } },
     yAxis: [{ type: 'value', scale: true, name: 'USD', splitLine: { lineStyle: { color: '#263446' } } }, { type: 'value', name: 'RS', splitLine: { show: false } }],
     series: [{ name: 'Adjusted price', type: 'line', showSymbol: false, data: series.map((row) => row.price), itemStyle: { color: '#5eead4' },
       markPoint: { label: { show: false }, data: markers },
       markLine: company.insiderCost == null ? undefined : { symbol: 'none', label: { formatter: 'Current observed basis', position: 'insideEndTop' }, lineStyle: { color: '#fbbf24', type: 'dashed' }, data: [{ yAxis: company.insiderCost }] } },
     { name: 'Mansfield market RS', type: 'line', yAxisIndex: 1, showSymbol: false, connectNulls: true, data: series.map((row) => row.mansfield), itemStyle: { color: '#38bdf8' } },
     ...(data.research ? [{ name: 'Mansfield sector RS', type: 'line', yAxisIndex: 1, showSymbol: false, connectNulls: true, data: series.map((row) => row.sectorMansfield ?? null), itemStyle: { color: '#c4b5fd' } }] : [])],
+    media: [{ query: { maxWidth: 600 }, option: { legend: { orient: 'vertical', top: 8, left: 'center', bottom: 'auto' }, grid: { top: 100, bottom: 45 } } }],
   };
   return <>
     <div className="flex flex-wrap gap-3"><input aria-label="Search companies" className={controlClass} placeholder="Search companies" value={query} onChange={(event) => setQuery(event.target.value)} /><select aria-label="Select company" className={`${controlClass} min-w-0 max-w-full flex-1`} value={choices.some((row) => row.ticker === company.ticker) ? company.ticker : ''} onChange={(event) => openCompany(event.target.value)}><option value="" disabled>{choices.length ? 'Choose company' : 'No matching companies'}</option>{choices.map((row) => <option key={row.ticker} value={row.ticker}>{row.ticker} · {row.company}</option>)}</select><WatchButton row={company} watched={watchlist.includes(company.issuerCik)} toggle={toggleWatch} /></div>
