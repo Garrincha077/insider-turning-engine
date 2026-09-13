@@ -63,10 +63,24 @@ now has 1,056/1,056 stored, 2,653 owner rows, no pending filings or fetch failur
 and three quarantined rows. Storage success is not parse completeness. The extra
 facts enter Pages on the next data refresh, not through a UI-only deployment.
 
-## Remaining activation checks
+## First real daily cycle
 
-1. Refresh Pages from the verified repair. Verify the selected latest-day facts
-   and first remotely persisted claim/result; UI-only deploys never send.
+[Daily run 34725230445](https://github.com/Garrincha077/insider-turning-engine/actions/runs/34725230445)
+successfully published `run_research_20260912T232503Z` and recorded Telegram
+`SENT` for SEC day 2026-09-11. The validated public snapshot has 1,290 companies,
+8,293 economic events, 534 priced companies and 60 complete experimental scores.
+One SEC day is complete; the older observed window remains explicitly partial.
+The factual message contains five qualifying purchases and discloses excluded
+unresolved issuers. No predictive alert was enabled or sent.
+
+All 14 public views were verified on desktop and mobile without JavaScript errors
+or horizontal overflow. A UI-only publication refreshes the delivery history;
+it does not acquire new facts or initiate another Telegram send.
+
+## Remaining operational checks
+
+1. Inspect the persisted claim/result and refreshed public delivery history.
+   Never delete a claim to retry the same SEC day.
 2. Telegram test delivery was successful in
    [the September 9 test run](https://github.com/Garrincha077/insider-turning-engine/actions/runs/34404894965).
    This establishes channel configuration, not proof of a factual daily cycle.
