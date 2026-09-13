@@ -66,6 +66,24 @@ test('v2 semantic corruption cannot fall back to the legacy snapshot', async ({ 
   await expect(page.getByLabel('Ticker or company')).toHaveCount(0);
 });
 
+test('Market Pulse reserves a top legend band away from transaction dates', async ({ page }) => {
+  await v2(page);
+  await ready(page);
+  await section(page, 'Market Pulse');
+  await expect(page.locator('canvas')).toBeVisible();
+  const layout = await page.evaluate(async () => {
+    const modulePath = '/node_modules/.vite/deps/echarts_core.js';
+    const engine = await import(modulePath) as typeof import('echarts/core');
+    const chart = engine.getInstanceByDom(document.querySelector<HTMLElement>('[_echarts_instance_]')!);
+    const option = chart!.getOption() as { legend: Array<{ top: number; bottom: number | null }>; grid: Array<{ top: number; bottom: number }> };
+    return { legend: option.legend[0], grid: option.grid[0] };
+  });
+  expect(layout.legend.top).toBe(8);
+  expect(layout.legend.bottom).toBeNull(); // ECharts normalizes the unused 'auto' edge.
+  expect(layout.grid.top).toBeGreaterThanOrEqual(65);
+  expect(layout.grid.bottom).toBeGreaterThanOrEqual(45);
+});
+
 test('v2.1 source amounts with unknown derivative quantity do not enter purchase tape', async ({ page }) => {
   await v2(page, (value) => {
     value.schemaVersion = '2.1.0';
