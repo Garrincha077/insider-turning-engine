@@ -48,6 +48,7 @@ test('v2 facts drive scoreless Radar, real clusters, basis and source-linked tap
   await section(page, 'Market Pulse');
   await expect(page.getByText('$2,000.00', { exact: true })).toBeVisible();
   await expect(page.getByText('Purchases and sales by transaction date')).toBeVisible();
+  await expect(page.getByText('Observed buy/sell ratio history · 90D')).toBeVisible();
   await section(page, 'Data Coverage');
   await expect(page.getByText('Measured source-to-score coverage')).toBeVisible();
   await section(page, 'Company Lab');
@@ -70,7 +71,7 @@ test('Market Pulse reserves a top legend band away from transaction dates', asyn
   await v2(page);
   await ready(page);
   await section(page, 'Market Pulse');
-  await expect(page.locator('canvas')).toBeVisible();
+  await expect(page.locator('canvas').first()).toBeVisible();
   const layout = await page.evaluate(async () => {
     const modulePath = '/node_modules/.vite/deps/echarts_core.js';
     const engine = await import(modulePath) as typeof import('echarts/core');
