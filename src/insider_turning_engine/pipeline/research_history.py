@@ -24,6 +24,25 @@ class ResearchHistory:
     quarantined_issuers: frozenset[str] = frozenset()
 
 
+def _filing_identity(filing: dict[str, Any]) -> tuple[Any, ...]:
+    """Prove a repeated index entry is the same source filing and parse result."""
+    return (
+        filing["parserVersion"],
+        filing["provenance"]["complete_submission_hash"],
+        tuple(sorted(
+            (
+                row["transactionId"], row["revisionId"],
+                row["source"]["sourceRowKey"], row["source"]["contentHash"],
+            )
+            for row in filing["records"]
+        )),
+        tuple(sorted(
+            (row["reason_code"], row["source_row_key"])
+            for row in filing["quarantines"]
+        )),
+    )
+
+
 def research_history(
     checkpoints: Sequence[dict[str, Any]], *, expected_days: Sequence[date],
 ) -> ResearchHistory:
@@ -33,6 +52,7 @@ def research_history(
     evidence: dict[date, DayEvidence] = {}
     rows: list[CanonicalTransaction] = []
     accession_days: dict[str, date] = {}
+    selected_filings: dict[str, tuple[date, dict[str, Any], list[CanonicalTransaction]]] = {}
     quarantined_issuers: set[str] = set()
     for item in checkpoints:
         day = date.fromisoformat(item["day"])
@@ -52,14 +72,23 @@ def research_history(
         )
         for filing in checkpoint["filings"]:
             accession = str(filing["accession"])
-            if accession in accession_days and accession_days[accession] != day:
-                raise ValueError("filing appears in conflicting SEC day inventories")
-            accession_days[accession] = day
-            if filing["quarantines"]:
-                # A filer CIK can be an owner: only parsed issuer evidence is usable.
-                quarantined_issuers.update(CanonicalTransaction.model_validate(row).issuer.cik
-                                           for row in filing["records"])
-        rows.extend(filing_rows)
+            typed = [CanonicalTransaction.model_validate(row) for row in filing["records"]]
+            previous = selected_filings.get(accession)
+            if previous is not None:
+                if _filing_identity(previous[1]) != _filing_identity(filing):
+                    raise ValueError("filing appears in conflicting SEC day inventories")
+                # SEC can republish an unchanged accession in a later master
+                # index. Attribute it to the first observed index and count its
+                # economics once; each day's acquisition evidence remains intact.
+                if day >= previous[0]:
+                    continue
+            selected_filings[accession] = (day, filing, typed)
+    for accession, (day, filing, typed) in selected_filings.items():
+        accession_days[accession] = day
+        if filing["quarantines"]:
+            # A filer CIK can be an owner: only parsed issuer evidence is usable.
+            quarantined_issuers.update(row.issuer.cik for row in typed)
+        rows.extend(typed)
     return ResearchHistory(tuple(_merge_records(rows)), expected,
                            tuple(evidence[day] for day in sorted(evidence)), accession_days,
                            frozenset(quarantined_issuers))
