@@ -84,6 +84,39 @@ test('Market Pulse reserves a top legend band away from transaction dates', asyn
   expect(layout.grid.bottom).toBeGreaterThanOrEqual(45);
 });
 
+test('Market Pulse shows the purchase-sale value ratio and signed sector net', async ({ page }) => {
+  await v2(page, (value) => {
+    value.economicTransactions.push({ ...value.economicTransactions[0],
+      eventId: 'evt_sale_for_pulse', accession: '0001234567-26-000003', code: 'S', side: 'SELL',
+      shares: 50, price: 10, value: 500, owners: [value.economicTransactions[0].owners[0]] });
+    value.coverage.economicEvents += 1;
+    value.coverage.canonicalOwnerRows += 1;
+  });
+  await ready(page);
+  await section(page, 'Market Pulse');
+  await expect(page.getByTestId('pulse-value-ratio')).toHaveText('4×');
+  await expect(page.getByRole('columnheader', { name: 'Net USD' })).toBeVisible();
+  await expect(page.getByTestId('sector-net')).toHaveAttribute('title', '+$1,500.00');
+  await expect(page.getByTestId('sector-net')).toHaveText('+$1.5K');
+});
+
+test('Market Pulse excludes a clearly flagged reported-price anomaly without hiding the SEC event', async ({ page }) => {
+  await v2(page, (value) => {
+    value.economicTransactions.push({ ...value.economicTransactions[0],
+      eventId: 'evt_price_anomaly', accession: '0001234567-26-000004', shares: 131387,
+      price: 180000, value: 23649660000, owners: [value.economicTransactions[0].owners[0]] });
+    value.coverage.economicEvents += 1;
+    value.coverage.canonicalOwnerRows += 1;
+  });
+  await ready(page);
+  await section(page, 'Market Pulse');
+  await expect(page.getByText('$2,000.00', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('pulse-value-ratio')).toHaveText('∞');
+  await expect(page.getByText('1 SEC-reported price anomaly is excluded from Pulse totals')).toBeVisible();
+  await section(page, 'Live SEC Tape');
+  await expect(page.locator('tbody tr')).toHaveCount(3);
+});
+
 test('Company Lab reserves a top legend band away from date labels', async ({ page }) => {
   await v2(page);
   await ready(page);

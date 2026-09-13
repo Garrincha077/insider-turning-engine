@@ -5,9 +5,28 @@ import { isString, usePreference } from '@/lib/local-preferences';
 import { SortControls, useRowSort } from './sort-controls';
 import { EChart } from './echart';
 
+function signedMoney(value: number, compact = false): string {
+  if (value === 0) return money(0, compact);
+  return `${value > 0 ? '+' : '−'}${money(Math.abs(value), compact)}`;
+}
+
+function purchaseSaleRatio(purchases: number, sales: number): string {
+  if (sales === 0) return purchases > 0 ? '∞' : '—';
+  return `${metric(purchases / sales, 2)}×`;
+}
+
 export function ActivityV2({ data }: { data: ResearchSnapshot }) {
-  const rows = data.economicTransactions.filter((row) => row.aggregateEligible);
   const companies = new Map(data.companies.map((row) => [row.issuerCik, row]));
+  const candidateRows = data.economicTransactions.filter((row) => row.aggregateEligible);
+  // Keep the source event inspectable, but prevent a plainly anomalous SEC-reported
+  // per-share price from flattening every factual Pulse chart and aggregate.
+  const flaggedRows = candidateRows.filter((row) => {
+    const reference = companies.get(row.issuerCik)?.currentPrice;
+    if (row.price == null || row.price <= 0 || reference == null || reference <= 0) return false;
+    return Math.max(row.price / reference, reference / row.price) >= 1_000;
+  });
+  const flaggedIds = new Set(flaggedRows.map((row) => row.eventId));
+  const rows = candidateRows.filter((row) => !flaggedIds.has(row.eventId));
   const daily = new Map<string, { buy: number; sell: number; count: number; owners: Set<string> }>();
   const sectors = new Map<string, { buy: number; sell: number; count: number; owners: Set<string> }>();
   for (const row of rows) {
@@ -20,11 +39,14 @@ export function ActivityV2({ data }: { data: ResearchSnapshot }) {
   const days = [...daily].sort(([a], [b]) => a.localeCompare(b));
   const buys = rows.filter((row) => row.side === 'BUY');
   const sales = rows.filter((row) => row.side === 'SELL');
+  const purchaseValue = buys.reduce((sum, row) => sum + (row.value ?? 0), 0);
+  const saleValue = sales.reduce((sum, row) => sum + (row.value ?? 0), 0);
   return <div className="space-y-5">
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[['Purchase value', money(buys.reduce((sum, row) => sum + (row.value ?? 0), 0))], ['Sale value', money(sales.reduce((sum, row) => sum + (row.value ?? 0), 0))], ['Economic transactions', String(rows.length)], ['Distinct reporting-owner CIKs', String(new Set(rows.flatMap((row) => row.owners.map((owner) => owner.ownerCik))).size)]].map(([label, value]) => <div key={label} className="rounded-xl border border-border bg-card p-4"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-3 font-mono text-lg">{value}</p></div>)}</div>
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{[['Purchase value', money(purchaseValue)], ['Sale value', money(saleValue)], ['Purchase / sale value', purchaseSaleRatio(purchaseValue, saleValue)], ['Economic transactions', String(rows.length)], ['Distinct reporting-owner CIKs', String(new Set(rows.flatMap((row) => row.owners.map((owner) => owner.ownerCik))).size)]].map(([label, value]) => <div key={label} className="rounded-xl border border-border bg-card p-4"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-3 font-mono text-lg" data-testid={label === 'Purchase / sale value' ? 'pulse-value-ratio' : undefined}>{value}</p></div>)}</div>
     <p className="text-sm leading-6 text-muted-foreground">{data.coverage.scope}. Values count each economic event once; reporting-owner counts include joint filers, not necessarily independent decisions. Unresolved-amendment issuers are excluded from these aggregates. {data.readiness.dashboard.status !== 'READY' ? 'The SEC window is incomplete; zero means no observed eligible event, not no market activity.' : ''}</p>
-    <section className="rounded-xl border border-border bg-card p-5"><h2 className="text-base font-semibold">Purchases and sales by transaction date</h2>{!days.length ? <p className="mt-4 text-sm text-muted-foreground">No eligible observed events. Check coverage before interpreting the absence.</p> : <EChart style={{ height: 320 }} option={{ textStyle: { color: '#cbd5e1' }, tooltip: { trigger: 'axis' }, legend: { top: 8, bottom: 'auto', data: ['Purchases', 'Sales'], textStyle: { color: '#cbd5e1' } }, grid: { left: 80, right: 15, top: 65, bottom: 45 }, xAxis: { type: 'category', data: days.map(([day]) => day), axisLabel: { hideOverlap: true } }, yAxis: { type: 'value', name: 'USD', splitLine: { lineStyle: { color: '#263446' } } }, series: [{ type: 'bar', name: 'Purchases', data: days.map(([, row]) => row.buy), itemStyle: { color: '#5eead4' } }, { type: 'bar', name: 'Sales', data: days.map(([, row]) => row.sell), itemStyle: { color: '#fb7185' } }] }} />}</section>
-    <section className="overflow-x-auto rounded-xl border border-border bg-card p-5"><h2 className="text-base font-semibold">Observed sector activity</h2><table className="mt-4 w-full text-left text-sm"><thead><tr>{['Sector', 'Buys USD', 'Sales USD', 'Events', 'Reporting owners'].map((label) => <th className="p-3" key={label}>{label}</th>)}</tr></thead><tbody>{[...sectors].sort(([, a], [, b]) => b.buy - a.buy).map(([sector, row]) => <tr key={sector} className="border-t border-border"><td className="p-3">{sector}</td><td className="p-3" title={money(row.buy)}>{money(row.buy, true)}</td><td className="p-3" title={money(row.sell)}>{money(row.sell, true)}</td><td className="p-3">{row.count}</td><td className="p-3">{row.owners.size}</td></tr>)}</tbody></table></section>
+    {flaggedRows.length > 0 && <details className="rounded-xl border border-amber-400/40 bg-amber-400/5 p-4 text-sm"><summary className="cursor-pointer text-amber-200">{flaggedRows.length} SEC-reported price {flaggedRows.length === 1 ? 'anomaly is' : 'anomalies are'} excluded from Pulse totals</summary><p className="mt-2 leading-6 text-muted-foreground">A reported transaction price at least 1,000× away from the available market reference is excluded from these aggregates only. The original event remains in Live SEC Tape.</p><ul className="mt-2 space-y-1">{flaggedRows.map((row) => <li key={row.eventId}><a className="text-amber-200 underline" href={row.sourceUrl} target="_blank" rel="noreferrer">{companies.get(row.issuerCik)?.ticker ?? row.issuerCik} · {row.transactionDate} · reported {money(row.price)} per share · {money(row.value)} event value</a></li>)}</ul></details>}
+    <section className="rounded-xl border border-border bg-card p-5"><h2 className="text-base font-semibold">Purchases and sales by transaction date</h2>{!days.length ? <p className="mt-4 text-sm text-muted-foreground">No eligible observed events. Check coverage before interpreting the absence.</p> : <EChart style={{ height: 320 }} option={{ textStyle: { color: '#cbd5e1' }, tooltip: { trigger: 'axis', valueFormatter: (value: unknown) => money(Number(value)) }, legend: { top: 8, bottom: 'auto', data: ['Purchases', 'Sales'], textStyle: { color: '#cbd5e1' } }, grid: { left: 80, right: 15, top: 65, bottom: 45 }, xAxis: { type: 'category', data: days.map(([day]) => day), axisLabel: { hideOverlap: true } }, yAxis: { type: 'value', name: 'USD', axisLabel: { formatter: (value: number) => money(value, true) }, splitLine: { lineStyle: { color: '#263446' } } }, series: [{ type: 'bar', name: 'Purchases', data: days.map(([, row]) => row.buy), itemStyle: { color: '#5eead4' } }, { type: 'bar', name: 'Sales', data: days.map(([, row]) => row.sell), itemStyle: { color: '#fb7185' } }] }} />}</section>
+    <section className="overflow-x-auto rounded-xl border border-border bg-card p-5"><h2 className="text-base font-semibold">Observed sector activity</h2><table className="mt-4 w-full text-left text-sm"><thead><tr>{['Sector', 'Buys USD', 'Sales USD', 'Net USD', 'Events', 'Reporting owners'].map((label) => <th className="p-3" key={label}>{label}</th>)}</tr></thead><tbody>{[...sectors].sort(([, a], [, b]) => b.buy - a.buy).map(([sector, row]) => { const net = row.buy - row.sell; return <tr key={sector} className="border-t border-border"><td className="p-3">{sector}</td><td className="p-3" title={money(row.buy)}>{money(row.buy, true)}</td><td className="p-3" title={money(row.sell)}>{money(row.sell, true)}</td><td className={`p-3 font-medium ${net > 0 ? 'text-emerald-200' : net < 0 ? 'text-rose-300' : ''}`} data-testid="sector-net" title={signedMoney(net)}>{signedMoney(net, true)}</td><td className="p-3">{row.count}</td><td className="p-3">{row.owners.size}</td></tr>; })}</tbody></table></section>
   </div>;
 }
 
