@@ -84,7 +84,7 @@ test('Market Pulse reserves a top legend band away from transaction dates', asyn
   expect(layout.grid.bottom).toBeGreaterThanOrEqual(45);
 });
 
-test('Market Pulse shows the purchase-sale value ratio and signed sector net', async ({ page }) => {
+test('Market Pulse separates 30D and 90D event ratios from value ratios and shows signed sector net', async ({ page }) => {
   await v2(page, (value) => {
     value.economicTransactions.push({ ...value.economicTransactions[0],
       eventId: 'evt_sale_for_pulse', accession: '0001234567-26-000003', code: 'S', side: 'SELL',
@@ -95,6 +95,10 @@ test('Market Pulse shows the purchase-sale value ratio and signed sector net', a
   await ready(page);
   await section(page, 'Market Pulse');
   await expect(page.getByTestId('pulse-value-ratio')).toHaveText('4×');
+  await expect(page.getByTestId('pulse-inverse-value-ratio')).toHaveText('0.25×');
+  await expect(page.getByTestId('pulse-count-ratio-30')).toHaveText('2×');
+  await expect(page.getByTestId('pulse-count-ratio-90')).toHaveText('2×');
+  await expect(page.getByText(/Value ratio.*purchase USD \/ sale USD/)).toBeVisible();
   await expect(page.getByRole('columnheader', { name: 'Net USD' })).toBeVisible();
   await expect(page.getByTestId('sector-net')).toHaveAttribute('title', '+$1,500.00');
   await expect(page.getByTestId('sector-net')).toHaveText('+$1.5K');

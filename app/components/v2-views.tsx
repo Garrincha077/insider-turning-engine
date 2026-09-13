@@ -10,9 +10,9 @@ function signedMoney(value: number, compact = false): string {
   return `${value > 0 ? '+' : '−'}${money(Math.abs(value), compact)}`;
 }
 
-function purchaseSaleRatio(purchases: number, sales: number): string {
-  if (sales === 0) return purchases > 0 ? '∞' : '—';
-  return `${metric(purchases / sales, 2)}×`;
+function ratio(numerator: number, denominator: number): string {
+  if (denominator === 0) return numerator > 0 ? '∞' : '—';
+  return `${metric(numerator / denominator, 2)}×`;
 }
 
 export function ActivityV2({ data }: { data: ResearchSnapshot }) {
@@ -33,6 +33,10 @@ export function ActivityV2({ data }: { data: ResearchSnapshot }) {
   });
   const flaggedIds = new Set(flaggedRows.map((row) => row.eventId));
   const rows = candidateRows.filter((row) => !flaggedIds.has(row.eventId));
+  const pulse30StartDate = new Date(`${pulseEnd}T00:00:00Z`);
+  pulse30StartDate.setUTCDate(pulse30StartDate.getUTCDate() - 29);
+  const pulse30Start = pulse30StartDate.toISOString().slice(0, 10);
+  const rows30 = rows.filter((row) => row.transactionDate >= pulse30Start);
   const daily = new Map<string, { buy: number; sell: number; count: number; owners: Set<string> }>();
   const sectors = new Map<string, { buy: number; sell: number; count: number; owners: Set<string> }>();
   for (const row of rows) {
@@ -47,9 +51,21 @@ export function ActivityV2({ data }: { data: ResearchSnapshot }) {
   const sales = rows.filter((row) => row.side === 'SELL');
   const purchaseValue = buys.reduce((sum, row) => sum + (row.value ?? 0), 0);
   const saleValue = sales.reduce((sum, row) => sum + (row.value ?? 0), 0);
+  const buys30 = rows30.filter((row) => row.side === 'BUY');
+  const sales30 = rows30.filter((row) => row.side === 'SELL');
   return <div className="space-y-5">
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{[['Purchase value', money(purchaseValue)], ['Sale value', money(saleValue)], ['Purchase / sale value', purchaseSaleRatio(purchaseValue, saleValue)], ['Economic transactions', String(rows.length)], ['Distinct reporting-owner CIKs', String(new Set(rows.flatMap((row) => row.owners.map((owner) => owner.ownerCik))).size)]].map(([label, value]) => <div key={label} className="rounded-xl border border-border bg-card p-4"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-3 font-mono text-lg" data-testid={label === 'Purchase / sale value' ? 'pulse-value-ratio' : undefined}>{value}</p></div>)}</div>
-    <p className="text-sm leading-6 text-muted-foreground">{data.coverage.scope}. Pulse window: {pulseStart} to {pulseEnd} by transaction date. Values count each economic event once; reporting-owner counts include joint filers, not necessarily independent decisions. Unresolved-amendment issuers are excluded from these aggregates. {outsideWindowRows.length > 0 ? `${outsideWindowRows.length.toLocaleString('en-US')} older transactions discovered in later filings remain in Live SEC Tape and are excluded from this 90-day Pulse. ` : ''}{data.readiness.dashboard.status !== 'READY' ? 'The SEC window is incomplete; zero means no observed eligible event, not no market activity.' : ''}</p>
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[
+      ['Purchase value · 90D', money(purchaseValue), undefined],
+      ['Sale value · 90D', money(saleValue), undefined],
+      ['Buy / sell value · 90D', ratio(purchaseValue, saleValue), 'pulse-value-ratio'],
+      ['Sales / buys value · 90D', ratio(saleValue, purchaseValue), 'pulse-inverse-value-ratio'],
+      ['Buy / sell events · 30D', ratio(buys30.length, sales30.length), 'pulse-count-ratio-30'],
+      ['Buy / sell events · 90D', ratio(buys.length, sales.length), 'pulse-count-ratio-90'],
+      ['Economic transactions · 90D', String(rows.length), undefined],
+      ['Reporting-owner CIKs · 90D', String(new Set(rows.flatMap((row) => row.owners.map((owner) => owner.ownerCik))).size), undefined],
+    ].map(([label, value, testId]) => <div key={label} className="rounded-xl border border-border bg-card p-4"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-3 font-mono text-lg" data-testid={testId}>{value}</p></div>)}</div>
+    <p className="text-sm leading-6 text-muted-foreground"><strong className="font-medium text-foreground">Value ratio</strong> = observed purchase USD / sale USD. <strong className="font-medium text-foreground">Event ratio</strong> = purchase economic events / sale economic events; it is a different measure. The 30D event window is {pulse30Start} to {pulseEnd}; all other cards and the chart use {pulseStart} to {pulseEnd}, by transaction date. GuruFocus comparisons may use delayed data and a different officer/director universe, so they are not a live benchmark for these cards.</p>
+    <p className="text-sm leading-6 text-muted-foreground">{data.coverage.scope}. Values count each economic event once; reporting-owner counts include joint filers, not necessarily independent decisions. Unresolved-amendment issuers are excluded from these aggregates. {outsideWindowRows.length > 0 ? `${outsideWindowRows.length.toLocaleString('en-US')} older transactions discovered in later filings remain in Live SEC Tape and are excluded from this 90-day Pulse. ` : ''}{data.readiness.dashboard.status !== 'READY' ? 'The SEC window is incomplete; zero means no observed eligible event, not no market activity.' : ''}</p>
     {flaggedRows.length > 0 && <details className="rounded-xl border border-amber-400/40 bg-amber-400/5 p-4 text-sm"><summary className="cursor-pointer text-amber-200">{flaggedRows.length} SEC-reported price {flaggedRows.length === 1 ? 'anomaly is' : 'anomalies are'} excluded from Pulse totals</summary><p className="mt-2 leading-6 text-muted-foreground">A reported transaction price at least 1,000× away from the available market reference is excluded from these aggregates only. The original event remains in Live SEC Tape.</p><ul className="mt-2 space-y-1">{flaggedRows.map((row) => <li key={row.eventId}><a className="text-amber-200 underline" href={row.sourceUrl} target="_blank" rel="noreferrer">{companies.get(row.issuerCik)?.ticker ?? row.issuerCik} · {row.transactionDate} · reported {money(row.price)} per share · {money(row.value)} event value</a></li>)}</ul></details>}
     <section className="rounded-xl border border-border bg-card p-5"><h2 className="text-base font-semibold">Purchases and sales by transaction date</h2>{!days.length ? <p className="mt-4 text-sm text-muted-foreground">No eligible observed events. Check coverage before interpreting the absence.</p> : <EChart style={{ height: 320 }} option={{ textStyle: { color: '#cbd5e1' }, tooltip: { trigger: 'axis', valueFormatter: (value: unknown) => money(Number(value)) }, legend: { top: 8, bottom: 'auto', data: ['Purchases', 'Sales'], textStyle: { color: '#cbd5e1' } }, grid: { left: 80, right: 15, top: 65, bottom: 45 }, xAxis: { type: 'category', data: days.map(([day]) => day), axisLabel: { hideOverlap: true } }, yAxis: { type: 'value', name: 'USD', axisLabel: { formatter: (value: number) => money(value, true) }, splitLine: { lineStyle: { color: '#263446' } } }, series: [{ type: 'bar', name: 'Purchases', data: days.map(([, row]) => row.buy), itemStyle: { color: '#5eead4' } }, { type: 'bar', name: 'Sales', data: days.map(([, row]) => row.sell), itemStyle: { color: '#fb7185' } }] }} />}</section>
     <section className="overflow-x-auto rounded-xl border border-border bg-card p-5"><h2 className="text-base font-semibold">Observed sector activity</h2><table className="mt-4 w-full text-left text-sm"><thead><tr>{['Sector', 'Buys USD', 'Sales USD', 'Net USD', 'Events', 'Reporting owners'].map((label) => <th className="p-3" key={label}>{label}</th>)}</tr></thead><tbody>{[...sectors].sort(([, a], [, b]) => b.buy - a.buy).map(([sector, row]) => { const net = row.buy - row.sell; return <tr key={sector} className="border-t border-border"><td className="p-3">{sector}</td><td className="p-3" title={money(row.buy)}>{money(row.buy, true)}</td><td className="p-3" title={money(row.sell)}>{money(row.sell, true)}</td><td className={`p-3 font-medium ${net > 0 ? 'text-emerald-200' : net < 0 ? 'text-rose-300' : ''}`} data-testid="sector-net" title={signedMoney(net)}>{signedMoney(net, true)}</td><td className="p-3">{row.count}</td><td className="p-3">{row.owners.size}</td></tr>; })}</tbody></table></section>
