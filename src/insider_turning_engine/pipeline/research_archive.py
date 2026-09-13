@@ -14,11 +14,16 @@ from insider_turning_engine.domain.research import ResearchSnapshot
 from insider_turning_engine.export.research_policy import validate_publication
 from insider_turning_engine.ingestion.sec.release_store import ReleaseCheckpointStore
 
-MAX_SNAPSHOT_BYTES = 64 * 1024 * 1024
+# The public v2 document contains up to one year of chart points for the full
+# insider-active universe. Bound decompressed JSON separately from the much
+# smaller gzip Release asset so a legitimate 90-day snapshot is not confused
+# with an oversized upload or decompression bomb.
+MAX_SNAPSHOT_BYTES = 256 * 1024 * 1024
+MAX_ARCHIVE_BYTES = 64 * 1024 * 1024
 
 
 def decode_snapshot(payload: bytes, digest: str) -> ResearchSnapshot:
-    if len(payload) > MAX_SNAPSHOT_BYTES:
+    if len(payload) > MAX_ARCHIVE_BYTES:
         raise ValueError("snapshot archive exceeds size limit")
     with gzip.GzipFile(fileobj=io.BytesIO(payload)) as stream:
         raw = stream.read(MAX_SNAPSHOT_BYTES + 1)
@@ -57,7 +62,7 @@ class ResearchArchive(ReleaseCheckpointStore):
         assets = release["assets"]
         if (release["draft"] or not release["prerelease"] or len(assets) != 1
                 or assets[0]["name"] != name or assets[0]["state"] != "uploaded"
-                or not 0 < assets[0]["size"] <= MAX_SNAPSHOT_BYTES):
+                or not 0 < assets[0]["size"] <= MAX_ARCHIVE_BYTES):
             raise ValueError("incomplete research archive")
         with tempfile.TemporaryDirectory(prefix="ite-research-readback-") as temporary:
             self._gh("release", "download", release["tag_name"], "--repo", self.repository,
