@@ -48,7 +48,7 @@ test('v2 facts drive scoreless Radar, real clusters, basis and source-linked tap
   await section(page, 'Market Pulse');
   await expect(page.getByText('$2,000.00', { exact: true })).toBeVisible();
   await expect(page.getByText('Purchases and sales by transaction date')).toBeVisible();
-  await expect(page.getByText('Observed buy/sell ratio history · 90D')).toBeVisible();
+  await expect(page.getByText('Observed buy/sell ratio history · monthly')).toBeVisible();
   await section(page, 'Data Coverage');
   await expect(page.getByText('Measured source-to-score coverage')).toBeVisible();
   await section(page, 'Company Lab');
