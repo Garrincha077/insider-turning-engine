@@ -16,6 +16,9 @@ import httpx
 from .dashboard import DashboardExportError, export_dashboard, validate_dashboard_directory
 
 PUBLIC_DATA = "https://garrincha077.github.io/insider-turning-engine/data/"
+MAX_PUBLIC_RESEARCH_BYTES = 256 * 1024 * 1024
+MAX_PUBLIC_FILE_BYTES = 10_000_000
+MAX_PUBLICATION_BYTES = 320 * 1024 * 1024
 
 
 def restore_publication(output: Path, client: httpx.Client) -> None:
@@ -50,12 +53,16 @@ def restore_publication(output: Path, client: httpx.Client) -> None:
             or PurePosixPath(path).is_absolute() or ".." in PurePosixPath(path).parts
             or path == "manifest.json" or path in names
             or not isinstance(size, int)
-            or not 0 < size <= (64 * 1024 * 1024 if path == "research-v2.json" else 10_000_000)
+            or not 0 < size <= (
+                MAX_PUBLIC_RESEARCH_BYTES
+                if path == "research-v2.json"
+                else MAX_PUBLIC_FILE_BYTES
+            )
         ):
             raise DashboardExportError("unsafe published file inventory")
         names.add(path)
         total_size += size
-    if total_size > 200_000_000:
+    if total_size > MAX_PUBLICATION_BYTES:
         raise DashboardExportError("published snapshot exceeds size limit")
     with tempfile.TemporaryDirectory(prefix="ite-published-") as temporary:
         root = Path(temporary)

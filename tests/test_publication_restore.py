@@ -46,3 +46,26 @@ def test_restore_rejects_unsafe_remote_paths(tmp_path: Path, path: str) -> None:
     ))) as client:
         with pytest.raises(DashboardExportError, match="unsafe"):
             restore_publication(tmp_path, client)
+
+
+def test_restore_accepts_research_inventory_larger_than_compressed_archive_limit(
+    tmp_path: Path,
+) -> None:
+    manifest = {
+        "files": [{
+            "path": "research-v2.json",
+            "size": 65 * 1024 * 1024,
+            "sha256": "0" * 64,
+        }]
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("manifest.json"):
+            return httpx.Response(200, json=manifest)
+        return httpx.Response(200, content=b"")
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        # The decompressed public snapshot is permitted up to 256 MiB. The
+        # empty test response then fails the later integrity check as intended.
+        with pytest.raises(DashboardExportError, match="integrity mismatch"):
+            restore_publication(tmp_path, client)
