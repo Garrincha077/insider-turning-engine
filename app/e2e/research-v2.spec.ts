@@ -117,6 +117,23 @@ test('Market Pulse excludes a clearly flagged reported-price anomaly without hid
   await expect(page.locator('tbody tr')).toHaveCount(3);
 });
 
+test('Market Pulse keeps late-filed older transactions in the tape but outside its 90-day chart', async ({ page }) => {
+  await v2(page, (value) => {
+    value.economicTransactions.push({ ...value.economicTransactions[0],
+      eventId: 'evt_late_filed_old_transaction', accession: '0001234567-26-000005',
+      transactionDate: '2024-01-02', shares: 500, price: 10, value: 5000,
+      owners: [value.economicTransactions[0].owners[0]] });
+    value.coverage.economicEvents += 1;
+    value.coverage.canonicalOwnerRows += 1;
+  });
+  await ready(page);
+  await section(page, 'Market Pulse');
+  await expect(page.getByText('$2,000.00', { exact: true })).toBeVisible();
+  await expect(page.getByText(/1 older transactions discovered in later filings/)).toBeVisible();
+  await section(page, 'Live SEC Tape');
+  await expect(page.locator('tbody tr')).toHaveCount(3);
+});
+
 test('Company Lab reserves a top legend band away from date labels', async ({ page }) => {
   await v2(page);
   await ready(page);
