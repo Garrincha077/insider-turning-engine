@@ -14,7 +14,7 @@ import os
 import re
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from pathlib import Path, PurePosixPath
 from zoneinfo import ZoneInfo
@@ -54,6 +54,11 @@ class DailyIndexEntry:
     filing_date: date
     submission_path: str
     accession_number: str
+    # The master-index publication day can differ from Date Filed when SEC
+    # publishes a late/repaired entry. Keep both facts: availability comes
+    # from the submission acceptance timestamp, while provenance must point
+    # to the index file that actually exposed the accession.
+    index_date: date | None = None
 
     @property
     def submission_url(self) -> str:
@@ -350,10 +355,13 @@ class SECDailyIndexSource:
             self._cache(index_name, index_payload, retrieved_at=self.clock())
         else:
             index_payload, _index_retrieved_at = cached_index
-        entries = parse_daily_master_index(index_payload)
+        entries = tuple(
+            replace(entry, index_date=day)
+            for entry in parse_daily_master_index(index_payload)
+        )
         self.last_index_hash = "sha256:" + hashlib.sha256(index_payload).hexdigest()
-        if any(entry.filing_date != day for entry in entries):
-            raise ValueError("daily index contains a different filing date")
+        if any(entry.filing_date > day for entry in entries):
+            raise ValueError("daily index contains a future filing date")
         return entries
 
     def discover_days(self, start: date, end: date) -> tuple[date, ...]:
@@ -397,7 +405,8 @@ class SECDailyIndexSource:
             submission, retrieved_at = cached
         return parse_complete_submission(
             submission, entry, retrieved_at=retrieved_at,
-            index_url=daily_index_url(entry.filing_date), index_hash=index_hash,
+            index_url=daily_index_url(entry.index_date or entry.filing_date),
+            index_hash=index_hash,
         )
 
     def fetch_day(self, day: date) -> SecPage:

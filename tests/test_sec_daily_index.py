@@ -58,6 +58,48 @@ def test_daily_index_filters_ownership_and_does_not_invent_acceptance_time() -> 
     )
 
 
+def test_source_accepts_late_filed_entry_but_keeps_publication_day_provenance() -> None:
+    late = INDEX.replace(b"2026-08-31", b"2026-08-30", 1)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("master.20260831.idx"):
+            return httpx.Response(200, content=late, request=request)
+        return httpx.Response(200, content=SUBMISSION, request=request)
+
+    source = SECDailyIndexSource(
+        "InsiderTurningEngine admin@example.com",
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+        sleeper=lambda _delay: None,
+        clock=lambda: datetime(2026, 9, 1, tzinfo=UTC),
+    )
+    entries = source.discover_day(date(2026, 8, 31))
+    assert entries[0].filing_date == date(2026, 8, 30)
+    assert entries[0].index_date == date(2026, 8, 31)
+    record = source.fetch_entry(entries[0], index_hash=source.last_index_hash)
+    assert record.filing_date == "2026-08-30"
+    assert record.provenance["daily_index_url"].endswith("master.20260831.idx")
+
+
+def test_source_rejects_future_filing_date_in_daily_index() -> None:
+    future = INDEX.replace(b"2026-08-31", b"2026-09-01", 1)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=future, request=request)
+
+    source = SECDailyIndexSource(
+        "InsiderTurningEngine admin@example.com",
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+        sleeper=lambda _delay: None,
+        clock=lambda: datetime(2026, 9, 2, tzinfo=UTC),
+    )
+    try:
+        source.discover_day(date(2026, 8, 31))
+    except ValueError as exc:
+        assert str(exc) == "daily index contains a future filing date"
+    else:
+        raise AssertionError("future Date Filed must be rejected")
+
+
 def test_complete_submission_recovers_exact_acceptance_and_issuer() -> None:
     entry = parse_daily_master_index(INDEX)[0]
     record = parse_complete_submission(
