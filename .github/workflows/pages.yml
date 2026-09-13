@@ -12,6 +12,10 @@ on:
         description: Refresh canonical daily research (otherwise preserve published source dates)
         type: boolean
         default: false
+      send_digest:
+        description: Deliver the latest SEC-day factual digest after refresh
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -177,10 +181,12 @@ jobs:
         uses: actions/deploy-pages@v4
 
   digest:
-    # UI-only deploys and reruns never initiate real delivery. No predictive gate bypass.
+    # UI-only deploys, historical/manual refreshes and reruns never initiate
+    # delivery unless the operator explicitly opts in. Scheduled daily runs do.
     if: >-
       github.ref == 'refs/heads/main' && github.run_attempt == 1 &&
-      (github.event_name == 'schedule' || inputs.refresh_data == true)
+      (github.event_name == 'schedule' ||
+      (inputs.refresh_data == true && inputs.send_digest == true))
     needs: [build, deploy]
     runs-on: ubuntu-latest
     timeout-minutes: 10

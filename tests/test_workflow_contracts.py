@@ -183,7 +183,10 @@ def test_factual_digest_is_after_pages_uses_exact_artifact_and_separate_policy()
     assert job["environment"] == "production"
     assert "github.run_attempt == 1" in job["if"]
     assert "inputs.refresh_data == true" in job["if"]
+    assert "inputs.send_digest == true" in job["if"]
     assert "refs/heads/main" in job["if"]
+    trigger = workflow.get("on", workflow.get(True))
+    assert trigger["workflow_dispatch"]["inputs"]["send_digest"]["default"] is False
     preview = next(step for step in job["steps"] if step.get("name", "").startswith("Offline"))
     assert "env" not in preview and "--execute" not in preview["run"]
     assert text.count("name: digest-publication-${{ github.run_id }}") == 2
