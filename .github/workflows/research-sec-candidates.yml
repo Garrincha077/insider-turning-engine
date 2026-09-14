@@ -1,0 +1,193 @@
+name: Build SEC research candidate universe
+
+on:
+  workflow_dispatch:
+    inputs:
+      history_run_id:
+        description: Successful research SEC history workflow run ID
+        type: string
+        default: "34883719192"
+  push:
+    paths:
+      - ".github/workflows/research-sec-candidates.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: research-sec-candidate-universe
+  cancel-in-progress: false
+
+env:
+  HISTORY_RUN_ID: ${{ inputs.history_run_id || '34883719192' }}
+
+jobs:
+  candidates:
+    name: Candidate accessions ${{ matrix.year }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        year: [2016, 2017, 2018, 2019, 2020, 2021, 2022]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Download verified SEC history year
+        uses: actions/download-artifact@v4
+        with:
+          name: sec-history-${{ matrix.year }}-${{ env.HISTORY_RUN_ID }}
+          path: work/sec-history/${{ matrix.year }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.HISTORY_RUN_ID }}
+          github-token: ${{ github.token }}
+      - name: Build bounded P/S accession universe
+        env:
+          YEAR: ${{ matrix.year }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run python - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          import polars as pl
+
+          year = int(os.environ["YEAR"])
+          root = Path("work/sec-history") / str(year)
+          year_dirs = list(root.rglob(f"year={year}"))
+          if len(year_dirs) != 1:
+              raise SystemExit(f"expected one year={year} directory, found {len(year_dirs)}")
+          year_root = year_dirs[0]
+          rows = []
+          quarter_summaries = []
+          accession_re = re.compile(r"^\d{10}-\d{2}-\d{6}$")
+
+          for quarter in range(1, 5):
+              qroot = year_root / f"quarter={quarter}"
+              trans_path = qroot / "NONDERIV_TRANS.parquet"
+              sub_path = qroot / "SUBMISSION.parquet"
+              if not trans_path.exists() or not sub_path.exists():
+                  raise SystemExit(f"missing verified tables for {year}Q{quarter}")
+
+              trans = pl.read_parquet(trans_path).select(
+                  "ACCESSION_NUMBER", "NONDERIV_TRANS_SK", "TRANS_DATE", "TRANS_CODE",
+                  "TRANS_SHARES", "TRANS_PRICEPERSHARE", "TRANS_ACQUIRED_DISP_CD",
+              )
+              sub = pl.read_parquet(sub_path).select(
+                  "ACCESSION_NUMBER", "FILING_DATE", "DOCUMENT_TYPE", "ISSUERCIK"
+              )
+              joined = trans.join(sub, on="ACCESSION_NUMBER", validate="m:1").with_columns(
+                  pl.col("TRANS_SHARES").cast(pl.Float64, strict=False).alias("shares"),
+                  pl.col("TRANS_PRICEPERSHARE").cast(pl.Float64, strict=False).alias("price"),
+              )
+              relevant = joined.filter(
+                  (((pl.col("TRANS_CODE") == "P") & (pl.col("TRANS_ACQUIRED_DISP_CD") == "A"))
+                   | ((pl.col("TRANS_CODE") == "S") & (pl.col("TRANS_ACQUIRED_DISP_CD") == "D")))
+                  & (pl.col("shares") > 0) & pl.col("shares").is_finite()
+                  & (pl.col("price") > 0) & pl.col("price").is_finite()
+              )
+              if relevant.filter(pl.col("ACCESSION_NUMBER").is_null()).height:
+                  raise SystemExit("null accession in candidate rows")
+              if relevant.filter(pl.col("ISSUERCIK").is_null()).height:
+                  raise SystemExit("null issuer CIK in candidate rows")
+
+              grouped = relevant.group_by(
+                  "ACCESSION_NUMBER", "ISSUERCIK", "FILING_DATE", "DOCUMENT_TYPE"
+              ).agg(
+                  pl.len().alias("transactionCount"),
+                  (pl.col("TRANS_CODE") == "P").sum().alias("buyCount"),
+                  (pl.col("TRANS_CODE") == "S").sum().alias("saleCount"),
+                  pl.col("TRANS_DATE").min().alias("firstTransactionDate"),
+                  pl.col("TRANS_DATE").max().alias("lastTransactionDate"),
+              )
+              quarter_summaries.append({
+                  "quarter": quarter,
+                  "relevantTransactionRows": relevant.height,
+                  "candidateAccessions": grouped.height,
+              })
+              for item in grouped.to_dicts():
+                  accession = str(item["ACCESSION_NUMBER"])
+                  cik = str(item["ISSUERCIK"]).strip()
+                  if not accession_re.fullmatch(accession):
+                      raise SystemExit(f"invalid accession {accession!r}")
+                  if not cik.isdigit() or len(cik) > 10:
+                      raise SystemExit(f"invalid issuer CIK {cik!r}")
+                  rows.append({
+                      "accession": accession,
+                      "issuerCik": cik.zfill(10),
+                      "filingDate": str(item["FILING_DATE"]),
+                      "documentType": str(item["DOCUMENT_TYPE"]),
+                      "transactionCount": int(item["transactionCount"]),
+                      "buyCount": int(item["buyCount"]),
+                      "saleCount": int(item["saleCount"]),
+                      "firstTransactionDate": str(item["firstTransactionDate"]),
+                      "lastTransactionDate": str(item["lastTransactionDate"]),
+                      "sourceYear": year,
+                      "sourceQuarter": quarter,
+                  })
+
+          by_accession = {}
+          for row in rows:
+              key = row["accession"]
+              prior = by_accession.get(key)
+              if prior is not None and prior != row:
+                  raise SystemExit(f"conflicting candidate accession across quarters: {key}")
+              by_accession[key] = row
+          rows = sorted(by_accession.values(), key=lambda x: (x["filingDate"], x["accession"]))
+          out = Path("work/sec-candidates") / str(year)
+          out.mkdir(parents=True, exist_ok=True)
+          with (out / "candidates.jsonl").open("w", encoding="utf-8") as stream:
+              for row in rows:
+                  stream.write(json.dumps(row, sort_keys=True) + "\n")
+          summary = {
+              "schemaVersion": "1.0.0",
+              "source": "verified-sec-quarterly-bulk",
+              "historyRunId": os.environ.get("HISTORY_RUN_ID", ""),
+              "year": year,
+              "candidateAccessions": len(rows),
+              "candidateIssuerCiks": len({row["issuerCik"] for row in rows}),
+              "buyAccessions": sum(row["buyCount"] > 0 for row in rows),
+              "saleAccessions": sum(row["saleCount"] > 0 for row in rows),
+              "quarters": quarter_summaries,
+              "canonicalReady": False,
+              "nextGate": "hydrate complete submissions for exact acceptance time and canonical XML",
+          }
+          (out / "summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          print(json.dumps(summary, indent=2, sort_keys=True))
+          PY
+      - name: Summarize candidate universe
+        if: always()
+        env:
+          YEAR: ${{ matrix.year }}
+        shell: bash
+        run: |
+          uv run python - <<'PY'
+          import json, os
+          from pathlib import Path
+          path = Path("work/sec-candidates") / os.environ["YEAR"] / "summary.json"
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as out:
+              out.write(f"## SEC candidate universe {os.environ['YEAR']}\n\n")
+              if not path.exists():
+                  out.write("Candidate manifest was not produced.\n")
+              else:
+                  value = json.loads(path.read_text(encoding="utf-8"))
+                  out.write(f"Candidate accessions: **{value['candidateAccessions']:,}**  \n")
+                  out.write(f"Candidate issuer CIKs: **{value['candidateIssuerCiks']:,}**  \n")
+                  out.write(f"Buy accessions: **{value['buyAccessions']:,}**  \n")
+                  out.write(f"Sale accessions: **{value['saleAccessions']:,}**  \n")
+                  out.write("\nResearch selection only; exact accepted_at and canonical XML are not yet hydrated.\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sec-candidates-${{ matrix.year }}-${{ github.run_id }}
+          path: work/sec-candidates/${{ matrix.year }}
+          if-no-files-found: warn
+          retention-days: 90
