@@ -2,16 +2,17 @@
 
 _Last updated: 2026-09-14_
 
-This file is the operational continuation point for a new ChatGPT/Codex session. Read this file first, then `docs/research-log.md` for the detailed research evidence and R-IDs.
+This is the operational continuation point for a new ChatGPT/Codex session. Read this file first, then `docs/research-log.md` for the detailed research evidence and R-IDs.
 
 ## FIRST ACTIONS IN A NEW CHAT
 
-1. Connect to GitHub and open repository `Garrincha077/insider-turning-engine`, branch `main`.
+1. Open GitHub repository `Garrincha077/insider-turning-engine`, branch `main`.
 2. Read this file and `docs/research-log.md`.
-3. Refresh GitHub Actions run **34886766478** (`Hydrate full 2016 Q1 SEC buy research set`) before assuming the status below is still current.
-4. If all 11 hydration shards and the completeness gate are green, perform the final 2016 Q1 audit before scaling further.
-5. Keep sealed OOS **2023+ unopened**.
-6. Do **not** change production scoring, weights, thresholds, signal states, alerts, or production methodology unless the owner explicitly asks. Research-only data/acquisition tooling is in scope because the owner explicitly asked to expand the dataset and continue.
+3. Refresh GitHub Actions run **34892106121** (`Hydrate full 2016 Q1 SEC buy research set`). This is the current fallback-aware reference Q1 run.
+4. Do **not** use old run **34886766478** as a successful reference. It failed safely on shard 10 because 65 valid 2016-03-31 accessions were not found by the bounded daily-index discovery path.
+5. If run 34892106121 completes successfully, verify that workflow **`Continue SEC PIT hydration 2016-2022`** auto-started. It should persist Q1 and then process 2016 Q2 through 2022 Q4 sequentially.
+6. Keep sealed OOS **2023+ unopened**.
+7. Do **not** change production scoring, weights, thresholds, signal states, alerts, or production methodology unless the owner explicitly asks. Research-only data/acquisition tooling is authorized.
 
 ---
 
@@ -19,23 +20,45 @@ This file is the operational continuation point for a new ChatGPT/Codex session.
 
 Build an empirically defensible **Insider Turning Engine** that distinguishes genuinely informative insider purchases from noise and then tests whether post-purchase turning/technical confirmation adds incremental value.
 
-The validation order is deliberately conservative:
+Validation order:
 
 `clean PIT data -> simple insider baseline -> feature tournament -> turning overlay -> statistical robustness -> frozen validation -> sealed OOS -> shadow production`
 
-The project must beat transparent simple insider benchmarks on development/validation data before the sealed OOS is opened.
+The engine must beat transparent simple insider benchmarks on development/validation data before sealed OOS is opened.
 
 ---
 
-## REPOSITORY / IMPORTANT FILES
+## CHANGE BOUNDARY
 
-Repository: `Garrincha077/insider-turning-engine`
+Authorized without another confirmation:
 
-Main research notebook:
+- literature/data research;
+- `docs/research-log.md` and this handoff;
+- research-only acquisition/hydration scripts and GitHub Actions workflows;
+- audits, hashes, manifests, PIT validation and data-quality reporting;
+- development/validation dataset preparation while OOS remains sealed.
+
+Not authorized without explicit owner instruction:
+
+- production scoring/weight/threshold changes;
+- replacing production feature logic based on research results;
+- opening/tuning on 2023+ OOS;
+- enabling production signal delivery;
+- presenting exploratory results as production evidence.
+
+---
+
+## CORE RESEARCH FILES
+
+Research notebook:
 
 - `docs/research-log.md`
 
-Current research/data workflows:
+Operational handoff:
+
+- `docs/HANDOFF.md`
+
+Research SEC workflows:
 
 - `.github/workflows/research-sec-history.yml`
 - `.github/workflows/research-sec-candidates.yml`
@@ -43,12 +66,16 @@ Current research/data workflows:
 - `.github/workflows/research-sec-hydration-scale-pilot.yml`
 - `.github/workflows/research-sec-hydration-v2-pilot.yml`
 - `.github/workflows/research-sec-hydration-2016q1.yml`
+- `.github/workflows/research-sec-hydration-history.yml`
 
-Important research hydration code:
+Research hydration scripts:
 
 - `scripts/research_sec_hydrate.py`
+- `scripts/research_sec_hydrate_with_fallback.py`
+- `scripts/research_sec_hydrate_quarter.py`
+- `scripts/research_sec_hydrate_quarter_v2.py`
 
-Important existing production/research architecture:
+Important existing architecture:
 
 - `src/insider_turning_engine/normalization/amendments.py`
 - `src/insider_turning_engine/features/opportunistic.py`
@@ -60,285 +87,289 @@ Important existing production/research architecture:
 
 ---
 
-## OWNER'S CHANGE BOUNDARY
+## DATA STATUS
 
-Original instruction was: **do not change production code/scoring, research is allowed**.
+### Raw SEC ownership history 2016–2022
 
-The owner later explicitly authorized:
-
-- creating/updating `docs/research-log.md`;
-- expanding the historical dataset;
-- continuing research/data-enablement work.
-
-Therefore:
-
-### Allowed without another confirmation
-
-- Literature/data research.
-- Updating `docs/research-log.md` and this handoff.
-- Research-only acquisition/hydration scripts and GitHub Actions workflows.
-- Audits, manifests, hashes, PIT validation, data-quality reporting.
-- Development/validation dataset preparation while OOS stays sealed.
-
-### Not authorized without explicit owner instruction
-
-- Changing production scoring weights or thresholds.
-- Replacing current production feature logic because a research hypothesis looks better.
-- Opening or tuning against 2023+ OOS.
-- Enabling production alerts/signal delivery.
-- Treating experimental backtests as production evidence.
-
----
-
-## CURRENT DATA STATUS
-
-### Raw SEC history 2016–2022
-
-Research-only quarterly SEC backfill has completed successfully for the entire development + validation window:
+Completed successfully:
 
 - years: **2016–2022**
 - quarters: **28/28**
-- annual verified research artifacts: **7**
+- verified annual research artifacts: **7**
 - approximate total artifact size: **234 MB**
 
-This solved the raw-history acquisition problem but did **not** by itself make the data backtest-ready because quarterly bulk history does not provide exact SEC acceptance timestamps.
+Raw quarterly bulk data is not sufficient for a PIT backtest because it does not provide exact public acceptance timestamps.
 
 ### Candidate universe
 
-Candidate-universe workflow reduced the raw SEC set to economically relevant ownership filings.
+Candidate-universe workflow run: **34884538222**.
 
 Across 2016–2022:
 
 - total P/S candidate filings: **390,314**
 - filings containing purchases: **119,727**
 
-The Phase-1 strategy is intentionally **buy-first**. Sales can be hydrated later for the dedicated sales tournament rather than slowing the first purchase benchmark.
+The first benchmark is intentionally buy-first. Sales are a later dedicated tournament.
 
-### Amendment census
+### Amendments
 
 Across 2016–2022:
 
 - amendment filings: **6,301**
 - amendment filings containing buys: **2,806**
 
-Buy amendments are only about **2.3%** of the buy universe, so amendments should be handled as a dedicated enrichment/lifecycle layer instead of blocking all original-buy hydration.
+Buy amendments are about **2.3%** of the buy universe, so they are a separate enrichment/lifecycle gate rather than a reason to block all original-buy hydration.
 
 ---
 
-## EXACT PIT HYDRATION RESULTS
+## PIT HYDRATION RESULTS SO FAR
 
 ### 100-filing pilot
 
-The initial exact-history hydration pilot recovered the SEC complete submission, exact `<ACCEPTANCE-DATETIME>`, primary ownership XML and canonical transactions.
-
-Result:
-
-- 100/100 matched in SEC daily index
-- 100/100 hydrated and parsed
+- 100/100 discovered
+- 100/100 hydrated/parsed
 - 0 failures
 - 0 quarantines
-- all canonical rows satisfied `knowledge_at == SEC accepted_at`
+- all canonical rows: `knowledge_at == SEC accepted_at`
 
-Important clock rule discovered here:
+Clock rule:
 
-> Historical public availability is **SEC `accepted_at`**. The 2026 research retrieval timestamp must remain separate as `recorded_at/retrieved_at/provenance` and must never become historical `knowledge_at`.
+> Historical availability is SEC `accepted_at`. The 2026 research retrieval timestamp stays separately in `recorded_at/retrieved_at/provenance` and must never become historical `knowledge_at`.
 
 ### 500-filing scale pilot
 
-Initial scale result:
+Initial result: **498/500**. Two failures were valid legacy SEC dates such as `2016-01-04-05:00`, not throttling or missing filings.
 
-- 498/500 successful
-- two failures were **not** SEC throttling or missing filings
-- both came from a legacy valid SEC transaction-date representation such as `2016-01-04-05:00`
+A research-only normalizer was added with a narrow rule:
 
-The production parser was **not loosened**.
-
-A research-only historical normalizer was added with a deliberately narrow rule:
-
-- only normalize `transactionDate` shaped `YYYY-MM-DD±HH:MM` to the date portion;
-- preserve original SEC XML hash;
-- preserve normalized XML hash;
+- only `transactionDate` shaped `YYYY-MM-DD±HH:MM` becomes `YYYY-MM-DD`;
+- preserve original XML hash and normalized XML hash;
 - count every transformed value;
-- fail closed outside that specific legacy pattern.
+- fail closed outside the exact legacy pattern.
 
-### 500-filing V2 pilot
+### 500-filing V2
 
-Result:
-
-- **500/500** matched
 - **500/500** parsed
 - **0 failures**
 - **0 quarantines**
 - **2,029 canonical rows**
 - **1,876 open-market purchase rows**
-- only **2 filings / 4 transaction-date values** needed legacy normalization
-- 100% of canonical rows had `knowledge_at == accepted_at`
-- observed throughput about **4.63 filings/sec** in that run
-
-This validated the research hydration approach well enough to run a complete quarter.
+- only **2 filings / 4 values** normalized
+- 100% `knowledge_at == accepted_at`
+- observed throughput around **4.63 filings/sec**
 
 ---
 
-## ACTIVE 2016 Q1 FULL HYDRATION
-
-Workflow:
-
-- `.github/workflows/research-sec-hydration-2016q1.yml`
-- GitHub Actions run ID: **34886766478**
-- run head SHA: **08df3a918254ce8f2e6576dbaceee716ec5d81af**
+## 2016 Q1 REFERENCE QUARTER — CURRENT STATUS
 
 Universe:
 
-- **5,482 original buy filings** in 2016 Q1
-- 11 shards, maximum 500 filings each
-- `max-parallel=1` intentionally limits SEC load
-- each shard must pass:
-  - all selected accessions matched in daily index;
-  - all selected filings hydrated/parsed;
-  - failure count = 0;
-  - all canonical `knowledge_at == accepted_at`;
-  - OOS remains unopened.
+- **5,482 original-buy filings**
+- 11 shards of at most 500
+- `max-parallel=1`
 
-### Snapshot at creation of this handoff
+### Old run — FAILED SAFELY
 
-- **9/11 shards completed successfully**
-- shard **9** in progress
-- shard **10** queued
-- **0 failed shards so far**
+Old run ID: **34886766478**.
 
-Do not assume this snapshot is current in a later chat. **Refresh run 34886766478 first.**
+Shards 0–9 passed. Shard 10 selected 482 filings but the original bounded daily-index discovery found only 417. There were **65 failures**, all with bulk filing date **2016-03-31**.
+
+This was diagnosed as a quarter-end discovery edge case rather than random SEC failures. The run must remain recorded as failed; do not relabel it as PASS.
+
+### Audited accession archive fallback
+
+Research-only fallback added in `scripts/research_sec_hydrate_with_fallback.py`.
+
+Primary path remains official daily index. Fallback is allowed only for the exact failure class:
+
+- stage `DISCOVERY`
+- reason `ACCESSION_NOT_FOUND_WITHIN_10_DAYS`
+
+Fallback derives the deterministic EDGAR complete-submission archive path from the accession and still requires:
+
+- exact accession header;
+- issuer CIK matching quarterly bulk evidence;
+- valid ownership XML;
+- exact SEC `accepted_at`;
+- canonical `knowledge_at == accepted_at`;
+- actual retrieval retained separately as `recorded_at`;
+- explicit fallback provenance.
+
+Fallback provenance includes `discovery = accession_archive_fallback`; it must never be represented as a daily-index match.
+
+### New reference run — ACTIVE
+
+Current Q1 run ID: **34892106121**.
+
+At the latest handoff refresh:
+
+- shard 0: PASS
+- shard 1: PASS
+- shard 2: in progress
+- remaining shards queued
+- no failure had appeared in the new run at that snapshot
+
+**Always refresh run 34892106121 before acting on this snapshot.**
+
+Expected critical test is shard 10. It should be allowed to show fewer daily-index matches than selected filings only if audited archive fallback closes the gap, `discoveredFilings == selectedOriginalBuyFilings`, all filings parse, `failureCount == 0`, and the PIT clock gate remains true.
 
 ---
 
-## 2016 Q1 QUALITY AUDIT ALREADY PERFORMED
+## AUTOMATED CONTINUATION 2016 Q2–2022 Q4
 
-Audit of the first 2,000 hydrated filings showed:
+Workflow:
+
+- `.github/workflows/research-sec-hydration-history.yml`
+- name: **`Continue SEC PIT hydration 2016-2022`**
+- persistent research prerelease tag: **`research-sec-pit-v1`**
+
+Behavior:
+
+1. Auto-triggers only when `Hydrate full 2016 Q1 SEC buy research set` completes with **success**.
+2. Persists audited 2016 Q1 without re-fetching SEC.
+3. Processes **2016 Q2 through 2022 Q4** in a matrix of 27 quarters.
+4. `max-parallel=1` keeps only one quarter active at a time.
+5. Each quarter calculates/runs bounded shards of 500 with 4 workers.
+6. Each shard/quarter is fail-closed.
+7. Passing quarter is packaged as `sec-pit-YYYYqQ.tar.gz`.
+8. Passing quarter is uploaded as a durable GitHub Release asset under `research-sec-pit-v1`.
+9. If the release asset already exists, that quarter is skipped on rerun — the pipeline is resume-safe.
+10. Final completeness gate requires all **28 quarters 2016 Q1–2022 Q4** to be persistently present.
+11. It creates annual manifests plus `sec-pit-2016-2022-index.json`.
+12. Final original-buy status becomes `ORIGINAL_BUY_PIT_2016_2022_PASS` only when all 28 archives exist.
+
+Important: even after that status, full Phase 0 is **not** complete. The generated index intentionally keeps:
+
+- `amendmentsReconciled = false`
+- `marketDataJoined = false`
+- `canonicalReady = false`
+- `signalReady = false`
+- `oosOpened = false`
+
+The workflow matrix contains **no 2023+ period**.
+
+---
+
+## QUARTER AUDIT / ARCHIVE CONTRACT
+
+`research_sec_hydrate_quarter.py` / `quarter_v2.py` merge and audit the whole quarter.
+
+Hard checks include:
+
+- exact candidate-accession coverage;
+- contiguous shard offsets;
+- zero remaining failures;
+- unique canonical transaction IDs;
+- unique revision IDs;
+- unique exact SEC row identities;
+- `knowledge_at == accepted_at` for all canonical rows;
+- OOS unopened;
+- explicit amendment-not-yet-reconciled status.
+
+A passing quarter emits:
+
+- `quarter-summary.json`
+- `checksums.json`
+- `raw-manifest.jsonl`
+- `canonical-research.jsonl`
+- `failures.jsonl`
+
+Actions artifacts remain temporary diagnostics. Durable PASS data belongs in the release archive, not large git history.
+
+---
+
+## Q1 QUALITY AUDIT BEFORE THE EDGE-CASE FIX
+
+Audit of the first 2,000 successfully hydrated filings showed:
 
 - **8,347 canonical rows**
 - **7,995 open-market purchase rows**
 - **0 duplicate transaction IDs**
 - **0 duplicate revision IDs**
 - **0 duplicate exact SEC row identities**
-- historical ticker present on about **98.6% of purchase rows**
-- unresolved purchase ticker evidence concentrated in only **10 issuer CIKs**
-- only **22 purchase rows** lacked price
+- historical ticker on about **98.6% of purchase rows**
+- unresolved ticker evidence concentrated in only **10 issuer CIKs**
+- only **22 purchase rows** lacked positive price
 
-This is encouraging: current defects look localized rather than systemic.
-
-The filing's contemporaneous `issuerTradingSymbol` is usable as historical ticker evidence from its acceptance time onward. **CIK remains the stable issuer key; ticker is a valid-time attribute.** Do not backfill today's SEC ticker map into the past.
+CIK is the stable issuer key. Ticker is a valid-time attribute. The filing's contemporaneous `issuerTradingSymbol` can be used as historical ticker evidence from `accepted_at` onward. Do not project today's SEC ticker map backwards.
 
 ---
 
-## WARM-UP HISTORY REQUIREMENT — IMPORTANT
+## WARM-UP HISTORY — REQUIRED NEXT GATE
 
-Do not start the final research history at 2016 if testing historical-behaviour features.
+For historical-behaviour features, the research history cannot start at 2016.
 
-At minimum add **2013–2015 ownership history as warm-up** for 2016 development events.
+Add at least **2013–2015 ownership history as warm-up**.
 
-Why:
+Reasons:
 
-- `FIRST_BUY_3Y` needs three years of earlier purchase visibility.
-- The canonical Cohen–Malloy–Pomorski routine/opportunistic classification uses approximately three previous years of insider trading history.
-- Crucially, the canonical classification is based on an **insider's trading pattern across issuers**, whereas the current proprietary implementation in `features/opportunistic.py` uses same `owner_cik + issuer_cik` history.
+- `FIRST_BUY_3Y` requires earlier purchase visibility;
+- canonical Cohen–Malloy–Pomorski routine/opportunistic classification uses approximately three previous years;
+- canonical CMP is fundamentally **trader/reporting-owner level across issuers**, while the current proprietary implementation uses same `owner_cik + issuer_cik` history.
 
-Therefore, for a proper canonical CMP benchmark, warm-up acquisition must preserve **reporting-owner CIK history across all issuers**, not only earlier transactions in the same company.
-
-2013–2015 is warm-up only. Do not treat it as a new tuning/OOS window unless methodology is explicitly changed and recorded.
+2013–2015 is warm-up only, not an added tuning/OOS window unless methodology is explicitly changed and documented.
 
 ---
 
 ## AMENDMENT POLICY
 
-Existing `normalization/amendments.py` is intentionally fail-closed and requires deterministic predecessor evidence; it does not fuzzy-match corrections by price/date/share count.
+Historical `4/A`/`5/A` handling stays deterministic and PIT-safe.
 
-Historical `4/A` enrichment should remain deterministic. SEC amendment forms expose `dateOfOriginalSubmission`, which can help narrow linkage, but an amendment should only supersede an earlier record when the predecessor relationship and exact row identity are auditable.
+Use explicit evidence such as `dateOfOriginalSubmission`, issuer/owner identity and exact row evidence. Do not fuzzy-match by approximate price/date/share count.
 
-Any unresolved or ambiguous cross-accession correction should remain quarantined rather than silently double-counted or fuzzily merged.
+PIT lifecycle rule:
 
-Important PIT requirement:
-
-- original row is effective until the amendment becomes public;
-- corrected row becomes effective only from amendment `accepted_at` onward;
-- never retroactively rewrite the historical state as though the corrected information was known from the original filing date.
+- original record remains effective until amendment becomes public;
+- corrected state becomes effective only from amendment `accepted_at`;
+- never rewrite history as if a later correction was known at original filing time;
+- ambiguous predecessor links go to quarantine.
 
 ---
 
 ## MARKET DATA PLAN
 
-The current live/experimental providers are not sufficient as the sole historical research source:
+Current Yahoo/Stooq paths are not sufficient as the sole research provider:
 
-- Yahoo chart adapter is intentionally experimental and requests only about 2 years.
-- Stooq adapter provides unadjusted OHLCV in the current implementation.
+- Yahoo adapter is experimental and around 2 years;
+- current Stooq implementation is unadjusted.
 
-The preferred architecture is:
+Keep architecture vendor-neutral:
 
-`historical market provider -> canonical market CSV contract -> existing backtester`
+`historical market provider -> canonical market CSV -> existing backtester`
 
-Do **not** couple the backtester directly to one vendor.
+Existing `CsvMarketDataProvider` already supports deterministic OHLCV, `adj_close`, adjustment flags/basis, split factor and PIT daily availability.
 
-`CsvMarketDataProvider` already supports a strict deterministic canonical contract including:
+Current provider direction:
 
-- date/ticker OHLCV
-- `adj_close`
-- `is_adjusted`
-- `adjustment_basis`
-- `split_factor`
-- PIT daily availability at US session close
+- EODHD: leading candidate for primary historical US price/universe because delisted history is explicitly available;
+- Tiingo: strong cross-check/alternative for raw + adjusted OHLCV and split/dividend factors.
 
-Current provider research direction:
+Required before formal benchmark claims:
 
-- **EODHD** is the leading candidate for primary historical US price/universe data because it explicitly supports delisted symbols/history.
-- **Tiingo** is a strong cross-check/alternative because it provides raw + adjusted OHLCV and split/dividend factors.
-- This provider choice is **not yet a production lock**. Validate coverage, licensing, delisted handling and corporate-action consistency first.
+- adjusted daily OHLCV;
+- delisted securities;
+- historical ticker/security identity;
+- missing/stale bar accounting;
+- SPY benchmark;
+- delayed-entry/MAE capability;
+- trailing dollar ADV.
 
-Required market-history properties before formal benchmark claims:
-
-- adjusted daily OHLCV
-- delisted securities included
-- ticker changes/security identity handled historically
-- missing/stale bar accounting
-- SPY benchmark
-- ability to calculate delayed-entry tests and MAE
-- trailing dollar ADV
-
-Do not silently drop a signal because its company later delisted.
+Do not silently drop firms that later delisted.
 
 ---
 
-## PIT MARKET CAP / LIQUIDITY PLAN
+## PIT MARKET CAP / LIQUIDITY
 
-Do not use today's market cap historically.
+Do not use current market cap historically.
 
 Planned structure:
 
-- price/volume from the historical market provider;
-- shares outstanding from a point-in-time source, with SEC Companyfacts as the preferred free CIK-keyed foundation;
-- market cap = PIT shares outstanding × contemporaneous market price;
-- trailing dollar ADV calculated from canonical market bars.
-
-For SEC shares-outstanding facts, use the fact's filing/accession to recover the **actual public acceptance timestamp**. A fact filed after the market close must not leak into that day's feature snapshot.
-
-Add sanity/quality controls because SEC shares-outstanding facts can contain tagging/scaling errors.
-
----
-
-## PERSISTENT DATA STORAGE RISK
-
-Current GitHub Actions research artifacts use finite retention (typically 90 days). That is not sufficient for reproducible long-term research.
-
-Before calling a quarter permanently complete, create a persistent archive strategy with:
-
-- quarter/year identifier
-- source/run IDs
-- row counts
-- failure/quarantine counts
-- SHA-256 manifest/dataset hashes
-- schema version
-- code/workflow commit SHA
-- exact PIT clock policy
-- OOS-opened = false assertion
-
-Preferred direction: keep source code out of large git history and archive completed research datasets as durable release/object-storage assets plus small manifests in the repo. Verify the actual repository/tool permissions before implementing upload automation.
+- price/volume from historical market provider;
+- shares outstanding from PIT evidence, with SEC Companyfacts as the preferred free CIK-keyed base;
+- map shares facts through accession to exact public acceptance time;
+- market cap = PIT shares × contemporaneous price;
+- trailing dollar ADV from canonical market bars;
+- add scaling/tagging sanity checks for SEC shares-outstanding facts.
 
 ---
 
@@ -346,19 +377,14 @@ Preferred direction: keep source code out of large git history and archive compl
 
 Do not optimize the full Turning Engine first.
 
-The first real benchmark should intentionally be simple and hard to manipulate.
-
-Primary event unit:
-
-- **issuer-session**, not transaction row, so a filing with multiple rows/insiders cannot mechanically get extra event weight.
+Primary event unit: **issuer-session**, not transaction row.
 
 Core eligibility:
 
-- publicly available ownership filing
-- non-derivative open-market purchase (`P`)
-- information available only from SEC `accepted_at` onward
-- evaluate after public availability
-- baseline entry: next eligible market-session open
+- public ownership filing;
+- non-derivative open-market purchase (`P`);
+- information available only from SEC `accepted_at` onward;
+- baseline entry at next eligible session open.
 
 Horizons:
 
@@ -367,107 +393,71 @@ Horizons:
 - 126 sessions
 - 252 sessions
 
-Primary diagnostics:
+Diagnostics:
 
-- raw return
-- SPY excess return
-- mean + median
-- win rate
-- downside tail
-- MAE
-- event count
-- attrition / missing outcome rate
-- delisting-aware outcome handling
+- raw return;
+- SPY excess;
+- mean and median;
+- win rate;
+- downside tail;
+- MAE;
+- event count;
+- attrition/missing outcomes;
+- delisting-aware outcomes.
 
-Simple benchmark family should include at least:
-
-- any qualified open-market purchase
-- dollar thresholds/buckets (e.g. >$100k, >$250k, >$1m as descriptive predefined cuts)
-- unique buyer count
-- independent-owner cluster buys
-- simple company-level aggregated buying
-- canonical opportunistic benchmark when warm-up history is ready
-
-Do not select the winning threshold after inspecting OOS.
-
----
-
-## RESEARCH FINDINGS TO PRESERVE
-
-Full details are in `docs/research-log.md` under R-001 through R-013. High-level conclusions:
-
-- **R-001:** current opportunistic classifier is proprietary and must be compared with canonical Cohen–Malloy–Pomorski classification.
-- **R-002:** CEO/CFO/director role priors are not empirically settled; role must earn its weight.
-- **R-003:** cluster-buy direction is supported, exact 30-day/2-owner/3-owner thresholds are unvalidated.
-- **R-004:** structured 10b5-1 coverage changes materially in 2023; pre-2023 unknown cannot be treated as confirmed non-plan.
-- **R-005/R-007:** IID event bootstrap may understate uncertainty; add dependence-aware/calendar-time evidence.
-- **R-006:** purchase size matters in some studies, but normalization is unresolved; run a tournament.
-- **R-008:** public Form 4 alpha must survive liquidity, delayed entry and capacity tests.
-- **R-009:** same-owner purchase sequences and independent-owner clusters are distinct signals.
-- **R-010:** `FIRST_BUY_3Y` / re-entry floor of 90 is an unvalidated heuristic.
-- **R-011:** sales should be classified; a single generic sale should not automatically act as a binary veto.
-- **R-012:** market cap/liquidity are mandatory controls; do not hard-code a small-cap bonus.
-- **R-013:** data readiness, not lack of indicators, is the binding research constraint.
+Simple benchmark family includes any qualified purchase, predefined dollar buckets, unique buyer count, independent-owner cluster, simple company-level aggregated buying, and canonical opportunistic benchmark once warm-up history is ready.
 
 ---
 
 ## DEVELOPMENT / VALIDATION / OOS BOUNDARY
 
-Current intended split:
+- warm-up: **2013–2015** history only
+- development: **2016–2020**
+- validation: **2021–2022**
+- sealed OOS: **2023+**
 
-- **warm-up:** 2013–2015 (history only)
-- **development:** 2016–2020
-- **validation:** 2021–2022
-- **sealed OOS:** 2023 onward through the last complete eligible period
-
-The sealed OOS must remain unopened until transaction eligibility, feature transforms, benchmark family, weights/thresholds, dedup policy, statistics, execution rule, missing-data policy and subgroup reports have been frozen.
-
-A failed OOS is a valid result. Do not retune on the same OOS and relabel it as a new holdout.
+Do not open OOS until transaction eligibility, transforms, benchmark family, weights/thresholds, dedup policy, inference, execution, missing-data policy and subgroup reports are frozen.
 
 ---
 
 ## NEXT EXECUTION SEQUENCE
 
-When resuming work, follow this order unless new evidence forces a documented change:
-
-1. **Refresh run 34886766478.**
-2. If 2016 Q1 all-green, run full-quarter audit across all 5,482 filings and all shard artifacts.
-3. Record final Q1 counts/coverage/hash/status in `docs/research-log.md` and update this handoff.
-4. Build/verify **2013–2015 warm-up ownership acquisition** across reporting-owner history.
-5. Generalize/shard exact PIT hydration for remaining **2016–2022 original-buy filings** without opening OOS.
-6. Add deterministic **amendment enrichment** and quantify unresolved/quarantine rate.
-7. Finalize historical security/ticker/delisting identity contract.
-8. Acquire/normalize adjusted historical OHLCV + delisted coverage through the canonical CSV contract.
-9. Add PIT shares-outstanding / market-cap and trailing dollar-ADV layers.
-10. Freeze a Phase-0 dataset manifest and persistent storage scheme.
-11. Run the **Simple Insider Buy baseline** before testing any full score.
-12. Only after the baseline reproduces basic insider-purchase informativeness, start the feature tournament.
+1. Refresh **Q1 run 34892106121**.
+2. If it fails, inspect and fix only the precise research/data issue; do not force continuation.
+3. If it passes, verify **`Continue SEC PIT hydration 2016-2022`** auto-started.
+4. Verify Q1 was finalized and persisted as `sec-pit-2016q1.tar.gz` under release tag `research-sec-pit-v1`.
+5. Monitor sequential quarter PASS archives for 2016 Q2–2022 Q4; failed quarters must stop/fail closed rather than be silently skipped.
+6. When all 28 are present, verify `sec-pit-2016-2022-index.json` says `ORIGINAL_BUY_PIT_2016_2022_PASS` and still says amendments/market/canonical/signal readiness are false.
+7. Build **2013–2015 warm-up ownership history**.
+8. Add deterministic **PIT amendment reconciliation** and report quarantine rate.
+9. Finalize historical security/ticker/delisting contract.
+10. Acquire and normalize adjusted/delisted market history through canonical CSV.
+11. Add PIT shares outstanding / market cap / dollar ADV.
+12. Freeze Phase-0 dataset manifest.
+13. Run the **Simple Insider Buy baseline**.
+14. Only after baseline integrity is established, begin the feature tournament.
 
 ---
 
-## WHAT COUNTS AS PHASE-0 PASS
+## WHAT COUNTS AS FULL PHASE-0 PASS
 
-Do not declare the dataset formally research-ready until all of the following are demonstrated:
+Do not declare formal research readiness until all are demonstrated:
 
-- required ownership history acquired, including warm-up;
-- exact public-availability/acceptance evidence recovered;
-- amendments handled point-in-time;
+- ownership history including warm-up;
+- exact public-availability evidence;
+- amendments handled PIT;
 - historical issuer/security/ticker identity auditable;
 - delisted securities represented;
 - adjusted OHLCV/corporate actions reconciled;
-- market cap/liquidity controls available or explicitly reported missing;
-- coverage/attrition matrices produced by year and relevant universe strata;
-- completed research dataset has durable hashes/manifests/storage;
-- sealed OOS remains unopened.
+- market-cap/liquidity controls available or explicit missingness reported;
+- coverage/attrition matrices by year/universe strata;
+- durable hashes/manifests/storage;
+- sealed OOS unopened.
 
-Until then, feature results are `NOT_EVALUATED` or exploratory, not `PASS`/`FAIL` model evidence.
+Until then, model-feature results are exploratory / `NOT_EVALUATED`, not formal `PASS` or `FAIL`.
 
 ---
 
 ## NEW-CHAT PROMPT
 
-If the owner starts a fresh chat, the shortest useful instruction is:
-
-> Open `Garrincha077/insider-turning-engine`, read `docs/HANDOFF.md` and `docs/research-log.md`, refresh Actions run `34886766478`, and continue from the NEXT EXECUTION SEQUENCE. Do not open 2023+ OOS or change production scoring unless I explicitly ask.
-
-This should be enough to continue without reconstructing the old conversation.
+> Open `Garrincha077/insider-turning-engine`, read `docs/HANDOFF.md` and `docs/research-log.md`, refresh Q1 Actions run `34892106121`, then continue from NEXT EXECUTION SEQUENCE. If Q1 is PASS, verify `Continue SEC PIT hydration 2016-2022` auto-started. Do not open 2023+ OOS or change production scoring unless I explicitly ask.
