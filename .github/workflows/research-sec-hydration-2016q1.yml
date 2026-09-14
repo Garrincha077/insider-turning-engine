@@ -17,6 +17,7 @@ concurrency:
 env:
   SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT }}
   CANDIDATE_RUN_ID: "34884538222"
+  HISTORY_RUN_ID: "34883719192"
   YEAR: "2016"
   QUARTER: "1"
   SHARD_SIZE: "500"
@@ -48,6 +49,20 @@ jobs:
           repository: ${{ github.repository }}
           run-id: ${{ env.CANDIDATE_RUN_ID }}
           github-token: ${{ github.token }}
+      - name: Download verified 2016 SEC history
+        uses: actions/download-artifact@v4
+        with:
+          name: sec-history-2016-${{ env.HISTORY_RUN_ID }}
+          path: work/sec-history/2016
+          repository: ${{ github.repository }}
+          run-id: ${{ env.HISTORY_RUN_ID }}
+          github-token: ${{ github.token }}
+      - name: Enrich Q1 candidates with reporting-owner CIK evidence
+        run: >-
+          uv run python scripts/research_sec_enrich_reporting_owners.py
+          --candidate-path work/sec-candidates/2016/candidates.jsonl
+          --history-root work/sec-history/2016
+          --year 2016 --quarter 1
       - name: Resolve shard offset
         shell: bash
         run: echo "SHARD_OFFSET=$(( ${{ matrix.shard }} * SHARD_SIZE ))" >> "$GITHUB_ENV"
