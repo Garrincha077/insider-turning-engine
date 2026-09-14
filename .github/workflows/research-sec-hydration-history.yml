@@ -1,0 +1,357 @@
+name: Continue SEC PIT hydration 2016-2022
+
+on:
+  workflow_run:
+    workflows: ["Hydrate full 2016 Q1 SEC buy research set"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      q1_run_id:
+        description: Successful 2016 Q1 reference hydration run ID
+        type: string
+        default: "34886766478"
+      candidate_run_id:
+        description: Successful SEC candidate-universe run ID
+        type: string
+        default: "34884538222"
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: research-sec-pit-history-v1
+  cancel-in-progress: false
+
+env:
+  SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT }}
+  RELEASE_TAG: research-sec-pit-v1
+  CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id || '34884538222' }}
+  Q1_RUN_ID: ${{ inputs.q1_run_id || github.event.workflow_run.id || '34886766478' }}
+
+jobs:
+  prepare:
+    name: Prepare persistent research dataset release
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ env.RELEASE_TAG }}
+    steps:
+      - name: Require the expected successful Q1 workflow when auto-triggered
+        if: github.event_name == 'workflow_run'
+        env:
+          UPSTREAM_NAME: ${{ github.event.workflow_run.name }}
+          UPSTREAM_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$UPSTREAM_NAME" = "Hydrate full 2016 Q1 SEC buy research set"
+          test "$UPSTREAM_CONCLUSION" = "success"
+      - name: Create persistent research release if absent
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists."
+          else
+            gh release create "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Research SEC PIT dataset v1" \
+              --notes "Research-only historical SEC ownership PIT archives. Development/validation years only. OOS 2023+ is excluded. Original-buy hydration does not imply amendment reconciliation or signal readiness." \
+              --prerelease
+          fi
+
+  archive_q1:
+    name: Persist audited 2016 Q1 reference quarter
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      YEAR: "2016"
+      QUARTER: "1"
+      ASSET_NAME: sec-pit-2016q1.tar.gz
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Check whether Q1 is already persistently archived
+        id: persisted
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq "$ASSET_NAME"; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "$ASSET_NAME already exists; Q1 archive will not be rebuilt."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Download 2016 candidate universe
+        if: steps.persisted.outputs.skip != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: sec-candidates-2016-${{ env.CANDIDATE_RUN_ID }}
+          path: work/sec-candidates/2016
+          repository: ${{ github.repository }}
+          run-id: ${{ env.CANDIDATE_RUN_ID }}
+          github-token: ${{ github.token }}
+      - name: Download all successful Q1 shard artifacts
+        if: steps.persisted.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/q1-shards
+          gh run download "$Q1_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern 'sec-hydration-2016q1-shard-*' \
+            --dir work/q1-shards
+      - name: Finalize Q1 without re-fetching SEC
+        if: steps.persisted.outputs.skip != 'true'
+        shell: bash
+        run: >-
+          uv run python scripts/research_sec_hydrate_quarter.py
+          --candidate-path work/sec-candidates/2016/candidates.jsonl
+          --output work/sec-quarter/2016q1
+          --year 2016 --quarter 1
+          --candidate-run-id "$CANDIDATE_RUN_ID"
+          --existing-shards-root work/q1-shards
+      - name: Package deterministic Q1 archive
+        if: steps.persisted.outputs.skip != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C work/sec-quarter/2016q1 -czf "work/$ASSET_NAME" \
+            quarter-summary.json checksums.json raw-manifest.jsonl canonical-research.jsonl failures.jsonl
+          sha256sum "work/$ASSET_NAME"
+      - name: Upload temporary Q1 audit artifact
+        if: steps.persisted.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sec-pit-2016q1-audit-${{ github.run_id }}
+          path: work/sec-quarter/2016q1
+          retention-days: 90
+      - name: Upload persistent Q1 release asset
+        if: steps.persisted.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release upload "$RELEASE_TAG" "work/$ASSET_NAME" \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+  hydrate_history:
+    name: Hydrate ${{ matrix.year }} Q${{ matrix.quarter }}
+    needs: archive_q1
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: true
+      max-parallel: 1
+      matrix:
+        include:
+          - {year: 2016, quarter: 2}
+          - {year: 2016, quarter: 3}
+          - {year: 2016, quarter: 4}
+          - {year: 2017, quarter: 1}
+          - {year: 2017, quarter: 2}
+          - {year: 2017, quarter: 3}
+          - {year: 2017, quarter: 4}
+          - {year: 2018, quarter: 1}
+          - {year: 2018, quarter: 2}
+          - {year: 2018, quarter: 3}
+          - {year: 2018, quarter: 4}
+          - {year: 2019, quarter: 1}
+          - {year: 2019, quarter: 2}
+          - {year: 2019, quarter: 3}
+          - {year: 2019, quarter: 4}
+          - {year: 2020, quarter: 1}
+          - {year: 2020, quarter: 2}
+          - {year: 2020, quarter: 3}
+          - {year: 2020, quarter: 4}
+          - {year: 2021, quarter: 1}
+          - {year: 2021, quarter: 2}
+          - {year: 2021, quarter: 3}
+          - {year: 2021, quarter: 4}
+          - {year: 2022, quarter: 1}
+          - {year: 2022, quarter: 2}
+          - {year: 2022, quarter: 3}
+          - {year: 2022, quarter: 4}
+    env:
+      YEAR: ${{ matrix.year }}
+      QUARTER: ${{ matrix.quarter }}
+      ASSET_NAME: sec-pit-${{ matrix.year }}q${{ matrix.quarter }}.tar.gz
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check whether quarter already has a persistent PASS archive
+        id: persisted
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq "$ASSET_NAME"; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "$ASSET_NAME already exists; treating quarter as previously completed."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-python@v5
+        if: steps.persisted.outputs.skip != 'true'
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        if: steps.persisted.outputs.skip != 'true'
+        with:
+          enable-cache: true
+      - name: Install locked environment
+        if: steps.persisted.outputs.skip != 'true'
+        run: uv sync --all-groups --frozen
+      - name: Download annual candidate universe
+        if: steps.persisted.outputs.skip != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: sec-candidates-${{ matrix.year }}-${{ env.CANDIDATE_RUN_ID }}
+          path: work/sec-candidates/${{ matrix.year }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.CANDIDATE_RUN_ID }}
+          github-token: ${{ github.token }}
+      - name: Hydrate and audit complete quarter in bounded shards
+        if: steps.persisted.outputs.skip != 'true'
+        shell: bash
+        run: >-
+          uv run python scripts/research_sec_hydrate_quarter.py
+          --candidate-path "work/sec-candidates/$YEAR/candidates.jsonl"
+          --output "work/sec-quarter/${YEAR}q${QUARTER}"
+          --year "$YEAR" --quarter "$QUARTER"
+          --candidate-run-id "$CANDIDATE_RUN_ID"
+          --shard-size 500 --workers 4
+      - name: Package deterministic quarter archive
+        if: steps.persisted.outputs.skip != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C "work/sec-quarter/${YEAR}q${QUARTER}" -czf "work/$ASSET_NAME" \
+            quarter-summary.json checksums.json raw-manifest.jsonl canonical-research.jsonl failures.jsonl
+          sha256sum "work/$ASSET_NAME"
+      - name: Preserve temporary quarter audit artifact
+        if: steps.persisted.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sec-pit-${{ matrix.year }}q${{ matrix.quarter }}-audit-${{ github.run_id }}
+          path: work/sec-quarter/${{ matrix.year }}q${{ matrix.quarter }}
+          retention-days: 90
+      - name: Upload persistent PASS quarter
+        if: steps.persisted.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release upload "$RELEASE_TAG" "work/$ASSET_NAME" \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+  completeness:
+    name: Original-buy PIT history completeness gate
+    needs: hydrate_history
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify all 28 development/validation quarter archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets > release-assets.json
+          python - <<'PY'
+          import json, re
+          from pathlib import Path
+
+          release = json.loads(Path('release-assets.json').read_text())
+          assets = {item['name']: item for item in release.get('assets', [])}
+          expected = [f"sec-pit-{year}q{quarter}.tar.gz" for year in range(2016, 2023) for quarter in range(1, 5)]
+          missing = [name for name in expected if name not in assets]
+          if missing:
+              raise SystemExit(f"missing persistent quarter archives: {missing}")
+
+          years = {}
+          for year in range(2016, 2023):
+              quarter_assets = []
+              for quarter in range(1, 5):
+                  item = assets[f"sec-pit-{year}q{quarter}.tar.gz"]
+                  quarter_assets.append({
+                      'quarter': quarter,
+                      'asset': item['name'],
+                      'size': item.get('size'),
+                      'digest': item.get('digest'),
+                      'updatedAt': item.get('updatedAt'),
+                  })
+              years[str(year)] = quarter_assets
+
+          index = {
+              'schemaVersion': '1.0.0',
+              'dataset': 'SEC original-buy PIT hydration',
+              'period': '2016-2022',
+              'quarterCount': len(expected),
+              'quarterArchivesComplete': True,
+              'years': years,
+              'oosOpened': False,
+              'amendmentsReconciled': False,
+              'marketDataJoined': False,
+              'canonicalReady': False,
+              'signalReady': False,
+              'status': 'ORIGINAL_BUY_PIT_2016_2022_PASS',
+              'nextGates': [
+                  '2013-2015 warm-up ownership history',
+                  'PIT amendment reconciliation',
+                  'adjusted/delisted market history',
+                  'simple insider baseline',
+              ],
+          }
+          Path('sec-pit-2016-2022-index.json').write_text(json.dumps(index, indent=2, sort_keys=True) + '\n')
+          for year, quarter_assets in years.items():
+              Path(f'sec-pit-{year}-manifest.json').write_text(json.dumps({
+                  'schemaVersion': '1.0.0',
+                  'year': int(year),
+                  'quarters': quarter_assets,
+                  'oosOpened': False,
+              }, indent=2, sort_keys=True) + '\n')
+          print(json.dumps(index, indent=2, sort_keys=True))
+          PY
+      - name: Upload year manifests and full-history index
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release upload "$RELEASE_TAG" \
+            sec-pit-2016-manifest.json sec-pit-2017-manifest.json sec-pit-2018-manifest.json \
+            sec-pit-2019-manifest.json sec-pit-2020-manifest.json sec-pit-2021-manifest.json \
+            sec-pit-2022-manifest.json sec-pit-2016-2022-index.json \
+            --repo "$GITHUB_REPOSITORY" --clobber
+      - name: Summarize gate
+        shell: bash
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## SEC original-buy PIT history
+
+          **ORIGINAL_BUY_PIT_2016_2022 = PASS**
+
+          All 28 development/validation quarter archives are persistently present.
+          This is **not** full Phase-0 PASS: amendments, 2013-2015 warm-up history,
+          adjusted/delisted market data and later research gates remain outstanding.
+          OOS 2023+ was not opened by this workflow.
+          EOF
