@@ -547,7 +547,173 @@ Do not define a sequence using its future endpoint when scoring the first trade;
 
 ---
 
+## Second research sprint — STARTED 2026-09-14
+
+This sprint tests three priors that currently look intuitive but are not sufficiently validated to be treated as facts: first-buy/re-entry novelty, binary treatment of sales, and a presumed small-cap information advantage.
+
+### R-010 — `FIRST_BUY_3Y` / re-entry is an unvalidated novelty prior, not yet a 90-point fact
+
+**Status:** `UNVALIDATED HEURISTIC / NEEDS TOURNAMENT`  
+**Priority:** High
+
+**Current implementation observed**
+
+`features/opportunistic.py` treats no earlier purchase in three years as `FIRST_BUY_3Y`, treats a one-year purchase hiatus as `INSIDER_REENTRY`, and raises the opportunistic score to at least 90 when either condition is present. With sparse history, this novelty exception can therefore create a high score even when the cadence-based classifier is not estimable.
+
+**External research**
+
+A targeted literature search did not identify a widely established peer-reviewed result supporting a generic rule that the first purchase after a one- or three-year hiatus deserves a fixed high conviction score. The stronger academic evidence is about **predictable routine versus opportunistic timing** and about **the structure of repeated trade sequences**, not a universal first-buy premium.
+
+Cohen, Malloy and Pomorski show that predictable routine trading is weak while opportunistic trading is informative:
+https://www.nber.org/papers/w16454
+
+Biggerstaff, Cicero and Wintoki show that the temporal structure and duration of trading sequences itself contains information, and that both purchases and sales become more informative after accounting for trading patterns:
+https://www.sciencedirect.com/science/article/pii/S0929119920300985
+
+**Research implication**
+
+Novelty may still be valuable, but it must compete against sequence information rather than automatically dominate it. A first purchase can represent genuine new conviction, but it can also be symbolic, compensation-related, governance-related or simply the first observable event in an incomplete history.
+
+**Proposed development/validation variants**
+
+1. Current rule: `FIRST_BUY_3Y` / `REENTRY` floor at 90.
+2. Novelty flag only, no score bonus.
+3. Separate hiatus buckets: 6M / 12M / 24M / 36M+.
+4. First purchase after becoming an officer/director, where role start can be dated reliably.
+5. First purchase after a major drawdown versus first purchase without drawdown.
+6. Sequence initiation versus sequence continuation.
+7. Novelty interacted with cluster evidence: first/re-entry buy by one insider versus simultaneous independent-owner corroboration.
+
+**Decision rule:** do not retain the 90-point floor unless development/validation shows material incremental lift over a neutral novelty flag and over sequence/cluster features.
+
+---
+
+### R-011 — Sales should be classified, not treated as a binary veto
+
+**Status:** `SUPPORTED METHODOLOGY DIRECTION / NEEDS FEATURE TEST`  
+**Priority:** High
+
+**Current implementation observed**
+
+The divergence model currently gives `absence_relevant_sales = 100` when there is no relevant sale in the window and `0` when one or more relevant sales are present. At company level, another component uses buy dollars divided by buy-plus-sale dollars. These are transparent baselines, but they do not distinguish information-motivated selling from diversification, liquidity, tax, option-exercise or routine-plan selling.
+
+**External research**
+
+Jeng, Metrick and Zeckhauser find robust abnormal returns for insider purchases but not for the aggregate sale portfolio, illustrating how noisy the unconditional sale signal can be:
+https://www.nber.org/papers/w6913
+
+Scott and Xu show that not all sales have the same implication. In their 1987–2002 sample, only large sales that were also large relative to the insider's existing holdings predicted significantly negative future abnormal returns; small sales that were small relative to holdings did not behave as a clean bearish signal:
+https://rpc.cfainstitute.org/research/financial-analysts-journal/2004/some-insider-sales-are-positive-signals
+
+Biggerstaff, Cicero and Wintoki find that after controlling for insider trading patterns, **both sales and purchases** predict abnormal returns:
+https://www.sciencedirect.com/science/article/pii/S0929119920300985
+
+Research on future crash risk also emphasizes that insider sales mix informational motives with liquidity/diversification motives, making raw sales difficult to interpret:
+https://link.springer.com/article/10.1007/s11156-020-00936-3
+
+**Research implication**
+
+`one sale exists -> absence score 0` is too coarse to be accepted without testing. It risks punishing a strong purchase setup because an unrelated insider sold a small fraction of holdings for noninformational reasons.
+
+**Proposed sales tournament**
+
+1. Current binary absence-of-sales factor.
+2. No sales factor.
+3. Net buy dollars / total insider dollars.
+4. Sale shares / pre-sale or post-sale holdings, when reliable.
+5. Large-relative-holding sale flag.
+6. Same-owner sale sequence versus isolated sale.
+7. Canonical routine/opportunistic sale classification.
+8. Known 10b5-1 sale versus non-plan/unknown sale, only where status is genuinely observed.
+9. Separate executive, director and 10% owner sales instead of pooling all owners.
+10. Purchase-cluster confirmation that is not vetoed by small unrelated sales.
+
+**Decision rule:** sales may become a negative feature only when a specific classification produces stable validation separation. Generic sales should remain descriptive or low-weight if the signal is noisy.
+
+---
+
+### R-012 — Market cap and liquidity are essential stratifiers, but the literature does not justify a fixed small-cap bonus
+
+**Status:** `MIXED EVIDENCE / REQUIRED CONTROL`  
+**Priority:** High
+
+**External research**
+
+Lakonishok and Lee find that insiders predict cross-sectional returns and that this result in their 1975–1995 US sample is driven by smaller firms; they also find purchases more informative than sales:
+https://www.nber.org/papers/w6656
+
+However, Jeng, Metrick and Zeckhauser report that abnormal returns to insider trades in small firms were **not significantly different** from those in large firms in their rolling-portfolio framework:
+https://www.nber.org/papers/w6913
+
+A 2026 Journal of Financial Economics study using Norwegian administrative data finds positive abnormal returns for purchases by executives below the top and reports broadly similar conclusions when splitting firms by market capitalization, though with less statistical power:
+https://doi.org/10.1016/j.jfineco.2026.104282
+
+The information environment clearly matters: greater analyst following and more informative public disclosure are associated with lower insider trading profitability/intensity, consistent with private-information advantages being larger when outsiders know less:
+https://www.sciencedirect.com/science/article/pii/S0165410103000685
+
+For an outside investor copying public Form 4 signals, liquidity is also a separate tradability problem: a percentage-return anomaly can concentrate in stocks where spreads and capacity make execution unattractive.
+
+**Research implication**
+
+Do not hard-code `small cap = stronger conviction`. Instead use market cap, price, dollar volume, spread proxy and analyst/information-environment variables as **stratification and robustness dimensions**. If a small-cap interaction survives liquidity/capacity controls and validation, it can later be considered as an interaction term.
+
+**Required diagnostics**
+
+- PIT market-cap quintiles;
+- trailing dollar-ADV quintiles;
+- price buckets;
+- market cap crossed with dollar ADV;
+- equal-weight versus liquidity-aware portfolios;
+- exclusion sensitivity for microcaps/penny stocks;
+- delayed-entry and slippage sensitivity by liquidity bucket;
+- signal coverage and attrition separately for each bucket.
+
+**Decision rule:** an engine that works only in the least tradable tail should not receive a general predictive `PASS`, even if percentage returns are statistically strong.
+
+---
+
+### R-013 — Phase-0 data readiness is now the binding constraint on empirical research
+
+**Status:** `REPOSITORY OBSERVATION / BLOCKER FOR FORMAL FEATURE TESTS`  
+**Priority:** Critical
+
+**Repository evidence**
+
+`docs/sec-history.md` states that the verified historical probe currently covers only five quarters: 2006 Q1 plus 2025 Q3 through 2026 Q2. The other 77 completed historical quarters were not ingested by that probe. The bulk SEC dataset supplies filing dates but not exact acceptance timestamps; `canonicalReady` and `eligibleUniverseReady` remain false. The repository correctly identifies canonical XML hydration, exact acceptance evidence, amendment links and point-in-time security/exchange identity as the next boundary.
+
+The current price feature layer has PIT price, return, volume, volatility and technical features, but it does **not** currently expose a point-in-time market-cap feature or trailing dollar-ADV feature. Raw volume is available, so dollar-volume diagnostics are conceptually feasible once the research dataset is assembled, but a historical shares-outstanding/market-cap source still needs a defensible PIT contract.
+
+**Research implication**
+
+Literature research can continue, but we should not claim that R-001/R-006/R-010/R-011/R-012 are empirically validated in this engine until Phase 0 is completed. The most valuable next engineering work, when implementation is authorized, is data-enablement rather than more scoring logic.
+
+**Minimum P0 research dataset before feature tournament**
+
+1. Full historical ownership acquisition covering the development and validation eras.
+2. Canonical owner/issuer transaction history with amendments and exact public-availability evidence.
+3. PIT ticker/security mapping including delisted names.
+4. Adjusted daily OHLCV with corporate-action integrity and missing-bar accounting.
+5. PIT or defensibly reconstructed market cap / shares outstanding.
+6. Trailing dollar-ADV and price liquidity proxies.
+7. Explicit coverage matrices by year, exchange, market-cap bucket and signal feature.
+8. OOS remains sealed throughout.
+
+**Gate:** until these are satisfied, classify quantitative feature comparisons as `NOT_EVALUATED` rather than `FAIL` or `PASS`.
+
+---
+
+## Research execution order from here
+
+1. Finish literature specification for ownership change, direct/indirect ownership, drawdown context and cost-basis reclaim.
+2. Predeclare the exact Phase-1 simple benchmark table and primary metrics.
+3. Define the minimum PIT market-cap/liquidity data contract needed by R-006/R-008/R-012.
+4. Once Phase 0 data exists, run simple insider purchase benchmarks before any full-engine score optimization.
+5. Only after the dataset reproduces basic purchase informativeness should the feature tournament begin.
+
+---
+
 ## Change log
 
 - **2026-09-14:** Created research log and recorded initial findings R-001 through R-005. No production code or scoring configuration changed.
 - **2026-09-14:** Added Research Roadmap v1 and started first sprint. Added R-006 through R-009 covering purchase-size normalization, dependence-aware/calendar-time inference, execution/liquidity realism, and insider trade sequences. No production code or scoring configuration changed.
+- **2026-09-14:** Continued second research sprint. Added R-010 through R-013 covering first-buy/re-entry novelty, sales classification, firm-size/liquidity controls, and the Phase-0 data-readiness blocker. No production code or scoring configuration changed.
