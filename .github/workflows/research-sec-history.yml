@@ -1,0 +1,94 @@
+name: Research SEC history backfill
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/research-sec-history.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: research-sec-history-backfill
+  cancel-in-progress: false
+
+env:
+  SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT }}
+
+jobs:
+  backfill:
+    name: Backfill SEC history ${{ matrix.year }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        year: [2016, 2017, 2018, 2019, 2020, 2021, 2022]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Require SEC User-Agent
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SEC_USER_AGENT:-}" || {
+            echo "SEC_USER_AGENT repository variable is required"
+            exit 1
+          }
+      - name: Backfill and validate all four quarters
+        shell: bash
+        run: >-
+          uv run insider-turning backfill-sec-history
+          --start-year ${{ matrix.year }}
+          --start-quarter 1
+          --end-year ${{ matrix.year }}
+          --end-quarter 4
+          --cache-dir work/sec-history/cache
+          --staging-dir work/sec-history/staging
+          --execute
+      - name: Summarize verified year
+        if: always()
+        shell: bash
+        run: |
+          uv run python - <<'PY'
+          import json, os
+          from pathlib import Path
+          year = os.environ["YEAR"]
+          path = Path("work/sec-history/staging/history-inventory.json")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as out:
+              out.write(f"## SEC research history {year}\n\n")
+              if not path.exists():
+                  out.write("No history inventory produced.\n")
+              else:
+                  report = json.loads(path.read_text(encoding="utf-8"))
+                  rows = report.get("quarters", [])
+                  out.write(f"Status: **{report.get('status', 'UNKNOWN')}**\n\n")
+                  out.write("| Quarter | Status | Filings | Rows |\n|---|---|---:|---:|\n")
+                  for row in rows:
+                      out.write(
+                          f"| {row.get('year')}Q{row.get('quarter')} | {row.get('status')} | "
+                          f"{row.get('filings', '')} | {row.get('rows', '')} |\n"
+                      )
+                  out.write("\nResearch acquisition only. canonicalReady remains false; no scores, alerts, Pages, or OOS were run.\n")
+          PY
+        env:
+          YEAR: ${{ matrix.year }}
+      - name: Upload verified yearly research partitions
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sec-history-${{ matrix.year }}-${{ github.run_id }}
+          path: |
+            work/sec-history/staging/year=${{ matrix.year }}
+            work/sec-history/staging/history-inventory.json
+          if-no-files-found: warn
+          retention-days: 90
+          compression-level: 0
