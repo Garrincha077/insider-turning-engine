@@ -33,6 +33,7 @@ from insider_turning_engine.ingestion.sec.daily_index import SECDailyIndexSource
 from insider_turning_engine.ingestion.sec.parser import parse_sec_filing
 
 _OFFSET_DATE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})([+-]\d{2}:\d{2})$")
+RESEARCH_SEC_MAX_ATTEMPTS = 8
 
 
 def _local(tag: str) -> str:
@@ -141,6 +142,7 @@ def hydrate(
     discovery = SECDailyIndexSource(
         user_agent,
         cache_dir=output / "sec-cache-discovery",
+        max_attempts=RESEARCH_SEC_MAX_ATTEMPTS,
     )
     matches: dict[str, tuple[Any, date, str]] = {}
     try:
@@ -178,6 +180,7 @@ def hydrate(
             source = SECDailyIndexSource(
                 user_agent,
                 cache_dir=output / "sec-cache-filings",
+                max_attempts=RESEARCH_SEC_MAX_ATTEMPTS,
             )
             local.source = source
             with sources_lock:
@@ -372,7 +375,7 @@ def main() -> None:
     parser.add_argument("--candidate-path", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--year", type=int, required=True)
-    parser.add_argument("--quarter", type=int, required=True)
+    parser.add_argument("--quarter", type=int, default=1)
     parser.add_argument("--offset", type=int, default=0)
     parser.add_argument("--limit", type=int, default=500)
     parser.add_argument("--workers", type=int, default=4)
