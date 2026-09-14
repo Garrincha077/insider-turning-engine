@@ -201,6 +201,353 @@ Next high-value questions:
 
 ---
 
+# Research Roadmap v1 — 2026-09-14
+
+## Objective
+
+Build an empirically defensible Insider Turning Engine that answers two separate questions:
+
+1. **Insider information:** which publicly observable insider behaviors identify unusually informative purchases?
+2. **Turning confirmation:** which post-purchase market/price conditions improve timing without merely adding redundant momentum filters?
+
+The engine should beat transparent simple insider benchmarks on development and validation data before sealed OOS is opened. Statistical significance alone is not enough: improvements must be economically meaningful, stable across eras, and reasonably tradable after public Form 4 availability.
+
+## Non-negotiable research rules
+
+- Never tune on sealed OOS.
+- Never promote a feature because one subgroup or one horizon looks good after broad searching.
+- Keep a simple benchmark in every experiment.
+- Report missing/delisted outcomes and coverage loss, never silently discard them.
+- Report both equal-weight and liquidity-aware results where feasible.
+- Separate **feature discovery**, **threshold selection**, and **final validation**.
+- Prefer ablations and monotonic bucket tests before continuous weight optimization.
+- Any methodology choice that could materially change a PASS/FAIL result must be frozen before opening OOS.
+
+## Phase 0 — Data readiness and information boundary
+
+**Goal:** ensure the historical dataset is good enough that feature research is not measuring data artifacts.
+
+Required evidence:
+
+- canonical Form 4 history sufficiently deep for routine/opportunistic and owner-history features;
+- amendments/superseded rows handled point-in-time;
+- accepted/knowledge timestamps preserved;
+- valid-time issuer/ticker mapping and delisted securities;
+- adjusted prices and corporate-action basis reconciled;
+- market-cap, volume/liquidity and sector observations available point-in-time;
+- explicit Rule 10b5-1 coverage by era.
+
+**Gate P0:** no formal model-comparison claim until historical coverage and attrition are quantified. Partial datasets remain useful for parser and exploratory research only.
+
+## Phase 1 — Reproduce simple insider baselines
+
+Before testing the full engine, establish transparent benchmark strategies from the same PIT dataset:
+
+- any qualified open-market purchase;
+- simple purchase/sale ratio;
+- unique buyers / unique sellers;
+- largest purchase bucket;
+- cluster purchases;
+- canonical opportunistic purchases;
+- company net buying.
+
+Evaluate 21/63/126/252-session outcomes, SPY excess, factor/calendar-time results, win rate, median, downside tail, MAE, event count, attrition and coverage.
+
+**Gate P1:** the dataset should broadly reproduce the direction of well-established purchase informativeness. Failure to do so triggers a data/methodology audit before adding complexity.
+
+## Phase 2 — Insider-information feature tournament
+
+Test features individually and incrementally, not as one optimized score.
+
+Priority order:
+
+1. routine vs opportunistic classification;
+2. purchase-size normalization;
+3. insider role / hierarchy;
+4. independent-owner cluster buying;
+5. same-owner trading sequences;
+6. first-buy / re-entry definitions;
+7. ownership increase / direct versus indirect ownership;
+8. sales and absence-of-sales;
+9. drawdown/contrarian context;
+10. Rule 10b5-1 observed status.
+
+For each feature use bucket plots, monotonicity checks, ablation versus baseline and era/size/liquidity stability.
+
+**Gate P2:** a feature enters the candidate conviction model only if it adds stable validation information or materially improves downside/precision without unacceptable coverage loss.
+
+## Phase 3 — Turning overlay tournament
+
+Only after the insider component is defensible, test whether technical confirmation adds incremental value:
+
+- base formation / no-new-low;
+- volatility contraction;
+- volume dry-up versus accumulation;
+- ordinary relative strength turn;
+- Mansfield RS versus market;
+- Mansfield RS versus sector;
+- MA20/MA50 slope and reclaim;
+- insider cost-basis reclaim;
+- state persistence / hysteresis.
+
+Key test: compare `INSIDER ONLY` versus `INSIDER + ONE TECHNICAL FEATURE` before testing the full state machine.
+
+**Gate P3:** technical filters must improve incremental risk-adjusted outcome or timing, not merely remove events until only obvious winners remain.
+
+## Phase 4 — Statistical robustness and tradability
+
+Run two complementary evaluation families:
+
+**Event-level diagnostics**
+
+- 21/63/126/252-session returns;
+- median and mean SPY excess;
+- win rate, downside tail, MAE;
+- dependence-aware confidence intervals;
+- event-date and issuer clustering sensitivity.
+
+**Calendar-time diagnostics**
+
+- monthly/weekly portfolios of active signals;
+- equal-weight and tradability-aware weighting;
+- factor-adjusted alpha where data permit;
+- HAC/Newey-West or another pre-specified dependence-robust inference method.
+
+Tradability tests:
+
+- next-open baseline;
+- next-close and delayed-entry sensitivity;
+- minimum liquidity/price buckets;
+- spread/slippage scenarios;
+- capacity proxy as a fraction of ADV.
+
+**Gate P4:** no formal PASS based solely on an IID event bootstrap.
+
+## Phase 5 — Development/validation freeze
+
+Use development data for feature definition and coarse threshold exploration. Use validation for confirmation and simplification.
+
+Freeze:
+
+- transaction eligibility;
+- every raw-to-component transform;
+- feature list;
+- weights and thresholds;
+- deduplication policy;
+- statistical test;
+- benchmark family;
+- execution rule;
+- missing-data policy;
+- subgroup reports that will be examined OOS.
+
+Then update the methodology lock once, on a clean commit.
+
+**Gate P5:** validation should show economically meaningful advantage over simple benchmarks without relying on a single era, sector, microcap tail or a handful of extreme winners.
+
+## Phase 6 — Sealed OOS
+
+Open OOS once under the frozen methodology.
+
+Primary comparison should be predeclared. Suggested primary target:
+
+`FULL TURNING ENGINE` versus the strongest predeclared simple insider benchmark at 126 sessions, with 21/63/252 sessions as secondary horizons.
+
+A failed OOS is a valid result. Do not retune and relabel the same OOS as a new holdout.
+
+## Phase 7 — Shadow production
+
+If OOS is acceptable:
+
+- keep alerts in shadow mode first;
+- compare generated signal timestamps with actual tradable prices;
+- measure provider latency, stale data, SEC late filings, duplicate/amendment behavior;
+- record paper execution and slippage;
+- compare live feature distributions with historical distributions.
+
+Only after this should external alerts be treated as a production signal rather than a research preview.
+
+---
+
+## First research sprint — STARTED 2026-09-14
+
+The first sprint deliberately focuses on high-leverage methodology questions that can invalidate an otherwise impressive backtest:
+
+1. `R-001` canonical opportunistic/routine replication.
+2. `R-006` purchase-size normalization.
+3. `R-007` dependence-aware inference and calendar-time portfolio benchmark.
+4. `R-008` disclosure-time execution and liquidity realism.
+5. `R-009` same-owner trade sequences versus independent-owner clusters.
+
+No production code changes are authorized by these findings.
+
+---
+
+### R-006 — Purchase size is useful as a candidate feature, but the correct normalization is unresolved
+
+**Status:** `MIXED EVIDENCE / NEEDS TOURNAMENT`  
+**Priority:** High
+
+**Current implementation observed**
+
+The conviction code uses a point-in-time log-dollar percentile relative to the same insider's prior purchases. Company-level aggregation then dollar-weights qualified purchase scores, with a 99.5% prior-universe winsor cap when enough prior observations exist.
+
+**External research**
+
+Evidence supports the idea that size can matter in some contexts, but not one universal transformation. Research on discretionary director purchases reports that larger discretionary purchases are followed by higher abnormal returns; the same study also finds stronger effects in smaller firms and firms with greater information asymmetry.
+
+Source: https://www.sciencedirect.com/science/article/pii/S0927538X16300506
+
+Other research explicitly scales insider trading intensity relative to the insider's existing holdings when constructing weighted net-purchase measures, recognizing that nominal dollars are constrained by insider wealth and are not directly comparable across insiders.
+
+Source: https://doi.org/10.1111/jbfa.12666
+
+The broader literature is not uniformly monotonic: studies in other markets have found transaction value or relative trade size to be insignificant or even negatively related to subsequent price impact. This makes a hard-coded assumption that a larger dollar purchase always means stronger conviction unsafe.
+
+**Research implication**
+
+Do not replace the current history-relative percentile with another single measure on theoretical grounds. Run a predeclared feature tournament.
+
+**Proposed development/validation variants**
+
+1. No purchase-size factor.
+2. Current same-insider prior-history log-dollar percentile.
+3. Cross-sectional PIT dollar percentile.
+4. Purchase dollars / issuer market capitalization.
+5. Purchased shares / post-transaction direct holdings, when reliably observed.
+6. Change in reported ownership percentage, when denominator quality is sufficient.
+7. Two-dimensional specification: absolute/cross-sectional size plus insider-relative size, without forcing monotonicity.
+
+Required diagnostics: quintile/decile monotonicity, sample coverage, stability by market cap/liquidity, and incremental lift after opportunistic/cluster controls.
+
+**Decision rule:** prefer the simplest measure that produces stable validation separation. If none is stable, size should be reduced to a descriptive field rather than a scoring weight.
+
+---
+
+### R-007 — Add a calendar-time portfolio test before treating long-horizon event CIs as formal evidence
+
+**Status:** `SUPPORTED METHODOLOGY CHANGE FOR RESEARCH / IMPLEMENTATION NOT AUTHORIZED`  
+**Priority:** Critical before formal PASS
+
+**Current implementation observed**
+
+The current event engine schedules signals carefully from public availability, enters at the next session open, measures exact 21/63/126/252-session outcomes, and reports SPY excess. Its bootstrap resamples observed events individually.
+
+**External research**
+
+Jeng, Metrick and Zeckhauser explicitly use rolling insider-purchase portfolios partly to avoid the statistical difficulties of long-horizon event studies. In their US 1975–1996 sample the purchase portfolio earned roughly 40 basis points of abnormal return per month, while sales did not show abnormal performance.
+
+Source: https://www.nber.org/papers/w6913
+
+Long-horizon event-study literature documents serious issues from skewness, cross-sectional correlation and overlapping event periods. Dutta, Knif, Kolari and Pynnönen specifically note that overlapping long-run windows create cross-sectional dependence; calendar-time portfolios address this correlation problem, albeit sometimes with lower statistical power.
+
+Sources:
+
+- https://www.sciencedirect.com/science/article/pii/S0927539818300124
+- https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3167271
+
+**Research implication**
+
+Keep the current event study because it is excellent for interpretability, MAE and exact signal-level diagnostics. But formal predictive-validity evidence should not rely on its IID event bootstrap alone.
+
+**Proposed validation design**
+
+Run both:
+
+1. **Event study:** current PIT event returns with block/cluster sensitivity.
+2. **Calendar-time strategy:** on each calendar week/month form a portfolio of currently active qualifying signals using only information public by formation time.
+
+Predeclare equal-weight as the clean research baseline. Add a liquidity-aware/capacity-aware version separately rather than letting value weighting hide microcap concentration. Where data permit, report market/factor-adjusted alpha with dependence-robust standard errors.
+
+**Decision rule:** strongest evidence is concordance — the signal should look useful in both event-level outcomes and calendar-time performance. If significance exists only under an IID event bootstrap and disappears under dependence-aware/calendar-time analysis, classify the result as `INCONCLUSIVE`, not `PASS`.
+
+---
+
+### R-008 — Public-filings alpha must survive realistic execution and liquidity constraints
+
+**Status:** `SUPPORTED RISK / NEEDS EXECUTION ROBUSTNESS TEST`  
+**Priority:** High
+
+**Current implementation observed**
+
+The backtest does not trade on the transaction date. It waits for the filing's public `knowledge_at/accepted_at`, evaluates at the first eligible daily close, and enters at the following market-session open. This is conservative and protects against look-ahead.
+
+**External research**
+
+A 2025 study using intraday data on SEC Form 4 filings finds positive abnormal percentage returns for outsiders reacting to public insider filings, but substantially weaker economic results than many earlier insider studies. When the authors constrain signals to reasonable tradable dollar amounts, returns vanish or become negative; profitability is strongly tied to low liquidity. The study concludes that scalability is limited even before transaction costs.
+
+Source: https://www.sciencedirect.com/science/article/pii/S1544612324015435
+
+Older evidence also finds meaningful market reaction around Form 4 filing dates and shows that more timely post-SOX disclosure improved the information available to outside investors.
+
+Source: https://www.sciencedirect.com/science/article/abs/pii/S1058330014000408
+
+**Research implication**
+
+A statistically attractive microcap/illiquidity signal can be real yet not economically copyable. The Turning Engine should report this rather than silently converting percentage alpha into assumed executable alpha.
+
+**Proposed tests**
+
+- baseline next-open entry;
+- next-close entry;
+- one-full-session delay and two-session delay;
+- results by ADV/liquidity quintile;
+- results by stock-price bucket;
+- conservative spread/slippage scenarios;
+- capacity proxy using fixed fractions of trailing ADV;
+- percentage-return and dollar-P&L/capacity views kept separate.
+
+**Decision rule:** signal discovery can include illiquid names, but any claim of practical tradability must survive predeclared liquidity and delayed-entry tests.
+
+---
+
+### R-009 — Same-owner trading sequences are a separate information signal from cross-owner cluster buying
+
+**Status:** `SUPPORTED DIRECTION / NEEDS PIT DEFINITION`  
+**Priority:** High
+
+**Current implementation observed**
+
+The engine already has a strong concept of cross-owner clustering: multiple independent reporting-owner CIKs purchasing the same issuer inside a bounded window. The current conviction/opportunistic components also use prior owner history, but the public scoring model does not treat the *duration and structure of one insider's purchase sequence* as a distinct candidate component.
+
+**External research**
+
+Biggerstaff, Cicero and Wintoki (2020), *Insider trading patterns*, show that the temporal structure of an insider's trades contains information. They report positive abnormal returns after both isolated purchases and purchase sequences, with stronger outcomes for sequences in their sample. They also find that after-hours disclosure is associated with longer trading series, larger overall trading volume and larger abnormal returns.
+
+Source: https://www.sciencedirect.com/science/article/pii/S0929119920300985
+
+**Research implication**
+
+`cluster buying` and `trade sequence` should not be conflated:
+
+- cluster = several independent insiders expressing a similar view;
+- sequence = one insider repeatedly executing a view over time.
+
+They can contain different information and may interact.
+
+**Proposed test**
+
+Define PIT sequence candidates without looking forward from the event date, e.g. count and dollar intensity of same-owner qualified purchases over trailing 5/10/20/40 sessions, elapsed days since sequence start, and acceleration versus that owner's earlier cadence. Compare:
+
+1. isolated purchase;
+2. same-owner sequence only;
+3. independent-owner cluster only;
+4. sequence + cluster simultaneously.
+
+Do not define a sequence using its future endpoint when scoring the first trade; every snapshot must use only sequence evidence already public at that time.
+
+---
+
+## Sprint conclusions so far
+
+- The strongest immediate methodological priority is **not adding more indicators**; it is making the simple insider signal, inference and execution assumptions hard to fool.
+- `purchase size` should enter a tournament, not receive a stronger prior automatically.
+- The existing event engine should be retained, but a calendar-time/dependence-aware companion is needed before formal performance claims.
+- Liquidity/capacity must be a first-class report dimension because recent evidence suggests public Form 4 percentage alpha can concentrate in names that are difficult to scale.
+- Same-owner sequences deserve a separate test from independent-owner clusters.
+
+---
+
 ## Change log
 
 - **2026-09-14:** Created research log and recorded initial findings R-001 through R-005. No production code or scoring configuration changed.
+- **2026-09-14:** Added Research Roadmap v1 and started first sprint. Added R-006 through R-009 covering purchase-size normalization, dependence-aware/calendar-time inference, execution/liquidity realism, and insider trade sequences. No production code or scoring configuration changed.
