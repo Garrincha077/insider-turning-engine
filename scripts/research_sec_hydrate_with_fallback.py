@@ -2,11 +2,11 @@
 
 The primary path remains the official EDGAR daily index. If and only if that
 path cannot find a verified quarterly-bulk accession within the bounded search
-window, this adapter derives the canonical EDGAR complete-submission path from
-the accession number and fetches that exact submission. The fallback still
-must pass accession-header, issuer-CIK, ownership-XML, exact accepted_at and
-PIT-clock validation. Its provenance is explicitly marked as a fallback and is
-never represented as daily-index discovery.
+window, this adapter derives candidate EDGAR complete-submission paths from
+verified SEC quarterly-bulk reporting-owner CIKs and the accession number. The
+fallback still must pass accession-header, issuer-CIK, ownership-XML, exact
+accepted_at and PIT-clock validation. Its provenance is explicitly marked as a
+fallback and is never represented as daily-index discovery.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ import argparse
 import hashlib
 import json
 import os
+import time
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import replace
@@ -26,6 +27,7 @@ from insider_turning_engine.ingestion.sec.daily_index import DailyIndexEntry, SE
 from insider_turning_engine.ingestion.sec.parser import parse_sec_filing
 
 from research_sec_hydrate import (
+    RESEARCH_SEC_MAX_ATTEMPTS,
     _load_candidates,
     _sha256,
     _write_jsonl,
@@ -40,25 +42,77 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
-def _direct_entry(candidate: dict[str, Any]) -> DailyIndexEntry:
+def _direct_entries(candidate: dict[str, Any]) -> tuple[DailyIndexEntry, ...]:
     accession = str(candidate["accession"])
-    prefix = accession.split("-", 1)[0]
-    if len(prefix) != 10 or not prefix.isdigit():
+    if len(accession.split("-", 1)[0]) != 10:
         raise ValueError("accession filer prefix is invalid")
     compact = accession.replace("-", "")
     form_type = str(candidate["documentType"]).upper()
     filed = candidate["_filed"]
     if not isinstance(filed, date):
         raise ValueError("candidate filing date is not normalized")
-    return DailyIndexEntry(
-        filer_cik=prefix,
-        company_name="RESEARCH_ACCESSION_ARCHIVE_FALLBACK",
-        form_type=form_type,
-        filing_date=filed,
-        submission_path=f"edgar/data/{int(prefix)}/{compact}.txt",
-        accession_number=accession,
-        index_date=None,
+
+    owner_values = candidate.get("reportingOwnerCiks")
+    if not isinstance(owner_values, list) or not owner_values:
+        raise ValueError("verified reporting-owner CIK evidence is required for archive fallback")
+
+    owner_ciks: list[str] = []
+    for value in owner_values:
+        cik = str(value).strip()
+        if not cik.isdigit() or len(cik) > 10:
+            raise ValueError("candidate reporting-owner CIK is invalid")
+        normalized = cik.zfill(10)
+        if normalized not in owner_ciks:
+            owner_ciks.append(normalized)
+
+    return tuple(
+        DailyIndexEntry(
+            filer_cik=cik,
+            company_name="RESEARCH_REPORTING_OWNER_ARCHIVE_FALLBACK",
+            form_type=form_type,
+            filing_date=filed,
+            submission_path=(
+                f"edgar/data/{int(cik)}/{compact}/{accession}.txt"
+            ),
+            accession_number=accession,
+            index_date=None,
+        )
+        for cik in owner_ciks
     )
+
+
+def _fetch_reporting_owner_archive(
+    *, candidate: dict[str, Any], source: SECDailyIndexSource
+) -> tuple[Any, DailyIndexEntry]:
+    entries = _direct_entries(candidate)
+    last_error: Exception | None = None
+    for attempt in range(RESEARCH_SEC_MAX_ATTEMPTS):
+        retryable_error: Exception | None = None
+        not_found = 0
+        for entry in entries:
+            try:
+                raw = source.fetch_entry(
+                    entry, index_hash="research-reporting-owner-archive-fallback"
+                )
+                return raw, entry
+            except RuntimeError as exc:
+                message = str(exc)
+                if "404 Not Found" in message:
+                    not_found += 1
+                    last_error = exc
+                    continue
+                retryable_error = exc
+                last_error = exc
+                break
+        if not_found == len(entries):
+            raise ValueError("no verified reporting-owner SEC archive path exists") from last_error
+        if retryable_error is None:
+            break
+        if attempt + 1 < RESEARCH_SEC_MAX_ATTEMPTS:
+            time.sleep(min(16.0, float(2**attempt)))
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError("reporting-owner SEC archive fallback failed without an error")
 
 
 def _fallback_one(
@@ -69,8 +123,7 @@ def _fallback_one(
 ) -> dict[str, Any]:
     accession = str(candidate["accession"])
     try:
-        entry = _direct_entry(candidate)
-        raw = source.fetch_entry(entry, index_hash="research-accession-archive-fallback")
+        raw, entry = _fetch_reporting_owner_archive(candidate=candidate, source=source)
         if raw.payload is None:
             raise ValueError("complete submission did not yield ownership XML")
         if raw.issuer_cik != str(candidate["issuerCik"]):
@@ -83,9 +136,10 @@ def _fallback_one(
         }
         clean_provenance.update(
             {
-                "discovery": "accession_archive_fallback",
+                "discovery": "reporting_owner_accession_archive_fallback",
                 "fallback_reason": "not_found_in_daily_index_within_10_days",
-                "submission_path_derived_from_accession": True,
+                "archive_reporting_owner_cik": entry.filer_cik,
+                "submission_path_derived_from_reporting_owner_cik": True,
                 "candidate_filing_date": candidate["_filed"].isoformat(),
             }
         )
@@ -145,7 +199,8 @@ def _fallback_one(
                     if legacy_date_transforms
                     else "none"
                 ),
-                "discoveryMethod": "ACCESSION_ARCHIVE_FALLBACK",
+                "discoveryMethod": "REPORTING_OWNER_ACCESSION_ARCHIVE_FALLBACK",
+                "archiveReportingOwnerCik": entry.filer_cik,
                 "canonicalReady": False,
             }
             dumped.append(item)
@@ -158,6 +213,7 @@ def _fallback_one(
             "manifest": {
                 "accession": accession,
                 "issuerCik": raw.issuer_cik,
+                "archiveReportingOwnerCik": entry.filer_cik,
                 "formType": raw.form_type,
                 "acceptedAt": raw.accepted_at.astimezone(UTC).isoformat(),
                 "actualRetrievedAt": raw.retrieved_at.astimezone(UTC).isoformat(),
@@ -169,7 +225,7 @@ def _fallback_one(
                 "rawOwnershipXmlHash": raw_hash,
                 "normalizedOwnershipXmlHash": normalized_hash,
                 "legacyTransactionDateOffsetTransforms": legacy_date_transforms,
-                "discoveryMethod": "ACCESSION_ARCHIVE_FALLBACK",
+                "discoveryMethod": "REPORTING_OWNER_ACCESSION_ARCHIVE_FALLBACK",
                 "provenance": dict(raw.provenance),
                 "canonicalRecordCount": len(records),
             },
@@ -214,7 +270,9 @@ def hydrate(
     original_failures = _read_jsonl(output / "failures.jsonl")
     summary["fallbackArchiveFilings"] = 0
     summary["discoveredFilings"] = int(summary["hydratedAndParsedFilings"])
-    summary["discoveryPolicy"] = "daily index primary; exact accession archive path fallback"
+    summary["discoveryPolicy"] = (
+        "daily index primary; verified reporting-owner accession archive fallback"
+    )
     if not original_failures:
         (output / "summary.json").write_text(
             json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -249,7 +307,9 @@ def hydrate(
         else:
             targets.append(candidate)
 
-    source = SECDailyIndexSource(user_agent, cache_dir=output / "sec-cache-fallback")
+    source = SECDailyIndexSource(
+        user_agent, cache_dir=output / "sec-cache-fallback", max_attempts=1
+    )
     fallback_results: list[dict[str, Any]] = []
     try:
         with ThreadPoolExecutor(max_workers=workers) as pool:
