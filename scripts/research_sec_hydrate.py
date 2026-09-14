@@ -375,7 +375,7 @@ def main() -> None:
     parser.add_argument("--candidate-path", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--year", type=int, required=True)
-    parser.add_argument("--quarter", type=int, default=1)
+    parser.add_argument("--quarter", type=int, required=True)
     parser.add_argument("--offset", type=int, default=0)
     parser.add_argument("--limit", type=int, default=500)
     parser.add_argument("--workers", type=int, default=4)
