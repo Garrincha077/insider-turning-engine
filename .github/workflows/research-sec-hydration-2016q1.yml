@@ -1,0 +1,104 @@
+name: Hydrate full 2016 Q1 SEC buy research set
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/research-sec-hydration-2016q1.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: research-sec-hydration-2016q1
+  cancel-in-progress: false
+
+env:
+  SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT }}
+  CANDIDATE_RUN_ID: "34884538222"
+  YEAR: "2016"
+  QUARTER: "1"
+  SHARD_SIZE: "500"
+
+jobs:
+  hydrate:
+    name: Hydrate 2016 Q1 shard ${{ matrix.shard }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Download 2016 candidate universe
+        uses: actions/download-artifact@v4
+        with:
+          name: sec-candidates-2016-${{ env.CANDIDATE_RUN_ID }}
+          path: work/sec-candidates/2016
+          repository: ${{ github.repository }}
+          run-id: ${{ env.CANDIDATE_RUN_ID }}
+          github-token: ${{ github.token }}
+      - name: Resolve shard offset
+        shell: bash
+        run: echo "SHARD_OFFSET=$(( ${{ matrix.shard }} * SHARD_SIZE ))" >> "$GITHUB_ENV"
+      - name: Hydrate shard with exact SEC acceptance evidence
+        run: >-
+          uv run python scripts/research_sec_hydrate.py
+          --candidate-path work/sec-candidates/2016/candidates.jsonl
+          --output work/sec-hydration-2016q1
+          --year 2016 --quarter 1
+          --offset "$SHARD_OFFSET" --limit "$SHARD_SIZE" --workers 4
+          --candidate-run-id "$CANDIDATE_RUN_ID"
+      - name: Preserve shard evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sec-hydration-2016q1-shard-${{ matrix.shard }}-${{ github.run_id }}
+          path: |
+            work/sec-hydration-2016q1/summary.json
+            work/sec-hydration-2016q1/raw-manifest.jsonl
+            work/sec-hydration-2016q1/canonical-research.jsonl
+            work/sec-hydration-2016q1/failures.jsonl
+          if-no-files-found: warn
+          retention-days: 90
+      - name: Enforce shard completeness
+        shell: bash
+        run: |
+          uv run python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("work/sec-hydration-2016q1/summary.json").read_text())
+          assert report["matchedInDailyIndex"] == report["selectedOriginalBuyFilings"], report
+          assert report["hydratedAndParsedFilings"] == report["selectedOriginalBuyFilings"], report
+          assert report["failureCount"] == 0, report
+          assert report["allCanonicalKnowledgeEqualAccepted"] is True, report
+          assert report["oosOpened"] is False, report
+          print(json.dumps(report, indent=2, sort_keys=True))
+          PY
+
+  completeness:
+    name: 2016 Q1 hydration completeness gate
+    if: always()
+    needs: hydrate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every shard to pass
+        env:
+          HYDRATE_RESULT: ${{ needs.hydrate.result }}
+        shell: bash
+        run: |
+          test "$HYDRATE_RESULT" = "success" || {
+            echo "At least one historical hydration shard failed. Inspect its preserved artifact; Q1 is NOT complete."
+            exit 1
+          }
+          echo "All 2016 Q1 hydration shards passed. Research evidence is complete for the selected original-buy universe."
