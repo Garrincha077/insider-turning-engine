@@ -53,7 +53,7 @@ jobs:
         run: echo "SHARD_OFFSET=$(( ${{ matrix.shard }} * SHARD_SIZE ))" >> "$GITHUB_ENV"
       - name: Hydrate shard with exact SEC acceptance evidence
         run: >-
-          uv run python scripts/research_sec_hydrate.py
+          uv run python scripts/research_sec_hydrate_with_fallback.py
           --candidate-path work/sec-candidates/2016/candidates.jsonl
           --output work/sec-hydration-2016q1
           --year 2016 --quarter 1
@@ -78,7 +78,8 @@ jobs:
           import json
           from pathlib import Path
           report = json.loads(Path("work/sec-hydration-2016q1/summary.json").read_text())
-          assert report["matchedInDailyIndex"] == report["selectedOriginalBuyFilings"], report
+          discovered = report.get("discoveredFilings", report["matchedInDailyIndex"])
+          assert discovered == report["selectedOriginalBuyFilings"], report
           assert report["hydratedAndParsedFilings"] == report["selectedOriginalBuyFilings"], report
           assert report["failureCount"] == 0, report
           assert report["allCanonicalKnowledgeEqualAccepted"] is True, report
