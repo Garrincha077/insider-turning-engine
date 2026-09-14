@@ -9,7 +9,7 @@ on:
       q1_run_id:
         description: Successful 2016 Q1 reference hydration run ID
         type: string
-        default: "34886766478"
+        required: true
       candidate_run_id:
         description: Successful SEC candidate-universe run ID
         type: string
@@ -27,7 +27,7 @@ env:
   SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT }}
   RELEASE_TAG: research-sec-pit-v1
   CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id || '34884538222' }}
-  Q1_RUN_ID: ${{ inputs.q1_run_id || github.event.workflow_run.id || '34886766478' }}
+  Q1_RUN_ID: ${{ inputs.q1_run_id || github.event.workflow_run.id }}
 
 jobs:
   prepare:
@@ -36,8 +36,6 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    outputs:
-      release_tag: ${{ env.RELEASE_TAG }}
     steps:
       - name: Require the expected successful Q1 workflow when auto-triggered
         if: github.event_name == 'workflow_run'
@@ -121,7 +119,7 @@ jobs:
         if: steps.persisted.outputs.skip != 'true'
         shell: bash
         run: >-
-          uv run python scripts/research_sec_hydrate_quarter.py
+          uv run python scripts/research_sec_hydrate_quarter_v2.py
           --candidate-path work/sec-candidates/2016/candidates.jsonl
           --output work/sec-quarter/2016q1
           --year 2016 --quarter 1
@@ -232,7 +230,7 @@ jobs:
         if: steps.persisted.outputs.skip != 'true'
         shell: bash
         run: >-
-          uv run python scripts/research_sec_hydrate_quarter.py
+          uv run python scripts/research_sec_hydrate_quarter_v2.py
           --candidate-path "work/sec-candidates/$YEAR/candidates.jsonl"
           --output "work/sec-quarter/${YEAR}q${QUARTER}"
           --year "$YEAR" --quarter "$QUARTER"
@@ -277,7 +275,7 @@ jobs:
           set -euo pipefail
           gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets > release-assets.json
           python - <<'PY'
-          import json, re
+          import json
           from pathlib import Path
 
           release = json.loads(Path('release-assets.json').read_text())
