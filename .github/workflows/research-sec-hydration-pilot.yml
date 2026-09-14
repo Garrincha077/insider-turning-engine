@@ -1,0 +1,365 @@
+name: Pilot historical SEC PIT hydration
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_run_id:
+        description: Successful candidate-universe workflow run ID
+        type: string
+        default: "34884538222"
+      year:
+        description: Research year
+        type: number
+        default: 2016
+      quarter:
+        description: Research quarter (1-4)
+        type: number
+        default: 1
+      max_accessions:
+        description: Maximum original buy filings to hydrate
+        type: number
+        default: 100
+  push:
+    paths:
+      - ".github/workflows/research-sec-hydration-pilot.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: research-sec-hydration-pilot
+  cancel-in-progress: false
+
+env:
+  SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT }}
+  CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id || '34884538222' }}
+  YEAR: ${{ inputs.year || 2016 }}
+  QUARTER: ${{ inputs.quarter || 1 }}
+  MAX_ACCESSIONS: ${{ inputs.max_accessions || 100 }}
+
+jobs:
+  hydrate:
+    name: Hydrate historical buy pilot
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Require SEC User-Agent
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SEC_USER_AGENT:-}" || {
+            echo "SEC_USER_AGENT repository variable is required"
+            exit 1
+          }
+      - name: Validate pilot inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$YEAR" =~ ^20(1[6-9]|2[0-2])$ ]] || { echo "YEAR must be 2016-2022"; exit 1; }
+          [[ "$QUARTER" =~ ^[1-4]$ ]] || { echo "QUARTER must be 1-4"; exit 1; }
+          [[ "$MAX_ACCESSIONS" =~ ^[0-9]+$ ]] || { echo "MAX_ACCESSIONS must be an integer"; exit 1; }
+          test "$MAX_ACCESSIONS" -ge 1 -a "$MAX_ACCESSIONS" -le 500 || {
+            echo "MAX_ACCESSIONS must be 1-500"; exit 1;
+          }
+      - name: Download candidate accession universe
+        uses: actions/download-artifact@v4
+        with:
+          name: sec-candidates-${{ env.YEAR }}-${{ env.CANDIDATE_RUN_ID }}
+          path: work/sec-candidates/${{ env.YEAR }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.CANDIDATE_RUN_ID }}
+          github-token: ${{ github.token }}
+      - name: Hydrate exact SEC acceptance evidence and canonical research rows
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from datetime import UTC, date, datetime, timedelta
+          from pathlib import Path
+
+          from insider_turning_engine.ingestion.sec.daily_index import SECDailyIndexSource
+          from insider_turning_engine.ingestion.sec.parser import parse_sec_filing
+
+          year = int(os.environ["YEAR"])
+          quarter = int(os.environ["QUARTER"])
+          maximum = int(os.environ["MAX_ACCESSIONS"])
+          candidate_path = Path("work/sec-candidates") / str(year) / "candidates.jsonl"
+          output = Path("work/sec-hydration-pilot")
+          output.mkdir(parents=True, exist_ok=True)
+
+          def parse_bulk_date(value: str) -> date:
+              value = value.strip()
+              for fmt in ("%Y-%m-%d", "%d-%b-%Y"):
+                  try:
+                      return datetime.strptime(value, fmt).date()
+                  except ValueError:
+                      pass
+              raise ValueError(f"unsupported SEC bulk date {value!r}")
+
+          candidates = []
+          for line in candidate_path.read_text(encoding="utf-8").splitlines():
+              if not line.strip():
+                  continue
+              row = json.loads(line)
+              filed = parse_bulk_date(str(row["filingDate"]))
+              if (
+                  int(row["sourceQuarter"]) == quarter
+                  and int(row["buyCount"]) > 0
+                  and not str(row["documentType"]).upper().endswith("/A")
+              ):
+                  row["_filed"] = filed
+                  candidates.append(row)
+          candidates.sort(key=lambda row: (row["_filed"], row["accession"]))
+          selected = candidates[:maximum]
+          if not selected:
+              raise SystemExit("pilot selected no original buy filings")
+
+          source = SECDailyIndexSource(
+              os.environ["SEC_USER_AGENT"],
+              cache_dir=output / "sec-cache",
+          )
+          day_cache = {}
+          directory_cache = {}
+          raw_manifest = []
+          canonical_rows = []
+          failures = []
+          quarantines = []
+          acceptance_lags_days = []
+          discovered = 0
+          hydrated = 0
+          parsed_filings = 0
+          exact_knowledge = 0
+          purchase_rows = 0
+
+          def published_days(start: date, end: date):
+              key = (start, end)
+              if key not in directory_cache:
+                  directory_cache[key] = source.discover_days(start, end)
+              return directory_cache[key]
+
+          def entries_for(day: date):
+              if day not in day_cache:
+                  entries = source.discover_day(day)
+                  day_cache[day] = (entries, source.last_index_hash)
+              return day_cache[day]
+
+          try:
+              for candidate in selected:
+                  accession = str(candidate["accession"])
+                  filed = candidate["_filed"]
+                  match = None
+                  match_day = None
+                  match_hash = None
+                  # Filing date is not assumed to equal publication/index day. Search
+                  # the actual SEC-published daily indexes for a bounded late/repaired window.
+                  search_end = filed + timedelta(days=10)
+                  try:
+                      days = published_days(filed, search_end)
+                      for index_day in days:
+                          entries, index_hash = entries_for(index_day)
+                          found = next(
+                              (entry for entry in entries if entry.accession_number == accession),
+                              None,
+                          )
+                          if found is not None:
+                              match = found
+                              match_day = index_day
+                              match_hash = index_hash
+                              break
+                  except (RuntimeError, ValueError, OSError) as exc:
+                      failures.append({
+                          "accession": accession,
+                          "stage": "DISCOVERY",
+                          "reason": type(exc).__name__,
+                      })
+                      continue
+                  if match is None or match_day is None or match_hash is None:
+                      failures.append({
+                          "accession": accession,
+                          "stage": "DISCOVERY",
+                          "reason": "ACCESSION_NOT_FOUND_WITHIN_10_DAYS",
+                      })
+                      continue
+                  discovered += 1
+
+                  try:
+                      raw = source.fetch_entry(match, index_hash=match_hash)
+                      hydrated += 1
+                      if raw.payload is None:
+                          raise ValueError("complete submission did not yield ownership XML")
+                      if raw.issuer_cik != str(candidate["issuerCik"]):
+                          raise ValueError("hydrated issuer CIK disagrees with quarterly bulk")
+
+                      # Historical reconstruction has two clocks that must not be conflated:
+                      # accepted_at = contemporaneous public availability (used by PIT research),
+                      # retrieved_at = when this research backfill actually downloaded the evidence.
+                      # The legacy canonical schema cannot represent a separate source-observation
+                      # clock, so this research artifact maps observed_at to accepted_at while
+                      # retaining the true 2026 retrieval timestamp/hashes in raw provenance.
+                      run_id = "run_hist_" + hashlib.sha256(accession.encode()).hexdigest()[:24]
+                      parsed = parse_sec_filing(raw.payload, {
+                          "provider": "sec",
+                          "provider_record_id": raw.provider_record_id,
+                          "accession_number": raw.accession_number,
+                          "form_type": raw.form_type,
+                          "source_url": raw.source_url,
+                          "accepted_at": raw.accepted_at,
+                          "observed_at": raw.accepted_at,
+                          "recorded_at": raw.retrieved_at,
+                          "run_id": run_id,
+                      })
+                      filing_quarantines = [row.model_dump(mode="json") for row in parsed.quarantines]
+                      if filing_quarantines:
+                          quarantines.extend(
+                              {"accession": accession, "quarantine": row}
+                              for row in filing_quarantines
+                          )
+                      records = list(parsed.records)
+                      if not records:
+                          raise ValueError("ownership parser emitted no canonical records")
+                      parsed_filings += 1
+
+                      for record in records:
+                          if record.timestamps.accepted_at != raw.accepted_at:
+                              raise ValueError("canonical accepted_at disagrees with raw evidence")
+                          if record.timestamps.knowledge_at != raw.accepted_at:
+                              raise ValueError("historical knowledge_at does not equal SEC accepted_at")
+                          if record.timestamps.recorded_at != raw.retrieved_at:
+                              raise ValueError("canonical recorded_at lost actual retrieval time")
+                          if record.timestamps.knowledge_at == raw.accepted_at:
+                              exact_knowledge += 1
+                          dumped = record.canonical_dump()
+                          dumped["researchBackfill"] = {
+                              "historicalAvailabilityBasis": "SEC_ACCEPTANCE_DATETIME",
+                              "actualRetrievedAt": raw.retrieved_at.astimezone(UTC).isoformat(),
+                              "indexDate": match_day.isoformat(),
+                              "bulkFilingDate": filed.isoformat(),
+                              "candidateRunId": os.environ["CANDIDATE_RUN_ID"],
+                              "canonicalReady": False,
+                          }
+                          canonical_rows.append(dumped)
+                          tx = dumped.get("transaction", {})
+                          if tx.get("economicClassification") == "OPEN_MARKET_PURCHASE":
+                              purchase_rows += 1
+
+                      acceptance_lags_days.append((match_day - filed).days)
+                      raw_manifest.append({
+                          "accession": accession,
+                          "issuerCik": raw.issuer_cik,
+                          "formType": raw.form_type,
+                          "bulkFilingDate": filed.isoformat(),
+                          "indexDate": match_day.isoformat(),
+                          "acceptedAt": raw.accepted_at.astimezone(UTC).isoformat(),
+                          "actualRetrievedAt": raw.retrieved_at.astimezone(UTC).isoformat(),
+                          "sourceUrl": raw.source_url,
+                          "replayLocator": raw.replay_locator,
+                          "primaryDocument": raw.primary_document,
+                          "contentHash": raw.content_hash,
+                          "provenance": dict(raw.provenance),
+                          "canonicalRecordCount": len(records),
+                          "quarantineCount": len(filing_quarantines),
+                      })
+                  except (RuntimeError, ValueError, OSError, TypeError) as exc:
+                      failures.append({
+                          "accession": accession,
+                          "stage": "HYDRATE_PARSE_VALIDATE",
+                          "reason": type(exc).__name__,
+                          "message": str(exc)[:300],
+                      })
+          finally:
+              source.close()
+
+          def write_jsonl(path, rows):
+              with path.open("w", encoding="utf-8") as stream:
+                  for row in rows:
+                      stream.write(json.dumps(row, sort_keys=True, default=str) + "\n")
+
+          write_jsonl(output / "raw-manifest.jsonl", raw_manifest)
+          write_jsonl(output / "canonical-research.jsonl", canonical_rows)
+          write_jsonl(output / "failures.jsonl", failures)
+          write_jsonl(output / "quarantines.jsonl", quarantines)
+
+          summary = {
+              "schemaVersion": "1.0.0",
+              "source": "sec-historical-pit-hydration-pilot",
+              "candidateRunId": os.environ["CANDIDATE_RUN_ID"],
+              "year": year,
+              "quarter": quarter,
+              "selectedOriginalBuyFilings": len(selected),
+              "eligibleOriginalBuyFilingsInQuarter": len(candidates),
+              "discoveredAccessions": discovered,
+              "hydratedAccessions": hydrated,
+              "parsedFilings": parsed_filings,
+              "canonicalRecordCount": len(canonical_rows),
+              "openMarketPurchaseRecordCount": purchase_rows,
+              "canonicalRecordsWithKnowledgeEqualAccepted": exact_knowledge,
+              "failureCount": len(failures),
+              "quarantineCount": len(quarantines),
+              "indexDayLag": {
+                  "maxDays": max(acceptance_lags_days) if acceptance_lags_days else None,
+                  "nonZeroCount": sum(value != 0 for value in acceptance_lags_days),
+              },
+              "historicalClockPolicy": {
+                  "availability": "SEC accepted_at recovered from complete submission",
+                  "canonicalObservedAtForResearch": "accepted_at",
+                  "actualResearchRetrieval": "preserved separately as retrieved_at/recorded_at and provenance",
+                  "warning": "research reconstruction only; do not treat observed_at as the literal 2026 retrieval clock",
+              },
+              "amendmentPolicy": "original forms only in pilot; cross-accession amendment links remain a later gate",
+              "canonicalReady": False,
+              "signalReady": False,
+              "oosOpened": False,
+          }
+          (output / "summary.json").write_text(
+              json.dumps(summary, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(json.dumps(summary, indent=2, sort_keys=True))
+          PY
+      - name: Summarize hydration pilot
+        if: always()
+        shell: bash
+        run: |
+          uv run python - <<'PY'
+          import json, os
+          from pathlib import Path
+          path = Path("work/sec-hydration-pilot/summary.json")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as out:
+              out.write("## Historical SEC PIT hydration pilot\n\n")
+              if not path.exists():
+                  out.write("Pilot summary was not produced.\n")
+              else:
+                  value = json.loads(path.read_text(encoding="utf-8"))
+                  for key in (
+                      "selectedOriginalBuyFilings", "discoveredAccessions", "hydratedAccessions",
+                      "parsedFilings", "canonicalRecordCount", "openMarketPurchaseRecordCount",
+                      "failureCount", "quarantineCount",
+                  ):
+                      out.write(f"- {key}: **{value[key]:,}**\n")
+                  out.write("\nPIT availability is based on SEC acceptance time. Actual research retrieval time is preserved separately.\n")
+                  out.write("\nResearch-only pilot: canonicalReady=false, no scoring, alerts, Pages refresh, or OOS.\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sec-hydration-pilot-${{ env.YEAR }}q${{ env.QUARTER }}-${{ github.run_id }}
+          path: |
+            work/sec-hydration-pilot/summary.json
+            work/sec-hydration-pilot/raw-manifest.jsonl
+            work/sec-hydration-pilot/canonical-research.jsonl
+            work/sec-hydration-pilot/failures.jsonl
+            work/sec-hydration-pilot/quarantines.jsonl
+          if-no-files-found: warn
+          retention-days: 90
