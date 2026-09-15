@@ -9,11 +9,19 @@ on:
       q1_run_id:
         description: Successful 2016 Q1 reference hydration run ID
         type: string
-        required: true
+        required: false
+        default: "34901456426"
       candidate_run_id:
         description: Successful SEC candidate-universe run ID
         type: string
         default: "34884538222"
+      history_run_id:
+        description: Successful verified SEC history run ID
+        type: string
+        default: "34883719192"
+  push:
+    paths:
+      - ".github/workflows/research-sec-hydration-history.yml"
 
 permissions:
   contents: write
@@ -27,17 +35,19 @@ env:
   SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT }}
   RELEASE_TAG: research-sec-pit-v1
   CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id || '34884538222' }}
-  Q1_RUN_ID: ${{ inputs.q1_run_id || github.event.workflow_run.id }}
+  HISTORY_RUN_ID: ${{ inputs.history_run_id || '34883719192' }}
+  Q1_RUN_ID: ${{ inputs.q1_run_id || github.event.workflow_run.id || '34901456426' }}
 
 jobs:
   prepare:
     name: Prepare persistent research dataset release
     if: >-
       github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'push' ||
       github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
-      - name: Require the expected successful Q1 workflow when auto-triggered
+      - name: Require successful Q1 workflow when auto-triggered by workflow_run
         if: github.event_name == 'workflow_run'
         env:
           UPSTREAM_NAME: ${{ github.event.workflow_run.name }}
@@ -74,13 +84,6 @@ jobs:
       ASSET_NAME: sec-pit-2016q1.tar.gz
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-      - run: uv sync --all-groups --frozen
       - name: Check whether Q1 is already persistently archived
         id: persisted
         env:
@@ -94,6 +97,17 @@ jobs:
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
+      - uses: actions/setup-python@v5
+        if: steps.persisted.outputs.skip != 'true'
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        if: steps.persisted.outputs.skip != 'true'
+        with:
+          enable-cache: true
+      - name: Install locked environment
+        if: steps.persisted.outputs.skip != 'true'
+        run: uv sync --all-groups --frozen
       - name: Download 2016 candidate universe
         if: steps.persisted.outputs.skip != 'true'
         uses: actions/download-artifact@v4
@@ -226,6 +240,23 @@ jobs:
           repository: ${{ github.repository }}
           run-id: ${{ env.CANDIDATE_RUN_ID }}
           github-token: ${{ github.token }}
+      - name: Download verified annual SEC history
+        if: steps.persisted.outputs.skip != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: sec-history-${{ matrix.year }}-${{ env.HISTORY_RUN_ID }}
+          path: work/sec-history/${{ matrix.year }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.HISTORY_RUN_ID }}
+          github-token: ${{ github.token }}
+      - name: Enrich quarter candidates with reporting-owner CIK evidence
+        if: steps.persisted.outputs.skip != 'true'
+        shell: bash
+        run: >-
+          uv run python scripts/research_sec_enrich_reporting_owners.py
+          --candidate-path "work/sec-candidates/$YEAR/candidates.jsonl"
+          --history-root "work/sec-history/$YEAR"
+          --year "$YEAR" --quarter "$QUARTER"
       - name: Hydrate and audit complete quarter in bounded shards
         if: steps.persisted.outputs.skip != 'true'
         shell: bash
