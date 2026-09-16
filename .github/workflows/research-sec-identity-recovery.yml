@@ -1,0 +1,89 @@
+name: Diagnose PIT SEC ticker identity recovery 2016-2022
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "scripts/research_sec_identity_recovery.py"
+      - "scripts/research_market_event_audit.py"
+      - ".github/workflows/research-sec-identity-recovery.yml"
+
+permissions:
+  contents: write
+
+env:
+  SEC_RELEASE_TAG: research-sec-amendments-v1
+  IDENTITY_RELEASE_TAG: research-sec-identity-recovery-v1
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Ruff identity diagnostic
+        run: >-
+          uv run ruff check
+          scripts/research_market_event_audit.py
+          scripts/research_sec_identity_recovery.py
+      - name: Download bounded SEC evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/sec work/downloads
+          gh release download "$SEC_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'sec-amendment-reconciliation-2013-2022.tar.gz' \
+            --dir work/downloads
+          tar -xzf work/downloads/sec-amendment-reconciliation-2013-2022.tar.gz \
+            -C work/sec effective-end-2022.jsonl
+          test ! -e work/sec/effective-end-2023.jsonl
+      - name: Run PIT CIK ticker recovery diagnostic
+        run: >-
+          uv run python scripts/research_sec_identity_recovery.py
+          --sec work/sec/effective-end-2022.jsonl
+          --output work/identity
+      - name: Assert research boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          s = json.loads(Path("work/identity/summary.json").read_text())
+          assert s["status"] == "SEC_PIT_IDENTITY_RECOVERY_DIAGNOSTIC_COMPLETE"
+          assert s["period"] == "2016-2022"
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["canonicalSecChanged"] is False
+          assert s["identityProblemEvents"] > 0
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sec-identity-recovery-${{ github.run_id }}
+          path: work/identity
+          retention-days: 90
+      - name: Persist research diagnostic
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$IDENTITY_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$IDENTITY_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+              --title "Research SEC PIT identity recovery v1" \
+              --notes "Bounded 2016-2022 CIK-to-ticker recovery diagnostic. Canonical SEC data and production scoring remain unchanged; 2023+ remains sealed."
+          fi
+          gh release upload "$IDENTITY_RELEASE_TAG" \
+            work/identity/summary.json \
+            work/identity/identity-recovery-events.json \
+            --repo "$GITHUB_REPOSITORY" --clobber
