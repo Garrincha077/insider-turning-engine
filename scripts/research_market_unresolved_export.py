@@ -39,6 +39,7 @@ def export_unresolved(*, sec_path: Path, market_root: Path, output: Path) -> dic
     unresolved: list[dict[str, Any]] = []
     reason_counts: Counter[str] = Counter()
     ticker_counts: Counter[str] = Counter()
+    derived_sessions_beyond_boundary = 0
 
     conn = sqlite3.connect(db_path)
     try:
@@ -55,8 +56,7 @@ def export_unresolved(*, sec_path: Path, market_root: Path, output: Path) -> dic
                     continue
 
                 evaluation_session = str(event["evaluationSession"])
-                if int(evaluation_session[:4]) >= SEALED_YEAR:
-                    raise ValueError("sealed OOS boundary violated by unresolved event")
+                evaluation_beyond_boundary = int(evaluation_session[:4]) >= SEALED_YEAR
 
                 reason: str | None = None
                 if not regular_dates:
@@ -69,10 +69,14 @@ def export_unresolved(*, sec_path: Path, market_root: Path, output: Path) -> dic
                 if reason is None:
                     continue
 
+                if evaluation_beyond_boundary:
+                    derived_sessions_beyond_boundary += 1
+
                 record = {
                     "issuerCik": str(event["issuerCik"]),
                     "ticker": ticker,
                     "evaluationSession": evaluation_session,
+                    "evaluationSessionBeyondResearchBoundary": evaluation_beyond_boundary,
                     "knowledgeAtFirst": str(event["knowledgeAtFirst"]),
                     "knowledgeAtLast": str(event["knowledgeAtLast"]),
                     "knowledgeYear": int(event["knowledgeYear"]),
@@ -110,17 +114,22 @@ def export_unresolved(*, sec_path: Path, market_root: Path, output: Path) -> dic
 
     unique_ciks = {str(row["issuerCik"]) for row in unresolved if row["issuerCik"]}
     summary: dict[str, Any] = {
-        "schemaVersion": "1.0.0",
+        "schemaVersion": "1.1.0",
         "dataset": "Unresolved issuer-session market identities",
         "period": f"{START_YEAR}-{END_YEAR}",
         "qualifiedIssuerSessionEvents": int(sec_diag["qualifiedIssuerSessionEvents"]),
         "unresolvedIssuerSessionEvents": len(unresolved),
         "unresolvedUniqueTickers": len(ticker_counts),
         "unresolvedUniqueIssuerCiks": len(unique_ciks),
+        "derivedEvaluationSessionsBeyond2022": derived_sessions_beyond_boundary,
         "reasons": dict(sorted(reason_counts.items())),
         "topUnresolvedTickers": top_tickers[:20],
         "marketRowsRead": int(market_diag["marketRowsRead"]),
         "identityPolicyInheritedFromAudit": True,
+        "researchBoundaryPolicy": (
+            "knowledge/input data are bounded through 2022; a mechanically derived next "
+            "evaluation session may fall in 2023, but no 2023 SEC or market data is read"
+        ),
         "oosOpened": False,
         "productionScoringChanged": False,
         "status": "MARKET_UNRESOLVED_IDENTITY_EXPORT_COMPLETE",
