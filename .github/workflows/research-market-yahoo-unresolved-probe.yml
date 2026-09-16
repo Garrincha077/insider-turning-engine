@@ -26,10 +26,10 @@ jobs:
       - run: uv sync --all-groups --frozen
       - name: Ruff bounded Yahoo pilot
         run: uv run ruff check scripts/research_market_yahoo_pilot.py
-      - name: Probe top unresolved symbols through bounded Yahoo chart requests
+      - name: Probe top 100 unresolved symbols through bounded Yahoo chart requests
         run: >-
           uv run python scripts/research_market_yahoo_pilot.py
-          --symbols ENDV,AMAR,ISBA,FMBM,CWGL,EMMA,CBKM,CSBB,CMTV,WARM,BKGM,JUVF,NNUTU,EFSI,NANX,PFHO,XCLIX,PENC,ADMQ,EXGI
+          --symbols ENDV,AMAR,ISBA,FMBM,CWGL,EMMA,CBKM,CSBB,CMTV,WARM,BKGM,JUVF,NNUTU,EFSI,NANX,PFHO,XCLIX,PENC,ADMQ,EXGI,NWPP,CMXC,PKTX,FMCB,IGEN,LIVC,STLY,WHLR,IBAL,BLSP,QNBC,FKYS,CCUR,MFON,USQIX,VYST,DTRC,SUME,EMYB,ESCC,SODI,BRST,DSNY,FTLF,SHRG,ICCT,UBI,FNRN,BAYK,FREVS,IGXT,NIHK,YAYO,BMNM,DFCO,THMG,ENBP,PRKA,ZDPY,AMNL,ECIA,JANL,LXRP,N.A.,PQEFF,PGUS,PSIX,AUGG,CHCR,HBIA.PK,LTRE,MSLP,CRVW,FMFG,IMCI,NJMC,OMTK,RYES,WIZD,AMHG,ATEA,HLND,IVFH,LCRDX,RKFL,WCRS,XNAFX,CRDA-CRDB,GLGI,NNUP,RHE-A,SFEF,GNOW,IMTL,LSYN,PERS,RMES,TLRS,ACFN,ADOM
           --start 2016-01-01
           --end 2022-12-31
           --output work/yahoo-unresolved-probe
