@@ -1,0 +1,55 @@
+name: Probe Yahoo coverage for unresolved market symbols
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/research-market-yahoo-unresolved-probe.yml"
+      - "scripts/research_market_yahoo_pilot.py"
+      - "src/insider_turning_engine/ingestion/market/yahoo_chart.py"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Ruff bounded Yahoo pilot
+        run: uv run ruff check scripts/research_market_yahoo_pilot.py
+      - name: Probe top unresolved symbols through bounded Yahoo chart requests
+        run: >-
+          uv run python scripts/research_market_yahoo_pilot.py
+          --symbols ENDV,AMAR,ISBA,FMBM,CWGL,EMMA,CBKM,CSBB,CMTV,WARM,BKGM,JUVF,NNUTU,EFSI,NANX,PFHO,XCLIX,PENC,ADMQ,EXGI
+          --start 2016-01-01
+          --end 2022-12-31
+          --output work/yahoo-unresolved-probe
+      - name: Assert research boundary only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          s = json.loads(Path("work/yahoo-unresolved-probe/summary.json").read_text())
+          assert s["period"] == "2016-01-01..2022-12-31"
+          assert s["serverSideDateBoundsRequested"] is True
+          assert s["oosOpened"] is False
+          assert s["marketDataJoined"] is False
+          assert s["canonicalReady"] is False
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yahoo-unresolved-probe-${{ github.run_id }}
+          path: work/yahoo-unresolved-probe
+          retention-days: 90
