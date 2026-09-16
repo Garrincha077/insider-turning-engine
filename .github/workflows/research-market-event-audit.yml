@@ -54,7 +54,7 @@ jobs:
             tar -xzf "work/downloads/alpaca-market-${year}.tar.gz" -C "work/market/$year"
           done
           test ! -e work/market/2023
-      - name: Run event-level coverage and terminal audit
+      - name: Run issuer-session coverage and terminal audit
         run: >-
           uv run python scripts/research_market_event_audit.py
           --sec work/sec/effective-end-2022.jsonl
@@ -69,14 +69,14 @@ jobs:
           from pathlib import Path
 
           s = json.loads(Path("work/audit/summary.json").read_text())
-          assert s["status"] == "MARKET_EVENT_AUDIT_COMPLETE"
+          assert s["status"] == "MARKET_ISSUER_SESSION_AUDIT_COMPLETE"
           assert s["period"] == "2016-2022"
           assert s["oosOpened"] is False
           assert s["productionScoringChanged"] is False
           assert s["canonicalReady"] is False
           assert s["signalReady"] is False
           assert s["spy"]["observedRegularSessions"] > 0
-          assert s["entry"]["qualifiedEvents"] > 0
+          assert s["entry"]["qualifiedIssuerSessionEvents"] > 0
           PY
       - uses: actions/upload-artifact@v4
         with:
@@ -92,7 +92,7 @@ jobs:
           if ! gh release view "$AUDIT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release create "$AUDIT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
               --title "Research market event audit v1" \
-              --notes "Bounded 2016-2022 event-level market coverage and terminal audit. 2023+ remains sealed."
+              --notes "Bounded 2016-2022 issuer-session market coverage and terminal audit. 2023+ remains sealed."
           fi
           gh release upload "$AUDIT_RELEASE_TAG" \
             work/audit/summary.json \
