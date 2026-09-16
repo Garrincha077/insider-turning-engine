@@ -11,6 +11,11 @@ on:
         description: "Maximum new issuer-session PIT queries in this run. Re-run to resume."
         required: true
         default: "250"
+  push:
+    paths:
+      - ".github/workflows/research-massive-identity-recovery.yml"
+
+authorization: {}
 
 permissions:
   contents: write
@@ -18,6 +23,8 @@ permissions:
 env:
   IDENTITY_RELEASE_TAG: research-sec-identity-recovery-v1
   MASSIVE_RELEASE_TAG: research-massive-identity-recovery-v1
+  MASSIVE_REQUESTS_PER_MINUTE: ${{ inputs.requests_per_minute || '5' }}
+  MASSIVE_MAX_QUERIES: ${{ inputs.max_queries || '20' }}
 
 jobs:
   recover:
@@ -82,8 +89,8 @@ jobs:
             --identity-events work/identity/identity-recovery-events.json \
             --identity-summary work/identity/summary.json \
             --output work/massive \
-            --requests-per-minute '${{ inputs.requests_per_minute }}' \
-            --max-queries '${{ inputs.max_queries }}' \
+            --requests-per-minute "$MASSIVE_REQUESTS_PER_MINUTE" \
+            --max-queries "$MASSIVE_MAX_QUERIES" \
             "${CACHE_ARGS[@]}"
       - name: Assert frozen research boundary
         shell: bash
