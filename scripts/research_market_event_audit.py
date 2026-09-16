@@ -1,4 +1,4 @@
-"""Research-only event-level audit of the 2016-2022 Alpaca market backfill.
+"""Research-only issuer-session audit of the 2016-2022 Alpaca market backfill.
 
 This audit never reads 2023+ data and never changes production scoring. It joins
 only the predeclared simple-baseline insider purchase universe to regular market
@@ -18,10 +18,12 @@ from pathlib import Path
 from typing import Any
 
 import exchange_calendars as xcals
+import pandas as pd
 
 HORIZONS = (21, 63, 126, 252)
 START_YEAR = 2016
 END_YEAR = 2022
+SEALED_YEAR = 2023
 
 
 def _bool(value: object) -> bool:
@@ -39,13 +41,30 @@ def _qualified_purchase(row: dict[str, Any]) -> bool:
     )
 
 
+def _evaluation_session(knowledge: str, calendar: Any) -> str:
+    """Return the first XNYS session whose close is eligible after knowledgeAt."""
+    timestamp = pd.Timestamp(knowledge)
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.tz_localize("UTC")
+    else:
+        timestamp = timestamp.tz_convert("UTC")
+
+    local_day = timestamp.tz_convert("America/New_York").normalize().tz_localize(None)
+    if calendar.is_session(local_day):
+        session = local_day
+        if timestamp <= calendar.session_close(session):
+            return str(session.date())
+        return str(calendar.next_session(session).date())
+
+    return str(calendar.date_to_session(local_day, direction="next").date())
+
+
 def _load_events(sec_path: Path) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
-    by_ticker: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    ticker_year_ciks: dict[tuple[str, int], set[str]] = defaultdict(set)
+    calendar = xcals.get_calendar("XNYS")
+    grouped: dict[tuple[str, str], dict[str, Any]] = {}
     effective_rows = 0
     qualified_rows = 0
-    missing_ticker = 0
-    year_counts: dict[int, int] = defaultdict(int)
+    qualified_rows_by_year: dict[int, int] = defaultdict(int)
 
     with sec_path.open(encoding="utf-8") as stream:
         for line in stream:
@@ -54,54 +73,86 @@ def _load_events(sec_path: Path) -> tuple[dict[str, list[dict[str, Any]]], dict[
             row = json.loads(line)
             knowledge = str(row["timestamps"]["knowledgeAt"])
             year = int(knowledge[:4])
-            if year >= 2023:
+            if year >= SEALED_YEAR:
                 raise ValueError("sealed OOS boundary violated by SEC input")
             if not START_YEAR <= year <= END_YEAR:
                 continue
             effective_rows += 1
             if not _qualified_purchase(row):
                 continue
+
             qualified_rows += 1
-            year_counts[year] += 1
-            ticker_raw = row.get("issuer", {}).get("ticker")
-            if not ticker_raw:
-                missing_ticker += 1
-                continue
-            ticker = str(ticker_raw).strip().upper()
+            qualified_rows_by_year[year] += 1
             cik = str(row.get("issuer", {}).get("cik") or "")
-            event = {
-                "transactionId": row.get("transactionId"),
-                "revisionId": row.get("revisionId"),
-                "ticker": ticker,
-                "issuerCik": cik,
-                "knowledgeAt": knowledge,
-                "knowledgeDate": knowledge[:10],
-                "year": year,
-            }
-            by_ticker[ticker].append(event)
-            ticker_year_ciks[(ticker, year)].add(cik)
+            evaluation_session = _evaluation_session(knowledge, calendar)
+            key = (cik, evaluation_session)
+            event = grouped.setdefault(
+                key,
+                {
+                    "issuerCik": cik,
+                    "evaluationSession": evaluation_session,
+                    "knowledgeYear": year,
+                    "knowledgeAtFirst": knowledge,
+                    "knowledgeAtLast": knowledge,
+                    "tickers": set(),
+                    "rawQualifiedRows": 0,
+                },
+            )
+            event["rawQualifiedRows"] += 1
+            event["knowledgeAtFirst"] = min(str(event["knowledgeAtFirst"]), knowledge)
+            event["knowledgeAtLast"] = max(str(event["knowledgeAtLast"]), knowledge)
+            ticker_raw = row.get("issuer", {}).get("ticker")
+            if ticker_raw:
+                event["tickers"].add(str(ticker_raw).strip().upper())
+
+    total_events = len(grouped)
+    events_by_year: dict[int, int] = defaultdict(int)
+    missing_ticker_events = 0
+    multi_ticker_events = 0
+    by_ticker: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    ticker_session_ciks: dict[tuple[str, str], set[str]] = defaultdict(set)
+
+    for event in grouped.values():
+        year = int(event["knowledgeYear"])
+        events_by_year[year] += 1
+        tickers = sorted(event.pop("tickers"))
+        if not tickers:
+            missing_ticker_events += 1
+            continue
+        if len(tickers) != 1:
+            multi_ticker_events += 1
+            continue
+        ticker = tickers[0]
+        event["ticker"] = ticker
+        event["identityAmbiguous"] = False
+        by_ticker[ticker].append(event)
+        ticker_session_ciks[(ticker, str(event["evaluationSession"]))].add(
+            str(event["issuerCik"])
+        )
 
     collisions = {
         key: sorted(ciks)
-        for key, ciks in ticker_year_ciks.items()
+        for key, ciks in ticker_session_ciks.items()
         if len({cik for cik in ciks if cik}) > 1
     }
     collision_events = 0
     for ticker, events in by_ticker.items():
         for event in events:
-            if (ticker, int(event["year"])) in collisions:
+            key = (ticker, str(event["evaluationSession"]))
+            if key in collisions:
                 event["identityAmbiguous"] = True
                 collision_events += 1
-            else:
-                event["identityAmbiguous"] = False
 
     diagnostics = {
         "effectiveSecRows2016To2022": effective_rows,
-        "qualifiedPurchaseRows": qualified_rows,
-        "qualifiedPurchaseRowsByYear": dict(sorted(year_counts.items())),
-        "qualifiedRowsMissingTicker": missing_ticker,
-        "tickerYearIdentityCollisions": len(collisions),
-        "qualifiedEventsInIdentityCollisions": collision_events,
+        "rawQualifiedPurchaseRows": qualified_rows,
+        "rawQualifiedPurchaseRowsByYear": dict(sorted(qualified_rows_by_year.items())),
+        "qualifiedIssuerSessionEvents": total_events,
+        "qualifiedIssuerSessionEventsByYear": dict(sorted(events_by_year.items())),
+        "issuerSessionEventsMissingTicker": missing_ticker_events,
+        "issuerSessionEventsWithMultipleTickers": multi_ticker_events,
+        "tickerSessionIdentityCollisions": len(collisions),
+        "issuerSessionEventsInTickerCollisions": collision_events,
         "collisions": collisions,
     }
     return by_ticker, diagnostics
@@ -268,7 +319,7 @@ def audit(*, sec_path: Path, market_root: Path, output: Path) -> dict[str, Any]:
     terminal_tails: list[dict[str, Any]] = []
     terminal_interaction_events = 0
     entry_matched_total = 0
-    identity_ambiguous_total = 0
+    identity_collision_events = 0
 
     try:
         for ticker, events in sorted(events_by_ticker.items()):
@@ -285,14 +336,14 @@ def audit(*, sec_path: Path, market_root: Path, output: Path) -> dict[str, Any]:
             for event in events:
                 split = (
                     "development2016To2020"
-                    if int(event["year"]) <= 2020
+                    if int(event["knowledgeYear"]) <= 2020
                     else "validation2021To2022"
                 )
                 stats = split_stats[split]
-                stats["qualifiedWithTicker"] += 1
+                stats["qualifiedWithSingleTicker"] += 1
                 if event["identityAmbiguous"]:
-                    stats["identityAmbiguous"] += 1
-                    identity_ambiguous_total += 1
+                    stats["tickerSessionIdentityAmbiguous"] += 1
+                    identity_collision_events += 1
                     continue
                 stats["identityEligible"] += 1
                 if not regular_dates:
@@ -300,7 +351,8 @@ def audit(*, sec_path: Path, market_root: Path, output: Path) -> dict[str, Any]:
                     missing_tickers[ticker] += 1
                     continue
 
-                entry_index = bisect.bisect_right(regular_dates, str(event["knowledgeDate"]))
+                evaluation_session = str(event["evaluationSession"])
+                entry_index = bisect.bisect_right(regular_dates, evaluation_session)
                 if entry_index >= len(regular_dates):
                     stats["noNextRegularSession"] += 1
                     missing_tickers[ticker] += 1
@@ -341,13 +393,15 @@ def audit(*, sec_path: Path, market_root: Path, output: Path) -> dict[str, Any]:
     missing_spy = sorted(expected_spy - observed_spy)
     extra_spy = sorted(observed_spy - expected_spy)
 
-    total_qualified = int(sec_diag["qualifiedPurchaseRows"])
-    missing_ticker = int(sec_diag["qualifiedRowsMissingTicker"])
-    with_ticker = total_qualified - missing_ticker
-    identity_eligible = with_ticker - identity_ambiguous_total
+    total_events = int(sec_diag["qualifiedIssuerSessionEvents"])
+    missing_ticker = int(sec_diag["issuerSessionEventsMissingTicker"])
+    multi_ticker = int(sec_diag["issuerSessionEventsWithMultipleTickers"])
+    with_ticker = total_events - missing_ticker
+    ambiguous_total = multi_ticker + identity_collision_events
+    identity_eligible = with_ticker - ambiguous_total
     entry_coverage_eligible = entry_matched_total / identity_eligible if identity_eligible else 0.0
-    missing_ticker_rate = missing_ticker / total_qualified if total_qualified else 0.0
-    identity_ambiguous_rate = identity_ambiguous_total / with_ticker if with_ticker else 0.0
+    missing_ticker_rate = missing_ticker / total_events if total_events else 0.0
+    identity_ambiguous_rate = ambiguous_total / with_ticker if with_ticker else 0.0
 
     strict_terminal_tails = sum(
         1 for row in terminal_tails if row["strictTerminalValueCandidate"]
@@ -363,8 +417,8 @@ def audit(*, sec_path: Path, market_root: Path, output: Path) -> dict[str, Any]:
     gate_pass = all(gate_checks.values())
 
     collisions_json = [
-        {"ticker": ticker, "year": year, "issuerCiks": ciks}
-        for (ticker, year), ciks in sorted(sec_diag.pop("collisions").items())
+        {"ticker": ticker, "evaluationSession": session, "issuerCiks": ciks}
+        for (ticker, session), ciks in sorted(sec_diag.pop("collisions").items())
     ]
     (output / "identity-collisions.json").write_text(
         json.dumps(collisions_json, indent=2, sort_keys=True) + "\n",
@@ -375,7 +429,7 @@ def audit(*, sec_path: Path, market_root: Path, output: Path) -> dict[str, Any]:
         encoding="utf-8",
     )
     missing_ranked = [
-        {"ticker": ticker, "qualifiedEventsMissingEntry": count}
+        {"ticker": ticker, "qualifiedIssuerSessionsMissingEntry": count}
         for ticker, count in sorted(missing_tickers.items(), key=lambda item: (-item[1], item[0]))
     ]
     (output / "missing-entry-tickers.json").write_text(
@@ -384,27 +438,27 @@ def audit(*, sec_path: Path, market_root: Path, output: Path) -> dict[str, Any]:
     )
 
     summary: dict[str, Any] = {
-        "schemaVersion": "1.0.0",
-        "dataset": "Event-level market coverage and terminal audit",
+        "schemaVersion": "1.1.0",
+        "dataset": "Issuer-session market coverage and terminal audit",
         "period": "2016-2022",
         "baselineUniverse": "non-derivative open-market purchase P/A",
-        "entryRule": "first regular session strictly after SEC knowledgeAt calendar date",
+        "eventUnit": "issuer CIK + first eligible XNYS evaluation session",
+        "executionClock": "knowledgeAt -> first eligible daily evaluation close -> next session open",
         "regularSessionRule": "terminal_candidate=false AND volume>0 AND trade_count>0",
         "horizonsSessions": list(HORIZONS),
         "sec": sec_diag,
         "market": market_diag,
         "entry": {
-            "qualifiedEvents": total_qualified,
-            "qualifiedEventsWithTicker": with_ticker,
+            "qualifiedIssuerSessionEvents": total_events,
+            "issuerSessionEventsWithTicker": with_ticker,
+            "identityAmbiguousEvents": ambiguous_total,
             "identityEligibleEvents": identity_eligible,
             "entryMatchedEvents": entry_matched_total,
             "eligibleEntryCoverage": entry_coverage_eligible,
             "qualifiedMissingTickerRate": missing_ticker_rate,
             "identityAmbiguousRateAmongTickered": identity_ambiguous_rate,
         },
-        "splits": {
-            split: dict(values) for split, values in split_stats.items()
-        },
+        "splits": {split: dict(values) for split, values in split_stats.items()},
         "horizonAvailability": {
             split: {str(h): dict(values) for h, values in horizons.items()}
             for split, horizons in horizon_stats.items()
@@ -432,7 +486,7 @@ def audit(*, sec_path: Path, market_root: Path, output: Path) -> dict[str, Any]:
         "signalReady": False,
         "oosOpened": False,
         "productionScoringChanged": False,
-        "status": "MARKET_EVENT_AUDIT_COMPLETE",
+        "status": "MARKET_ISSUER_SESSION_AUDIT_COMPLETE",
     }
     (output / "summary.json").write_text(
         json.dumps(summary, indent=2, sort_keys=True) + "\n",
