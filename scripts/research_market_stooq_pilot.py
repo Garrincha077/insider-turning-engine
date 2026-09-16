@@ -219,8 +219,15 @@ def main() -> None:
     parser.add_argument("--end", type=date.fromisoformat, default=date(2022, 12, 30))
     parser.add_argument("--output", type=Path, default=Path("work/stooq-pilot"))
     args = parser.parse_args()
-    symbols = tuple(dict.fromkeys(item.strip().upper() for item in args.symbols.split(",") if item.strip()))
-    print(json.dumps(run(symbols=symbols, start=args.start, end=args.end, output=args.output), indent=2))
+    symbols = tuple(
+        dict.fromkeys(
+            item.strip().upper()
+            for item in args.symbols.split(",")
+            if item.strip()
+        )
+    )
+    summary = run(symbols=symbols, start=args.start, end=args.end, output=args.output)
+    print(json.dumps(summary, indent=2))
 
 
 if __name__ == "__main__":
