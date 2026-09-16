@@ -1,9 +1,17 @@
 """Research-only PIT recovery diagnostic for missing SEC issuer tickers.
 
 The diagnostic never reads 2023+ data and never mutates the canonical SEC data.
-For qualified issuer-session purchase events whose filing ticker is missing or an
-explicit audit placeholder, it asks whether a real ticker for the same issuer CIK
-was already observable in SEC data at or before the event knowledge time.
+For qualified issuer-session purchase events in 2016-2022 whose filing ticker is
+missing or an explicit audit placeholder, it asks whether a real ticker for the
+same issuer CIK was observable from SEC data before the signal's point-in-time
+market-entry cutoff.
+
+Warm-up observations from 2013-2015 may be used only as prior history for
+2016-2022 targets. The existing 90/365-day recovery tiers remain reported
+separately. A conservative additional tier asks whether exactly one real ticker
+for the same CIK became observable after the first target knowledge time but no
+later than the close of that target's evaluation session. This remains a
+research diagnostic and does not rewrite canonical SEC rows.
 """
 
 from __future__ import annotations
@@ -25,6 +33,7 @@ from research_market_event_audit import (
     _qualified_purchase,
 )
 
+OBSERVATION_START_YEAR = 2013
 STRICT_LOOKBACK_DAYS = 90
 EXTENDED_LOOKBACK_DAYS = 365
 
@@ -42,12 +51,18 @@ def _age_days(older: str, newer: str) -> float:
     return float((pd.Timestamp(newer) - pd.Timestamp(older)).total_seconds() / 86_400)
 
 
+def _evaluation_close(evaluation_session: str, calendar: Any) -> str:
+    session = pd.Timestamp(evaluation_session)
+    return str(calendar.session_close(session).isoformat())
+
+
 def run(*, sec_path: Path, output: Path) -> dict[str, Any]:
     output.mkdir(parents=True, exist_ok=True)
     calendar = xcals.get_calendar("XNYS")
     grouped: dict[tuple[str, str], dict[str, Any]] = {}
     observations: dict[str, list[tuple[str, str]]] = defaultdict(list)
     rows_read = 0
+    observation_rows_read = 0
 
     with sec_path.open(encoding="utf-8") as stream:
         for line in stream:
@@ -58,14 +73,20 @@ def run(*, sec_path: Path, output: Path) -> dict[str, Any]:
             year = int(knowledge[:4])
             if year >= SEALED_YEAR:
                 raise ValueError("sealed OOS boundary violated by SEC input")
-            if not START_YEAR <= year <= END_YEAR:
+            if not OBSERVATION_START_YEAR <= year <= END_YEAR:
                 continue
-            rows_read += 1
 
+            observation_rows_read += 1
             cik = str(row.get("issuer", {}).get("cik") or "")
             ticker = _real_ticker(row.get("issuer", {}).get("ticker"))
             if cik and ticker:
                 observations[cik].append((knowledge, ticker))
+
+            # 2013-2015 are warm-up observations only. They can contribute prior
+            # identity evidence but never become diagnostic target events.
+            if not START_YEAR <= year <= END_YEAR:
+                continue
+            rows_read += 1
 
             if not _qualified_purchase(row):
                 continue
@@ -105,11 +126,26 @@ def run(*, sec_path: Path, output: Path) -> dict[str, Any]:
     status_counts: Counter[str] = Counter()
     recovered_tickers: Counter[str] = Counter()
     problem_counts: Counter[str] = Counter()
+    evaluation_close_tickers: Counter[str] = Counter()
+    evaluation_close_unique_recoverable = 0
+    evaluation_close_ambiguous = 0
+    evaluation_close_no_evidence = 0
+    evaluation_close_conflicts_with_prior = 0
+    warmup_assisted_recoveries = 0
 
     for event in targets:
         cik = str(event["issuerCik"])
         cutoff = str(event["knowledgeAtFirst"])
-        prior = [(ts, ticker) for ts, ticker in observations.get(cik, []) if ts <= cutoff]
+        evaluation_session = str(event["evaluationSession"])
+        evaluation_close = _evaluation_close(evaluation_session, calendar)
+        all_observations = observations.get(cik, [])
+        prior = [(ts, ticker) for ts, ticker in all_observations if ts <= cutoff]
+        same_session_after_first = [
+            (ts, ticker)
+            for ts, ticker in all_observations
+            if cutoff < ts <= evaluation_close
+        ]
+        same_session_unique = sorted({ticker for _, ticker in same_session_after_first})
         problem = str(event["identityProblem"])
         problem_counts[problem] += 1
 
@@ -149,6 +185,31 @@ def run(*, sec_path: Path, output: Path) -> dict[str, Any]:
             else:
                 status = "PRIOR_TICKER_AMBIGUOUS"
 
+        if recovered and latest_at and int(str(latest_at)[:4]) < START_YEAR:
+            warmup_assisted_recoveries += 1
+
+        evaluation_close_recovered: str | None = None
+        evaluation_close_status = "NO_NEW_REAL_TICKER_BY_EVALUATION_CLOSE"
+        if same_session_unique:
+            if len(same_session_unique) == 1:
+                same_session_ticker = same_session_unique[0]
+                if recovered is None:
+                    evaluation_close_status = "RECOVERABLE_BY_EVALUATION_CLOSE_UNIQUE"
+                    evaluation_close_recovered = same_session_ticker
+                    evaluation_close_unique_recoverable += 1
+                    evaluation_close_tickers[same_session_ticker] += 1
+                elif recovered == same_session_ticker:
+                    evaluation_close_status = "CONFIRMS_PRIOR_RECOVERY"
+                else:
+                    evaluation_close_status = "CONFLICTS_WITH_PRIOR_RECOVERY"
+                    evaluation_close_conflicts_with_prior += 1
+            else:
+                evaluation_close_status = "AMBIGUOUS_BY_EVALUATION_CLOSE"
+                if recovered is None:
+                    evaluation_close_ambiguous += 1
+        elif recovered is None:
+            evaluation_close_no_evidence += 1
+
         status_counts[status] += 1
         if recovered:
             recovered_tickers[recovered] += 1
@@ -156,7 +217,8 @@ def run(*, sec_path: Path, output: Path) -> dict[str, Any]:
         results.append(
             {
                 "issuerCik": cik,
-                "evaluationSession": str(event["evaluationSession"]),
+                "evaluationSession": evaluation_session,
+                "evaluationSessionClose": evaluation_close,
                 "knowledgeAtFirst": cutoff,
                 "knowledgeAtLast": str(event["knowledgeAtLast"]),
                 "rawQualifiedRows": int(event["rawQualifiedRows"]),
@@ -167,12 +229,16 @@ def run(*, sec_path: Path, output: Path) -> dict[str, Any]:
                 "latestPriorRealTickerAgeDays": age_days,
                 "uniqueRealTickersTrailing90d": trailing_90,
                 "uniqueRealTickersTrailing365d": trailing_365,
+                "realTickersAfterFirstKnowledgeByEvaluationClose": same_session_unique,
+                "evaluationCloseRecoveryStatus": evaluation_close_status,
+                "evaluationCloseRecoveredTicker": evaluation_close_recovered,
             }
         )
 
     results.sort(
         key=lambda row: (
             str(row["recoveryStatus"]),
+            str(row["evaluationCloseRecoveryStatus"]),
             str(row["issuerCik"]),
             str(row["evaluationSession"]),
         )
@@ -188,12 +254,15 @@ def run(*, sec_path: Path, output: Path) -> dict[str, Any]:
     max_allowed_missing = int(0.01 * len(grouped))
     strict_remaining = target_count - strict
     strict_plus_extended_remaining = target_count - strict - extended
+    combined_remaining = strict_plus_extended_remaining - evaluation_close_unique_recoverable
 
     summary: dict[str, Any] = {
-        "schemaVersion": "1.0.0",
+        "schemaVersion": "1.1.0",
         "dataset": "PIT CIK-to-ticker recovery diagnostic",
         "period": f"{START_YEAR}-{END_YEAR}",
+        "identityObservationPeriod": f"{OBSERVATION_START_YEAR}-{END_YEAR}",
         "effectiveSecRowsRead": rows_read,
+        "identityObservationRowsRead": observation_rows_read,
         "qualifiedIssuerSessionEvents": len(grouped),
         "identityProblemEvents": target_count,
         "identityProblemCounts": dict(sorted(problem_counts.items())),
@@ -204,21 +273,41 @@ def run(*, sec_path: Path, output: Path) -> dict[str, Any]:
         "strictPlusUnique365dRecoveryRate": (
             (strict + extended) / target_count if target_count else 0.0
         ),
+        "warmupAssistedPriorRecoveries": warmup_assisted_recoveries,
+        "evaluationCloseUniqueRecoverableAfterPriorTiers": evaluation_close_unique_recoverable,
+        "evaluationCloseAmbiguousAfterPriorTiers": evaluation_close_ambiguous,
+        "evaluationCloseNoNewEvidenceAfterPriorTiers": evaluation_close_no_evidence,
+        "evaluationCloseConflictsWithPriorRecovery": evaluation_close_conflicts_with_prior,
+        "strictPlus365PlusEvaluationCloseRecoverable": (
+            strict + extended + evaluation_close_unique_recoverable
+        ),
         "remainingAfterStrict90d": strict_remaining,
         "remainingAfterStrictPlusUnique365d": strict_plus_extended_remaining,
+        "remainingAfterStrictPlus365PlusEvaluationClose": combined_remaining,
         "onePctGateMaxMissingEventsApprox": max_allowed_missing,
         "wouldStrict90dMeetOnePctIdentityGate": strict_remaining <= max_allowed_missing,
         "wouldStrictPlusUnique365dMeetOnePctIdentityGate": (
             strict_plus_extended_remaining <= max_allowed_missing
         ),
+        "wouldStrictPlus365PlusEvaluationCloseMeetOnePctIdentityGate": (
+            combined_remaining <= max_allowed_missing
+        ),
         "topRecoveredTickers": [
             {"ticker": ticker, "issuerSessionEvents": count}
             for ticker, count in recovered_tickers.most_common(30)
         ],
+        "topEvaluationCloseRecoveredTickers": [
+            {"ticker": ticker, "issuerSessionEvents": count}
+            for ticker, count in evaluation_close_tickers.most_common(30)
+        ],
         "policy": (
-            "Only ticker observations for the same issuer CIK with knowledgeAt at or before "
-            "the event are eligible. Strict recovery requires a unique real ticker within 90 "
-            "days; the 365-day tier is diagnostic and remains separate. No future ticker is used."
+            "Targets are qualified issuer-session events from 2016-2022 only. SEC ticker "
+            "observations from 2013-2015 may serve only as prior warm-up history. Existing "
+            "prior same-CIK recovery remains strict unique <=90 days plus a separate unique "
+            "<=365-day diagnostic. A conservative additional diagnostic may recover an "
+            "otherwise unresolved target only when exactly one real same-CIK ticker becomes "
+            "observable after knowledgeAtFirst and by the close of the target evaluation "
+            "session. No observation after evaluation-session close and no 2023+ data is used."
         ),
         "oosOpened": False,
         "productionScoringChanged": False,
