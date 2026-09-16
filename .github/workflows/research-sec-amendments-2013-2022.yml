@@ -1,0 +1,374 @@
+name: Reconcile SEC PIT amendments 2013-2022
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/research-sec-amendments-2013-2022.yml"
+      - "scripts/research_sec_build_amendment_candidates.py"
+      - "scripts/research_sec_hydrate_amendments.py"
+      - "scripts/research_sec_reconcile_amendments.py"
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: research-sec-amendments-v1
+  cancel-in-progress: false
+
+env:
+  SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT }}
+  RELEASE_TAG: research-sec-amendments-v1
+
+jobs:
+  prepare:
+    name: Prepare amendment research release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create persistent research release if absent
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists."
+          else
+            gh release create "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Research SEC PIT amendments v1" \
+              --notes "Research-only 4/A and 5/A PIT acquisition and deterministic reconciliation for 2013-2022. OOS 2023+ excluded. No production scoring changes." \
+              --prerelease
+          fi
+
+  build_sources:
+    name: Build amendment source ${{ matrix.year }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: true
+      max-parallel: 1
+      matrix:
+        year: [2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022]
+    env:
+      YEAR: ${{ matrix.year }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Require SEC User-Agent
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SEC_USER_AGENT:-}" || {
+            echo "SEC_USER_AGENT repository variable is required"
+            exit 1
+          }
+      - name: Backfill and validate all four historical quarters
+        shell: bash
+        run: >-
+          uv run insider-turning backfill-sec-history
+          --start-year "$YEAR" --start-quarter 1
+          --end-year "$YEAR" --end-quarter 4
+          --cache-dir work/sec-history/cache
+          --staging-dir work/sec-history/staging
+          --execute
+      - name: Build amendment universe and predecessor catalog
+        shell: bash
+        run: >-
+          uv run python scripts/research_sec_build_amendment_candidates.py
+          --history-root work/sec-history/staging
+          --year "$YEAR"
+          --output "work/amendment-source/$YEAR"
+      - name: Assert source boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run python - <<'PY'
+          import json, os
+          from pathlib import Path
+          s = json.loads((Path("work/amendment-source") / os.environ["YEAR"] / "summary.json").read_text())
+          assert s["oosOpened"] is False
+          assert s["canonicalReady"] is False
+          assert s["signalReady"] is False
+          assert int(s["year"]) <= 2022
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sec-amendment-source-${{ matrix.year }}-${{ github.run_id }}
+          path: work/amendment-source/${{ matrix.year }}
+          retention-days: 90
+
+  hydrate_amendments:
+    name: Hydrate amendments ${{ matrix.year }} Q${{ matrix.quarter }}
+    needs: build_sources
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: true
+      max-parallel: 1
+      matrix:
+        include:
+          - {year: 2013, quarter: 1}
+          - {year: 2013, quarter: 2}
+          - {year: 2013, quarter: 3}
+          - {year: 2013, quarter: 4}
+          - {year: 2014, quarter: 1}
+          - {year: 2014, quarter: 2}
+          - {year: 2014, quarter: 3}
+          - {year: 2014, quarter: 4}
+          - {year: 2015, quarter: 1}
+          - {year: 2015, quarter: 2}
+          - {year: 2015, quarter: 3}
+          - {year: 2015, quarter: 4}
+          - {year: 2016, quarter: 1}
+          - {year: 2016, quarter: 2}
+          - {year: 2016, quarter: 3}
+          - {year: 2016, quarter: 4}
+          - {year: 2017, quarter: 1}
+          - {year: 2017, quarter: 2}
+          - {year: 2017, quarter: 3}
+          - {year: 2017, quarter: 4}
+          - {year: 2018, quarter: 1}
+          - {year: 2018, quarter: 2}
+          - {year: 2018, quarter: 3}
+          - {year: 2018, quarter: 4}
+          - {year: 2019, quarter: 1}
+          - {year: 2019, quarter: 2}
+          - {year: 2019, quarter: 3}
+          - {year: 2019, quarter: 4}
+          - {year: 2020, quarter: 1}
+          - {year: 2020, quarter: 2}
+          - {year: 2020, quarter: 3}
+          - {year: 2020, quarter: 4}
+          - {year: 2021, quarter: 1}
+          - {year: 2021, quarter: 2}
+          - {year: 2021, quarter: 3}
+          - {year: 2021, quarter: 4}
+          - {year: 2022, quarter: 1}
+          - {year: 2022, quarter: 2}
+          - {year: 2022, quarter: 3}
+          - {year: 2022, quarter: 4}
+    env:
+      YEAR: ${{ matrix.year }}
+      QUARTER: ${{ matrix.quarter }}
+      ASSET_NAME: sec-amendments-${{ matrix.year }}q${{ matrix.quarter }}.tar.gz
+      CANDIDATE_RUN_ID: amendments-${{ github.run_id }}-${{ matrix.year }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check whether quarter already has a persistent PASS archive
+        id: persisted
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq "$ASSET_NAME"; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "$ASSET_NAME already exists; treating quarter as previously completed."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-python@v5
+        if: steps.persisted.outputs.skip != 'true'
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        if: steps.persisted.outputs.skip != 'true'
+        with:
+          enable-cache: true
+      - name: Install locked environment
+        if: steps.persisted.outputs.skip != 'true'
+        run: uv sync --all-groups --frozen
+      - name: Download verified amendment source year
+        if: steps.persisted.outputs.skip != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: sec-amendment-source-${{ matrix.year }}-${{ github.run_id }}
+          path: work/amendment-source/${{ matrix.year }}
+      - name: Hydrate and audit transaction-bearing amendments
+        if: steps.persisted.outputs.skip != 'true'
+        shell: bash
+        run: >-
+          uv run python scripts/research_sec_hydrate_amendments.py
+          --candidate-path "work/amendment-source/$YEAR/amendment-candidates.jsonl"
+          --output "work/sec-amendments/${YEAR}q${QUARTER}"
+          --year "$YEAR" --quarter "$QUARTER"
+          --candidate-run-id "$CANDIDATE_RUN_ID"
+          --shard-size 500 --workers 4
+      - name: Assert amendment acquisition contract
+        if: steps.persisted.outputs.skip != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p = Path("work/sec-amendments") / f"{os.environ['YEAR']}q{os.environ['QUARTER']}" / "quarter-summary.json"
+          s = json.loads(p.read_text())
+          q = s["qualityGates"]
+          assert q["completeAccessionCoverage"] is True
+          assert q["zeroFailures"] is True
+          assert q["knowledgeEqualsAccepted"] is True
+          assert q["oosOpened"] is False
+          assert q["amendmentAcquisitionComplete"] is True
+          assert q["amendmentsReconciled"] is False
+          assert q["canonicalReady"] is False
+          assert q["signalReady"] is False
+          PY
+      - name: Package deterministic amendment quarter archive
+        if: steps.persisted.outputs.skip != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C "work/sec-amendments/${YEAR}q${QUARTER}" -czf "work/$ASSET_NAME" \
+            quarter-summary.json checksums.json raw-manifest.jsonl canonical-research.jsonl failures.jsonl
+          sha256sum "work/$ASSET_NAME"
+      - uses: actions/upload-artifact@v4
+        if: steps.persisted.outputs.skip != 'true'
+        with:
+          name: sec-amendments-${{ matrix.year }}q${{ matrix.quarter }}-audit-${{ github.run_id }}
+          path: work/sec-amendments/${{ matrix.year }}q${{ matrix.quarter }}
+          retention-days: 90
+      - name: Upload persistent PASS amendment quarter
+        if: steps.persisted.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: gh release upload "$RELEASE_TAG" "work/$ASSET_NAME" --repo "$GITHUB_REPOSITORY" --clobber
+
+  completeness:
+    name: Amendment acquisition completeness gate
+    needs: hydrate_amendments
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify all 40 amendment quarter archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets > release-assets.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          release = json.loads(Path("release-assets.json").read_text())
+          assets = {item["name"]: item for item in release.get("assets", [])}
+          expected = [f"sec-amendments-{year}q{quarter}.tar.gz" for year in range(2013, 2023) for quarter in range(1, 5)]
+          missing = [name for name in expected if name not in assets]
+          if missing:
+              raise SystemExit(f"missing amendment quarter archives: {missing}")
+          index = {
+              "schemaVersion": "1.0.0",
+              "dataset": "SEC transaction-bearing 4/A and 5/A PIT acquisition",
+              "period": "2013-2022",
+              "quarterCount": 40,
+              "quarterArchivesComplete": True,
+              "oosOpened": False,
+              "amendmentsReconciled": False,
+              "canonicalReady": False,
+              "signalReady": False,
+              "status": "AMENDMENT_PIT_ACQUISITION_2013_2022_PASS",
+          }
+          Path("sec-amendments-2013-2022-index.json").write_text(json.dumps(index, indent=2, sort_keys=True) + "\n")
+          PY
+      - name: Upload acquisition index
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$RELEASE_TAG" sec-amendments-2013-2022-index.json --repo "$GITHUB_REPOSITORY" --clobber
+
+  reconcile:
+    name: Deterministic PIT amendment reconciliation
+    needs: completeness
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Download predecessor catalogs from this run
+        uses: actions/download-artifact@v4
+        with:
+          pattern: sec-amendment-source-*-${{ github.run_id }}
+          path: work/catalogs
+      - name: Download persistent original and amendment archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/original-assets work/amendment-assets
+          gh release download research-sec-warmup-v1 --repo "$GITHUB_REPOSITORY" \
+            --pattern 'sec-pit-warmup-*.tar.gz' --dir work/original-assets
+          gh release download research-sec-pit-v1 --repo "$GITHUB_REPOSITORY" \
+            --pattern 'sec-pit-20??q?.tar.gz' --dir work/original-assets
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'sec-amendments-*.tar.gz' --dir work/amendment-assets
+      - name: Extract quarter archives into isolated directories
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/original work/amendments
+          for file in work/original-assets/*.tar.gz; do
+            name=$(basename "$file" .tar.gz)
+            mkdir -p "work/original/$name"
+            tar -xzf "$file" -C "work/original/$name"
+          done
+          for file in work/amendment-assets/sec-amendments-*.tar.gz; do
+            name=$(basename "$file" .tar.gz)
+            mkdir -p "work/amendments/$name"
+            tar -xzf "$file" -C "work/amendments/$name"
+          done
+      - name: Reconcile amendments with exact PIT evidence
+        shell: bash
+        run: >-
+          uv run python scripts/research_sec_reconcile_amendments.py
+          --original-root work/original
+          --amendment-root work/amendments
+          --catalog-root work/catalogs
+          --output work/reconciliation
+      - name: Assert reconciliation boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run python - <<'PY'
+          import json
+          from pathlib import Path
+          s = json.loads(Path("work/reconciliation/summary.json").read_text())
+          assert s["amendmentReconciliationComplete"] is True
+          assert s["oosOpened"] is False
+          assert s["canonicalReady"] is False
+          assert s["marketDataJoined"] is False
+          assert s["signalReady"] is False
+          assert s["lifecycleHistoricalClockNormalization"]["productionParserChanged"] is False
+          PY
+      - name: Package and persist reconciliation evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C work/reconciliation -czf work/sec-amendment-reconciliation-2013-2022.tar.gz \
+            summary.json amendment-linkage.jsonl quarantines.jsonl reconciled-all-revisions.jsonl effective-end-2022.jsonl
+          sha256sum work/sec-amendment-reconciliation-2013-2022.tar.gz
+          gh release upload "$RELEASE_TAG" \
+            work/sec-amendment-reconciliation-2013-2022.tar.gz \
+            work/reconciliation/summary.json \
+            --repo "$GITHUB_REPOSITORY" --clobber
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sec-amendment-reconciliation-audit-${{ github.run_id }}
+          path: work/reconciliation
+          retention-days: 90
