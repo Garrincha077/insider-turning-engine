@@ -2,6 +2,10 @@ name: Backfill Alpaca SIP market history 2016-2022
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/research-market-alpaca-backfill.yml"
+      - "scripts/research_market_alpaca_backfill.py"
 
 permissions:
   contents: write
@@ -16,8 +20,26 @@ env:
   MARKET_RELEASE_TAG: research-market-alpaca-v1
 
 jobs:
+  lint:
+    name: Lint Alpaca research backfill
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Ruff research backfill
+        run: uv run ruff check scripts/research_market_alpaca_backfill.py
+
   backfill:
     name: Alpaca SIP adjusted ${{ matrix.year }}
+    needs: lint
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
@@ -95,6 +117,7 @@ jobs:
   persist:
     name: Persist bounded Alpaca market evidence
     needs: backfill
+    if: github.event_name == 'workflow_dispatch' && needs.backfill.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
