@@ -5,10 +5,10 @@ queries Massive's point-in-time reference endpoint only for events that remain
 unresolved after the SEC-only recovery tiers. It never reads 2023+ target data,
 never rewrites canonical SEC rows, and never changes production scoring.
 
-A Massive recovery is intentionally conservative: for the issuer CIK and exact
-evaluation-session date, the point-in-time endpoint must return exactly one
-active U.S. equity ticker across the stocks/OTC markets. Multiple candidates are
-kept as ambiguous evidence and receive no recovery credit.
+Recovery is conservative. A ticker receives credit when the exact CIK/date
+query returns one active U.S. equity ticker, or when multiple returned share
+classes can be resolved uniquely from the source-observed SEC security title.
+Ambiguous cases remain unresolved.
 """
 
 from __future__ import annotations
@@ -16,8 +16,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import time
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +28,12 @@ SEALED_YEAR = 2023
 ALLOWED_MARKETS = {"stocks", "otc"}
 API_URL = "https://api.massive.com/v3/reference/tickers"
 TRANSIENT_STATUS_CODES = {429, 500, 502, 503, 504}
+_CLASS_PATTERNS = (
+    re.compile(r"\bCLASS[\s-]*([A-Z])\b", re.IGNORECASE),
+    re.compile(r"\bCL[\s-]*([A-Z])\b", re.IGNORECASE),
+    re.compile(r"\bCL([A-Z])\b", re.IGNORECASE),
+)
+_TICKER_CLASS_SUFFIX = re.compile(r"[.-]([A-Z])$")
 
 
 def _normalize_cik(value: object) -> str:
@@ -50,6 +57,76 @@ def _load_json(path: Path) -> Any:
 
 def _write_json(path: Path, value: Any) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _class_tokens(text: object) -> set[str]:
+    value = str(text or "")
+    return {match.upper() for pattern in _CLASS_PATTERNS for match in pattern.findall(value)}
+
+
+def _candidate_class_tokens(candidate: dict[str, Any]) -> set[str]:
+    tokens = _class_tokens(candidate.get("name"))
+    ticker = str(candidate.get("ticker") or "").strip().upper()
+    suffix = _TICKER_CLASS_SUFFIX.search(ticker)
+    if suffix:
+        tokens.add(suffix.group(1))
+    return tokens
+
+
+def _event_class_token(event: dict[str, Any]) -> str | None:
+    tokens: set[str] = set()
+    for title in event.get("securityTitles") or []:
+        tokens.update(_class_tokens(title))
+    return next(iter(tokens)) if len(tokens) == 1 else None
+
+
+def _resolve_candidates(
+    event: dict[str, Any],
+    candidates: list[dict[str, Any]],
+) -> tuple[str | None, str, str | None]:
+    if len(candidates) == 1:
+        return str(candidates[0]["ticker"]), "RECOVERABLE_MASSIVE_PIT_UNIQUE", None
+    if not candidates:
+        return None, "NO_MASSIVE_PIT_ACTIVE_US_EQUITY", None
+
+    class_token = _event_class_token(event)
+    if class_token is None:
+        return None, "AMBIGUOUS_MASSIVE_PIT_MULTIPLE", None
+
+    matches = [
+        candidate
+        for candidate in candidates
+        if class_token in _candidate_class_tokens(candidate)
+    ]
+    if len(matches) == 1:
+        return (
+            str(matches[0]["ticker"]),
+            "RECOVERABLE_MASSIVE_PIT_SEC_CLASS_UNIQUE",
+            class_token,
+        )
+    return None, "AMBIGUOUS_MASSIVE_PIT_MULTIPLE", class_token
+
+
+def _round_robin_query_order(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Prioritize distinct issuers before repeated dates for the same CIK."""
+    by_cik: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for event in events:
+        by_cik[str(event["issuerCik"])].append(event)
+    for rows in by_cik.values():
+        rows.sort(key=lambda row: str(row["evaluationSession"]))
+
+    ordered: list[dict[str, Any]] = []
+    depth = 0
+    while True:
+        added = False
+        for cik in sorted(by_cik):
+            rows = by_cik[cik]
+            if depth < len(rows):
+                ordered.append(rows[depth])
+                added = True
+        if not added:
+            return ordered
+        depth += 1
 
 
 class RateLimiter:
@@ -205,6 +282,8 @@ def run(
         if year >= SEALED_YEAR:
             raise ValueError("sealed OOS boundary violated by identity event")
 
+    query_order = _round_robin_query_order(unresolved)
+
     cache: dict[str, Any] = {}
     if cache_path and cache_path.exists():
         loaded_cache = _load_json(cache_path)
@@ -212,12 +291,30 @@ def run(
             raise ValueError("Massive cache must be a JSON object")
         cache = loaded_cache
 
+    event_by_key = {_event_key(event): event for event in unresolved}
+    for key, evidence in cache.items():
+        event = event_by_key.get(key)
+        if event is None or not isinstance(evidence, dict):
+            continue
+        candidates = list(evidence.get("candidates") or [])
+        recovered, status, class_token = _resolve_candidates(event, candidates)
+        evidence["status"] = status
+        evidence["recoveredTicker"] = recovered
+        evidence["secClassToken"] = class_token
+        evidence["resolutionMethod"] = (
+            "SEC_SECURITY_TITLE_CLASS"
+            if status == "RECOVERABLE_MASSIVE_PIT_SEC_CLASS_UNIQUE"
+            else "EXACT_CIK_DATE_UNIQUE"
+            if status == "RECOVERABLE_MASSIVE_PIT_UNIQUE"
+            else None
+        )
+
     limiter = RateLimiter(requests_per_minute)
     network_queries = 0
     http_requests = 0
 
     with httpx.Client(timeout=30.0, follow_redirects=True) as client:
-        for event in unresolved:
+        for event in query_order:
             key = _event_key(event)
             if key in cache:
                 continue
@@ -236,13 +333,7 @@ def run(
             http_requests += used_requests
             network_queries += 1
             candidates = _candidate_rows(rows, cik)
-            recovered = candidates[0]["ticker"] if len(candidates) == 1 else None
-            if recovered:
-                status = "RECOVERABLE_MASSIVE_PIT_UNIQUE"
-            elif candidates:
-                status = "AMBIGUOUS_MASSIVE_PIT_MULTIPLE"
-            else:
-                status = "NO_MASSIVE_PIT_ACTIVE_US_EQUITY"
+            recovered, status, class_token = _resolve_candidates(event, candidates)
 
             cache[key] = {
                 "issuerCik": cik,
@@ -251,6 +342,15 @@ def run(
                 "recoveredTicker": recovered,
                 "candidateCount": len(candidates),
                 "candidates": candidates,
+                "securityTitles": list(event.get("securityTitles") or []),
+                "secClassToken": class_token,
+                "resolutionMethod": (
+                    "SEC_SECURITY_TITLE_CLASS"
+                    if status == "RECOVERABLE_MASSIVE_PIT_SEC_CLASS_UNIQUE"
+                    else "EXACT_CIK_DATE_UNIQUE"
+                    if status == "RECOVERABLE_MASSIVE_PIT_UNIQUE"
+                    else None
+                ),
                 "source": "Massive /v3/reference/tickers cik+date active=true",
             }
 
@@ -260,6 +360,7 @@ def run(
     result_rows: list[dict[str, Any]] = []
     status_counts: Counter[str] = Counter()
     recovered_tickers: Counter[str] = Counter()
+    resolution_methods: Counter[str] = Counter()
     recovered_events = 0
     queried_events = 0
 
@@ -270,14 +371,20 @@ def run(
             status = "NOT_QUERIED_YET"
             recovered = None
             candidates: list[dict[str, Any]] = []
+            class_token = _event_class_token(event)
+            resolution_method = None
         else:
             queried_events += 1
             status = str(evidence["status"])
             recovered = evidence.get("recoveredTicker")
             candidates = list(evidence.get("candidates") or [])
+            class_token = evidence.get("secClassToken")
+            resolution_method = evidence.get("resolutionMethod")
             if recovered:
                 recovered_events += 1
                 recovered_tickers[str(recovered)] += 1
+            if resolution_method:
+                resolution_methods[str(resolution_method)] += 1
         status_counts[status] += 1
         result_rows.append(
             {
@@ -285,8 +392,11 @@ def run(
                 "evaluationSession": event["evaluationSession"],
                 "identityProblem": event["identityProblem"],
                 "secRecoveryStatus": event["recoveryStatus"],
+                "securityTitles": list(event.get("securityTitles") or []),
+                "secClassToken": class_token,
                 "massiveRecoveryStatus": status,
                 "massiveRecoveredTicker": recovered,
+                "resolutionMethod": resolution_method,
                 "massiveCandidates": candidates,
             }
         )
@@ -301,13 +411,19 @@ def run(
     complete = queried_events == unresolved_after_sec
 
     summary: dict[str, Any] = {
-        "schemaVersion": "1.0.0",
+        "schemaVersion": "1.1.0",
         "dataset": "Massive PIT historical identity recovery diagnostic",
         "period": "2016-2022",
         "sourceEndpoint": "/v3/reference/tickers?cik=<CIK>&date=<evaluationSession>&active=true",
         "sourcePolicy": (
-            "Recovery credit requires exactly one active U.S. equity ticker for the exact "
-            "issuer CIK and evaluation-session date. Multiple candidates remain ambiguous."
+            "Recovery credit requires either exactly one active U.S. equity ticker for the "
+            "exact issuer CIK and evaluation-session date, or exactly one candidate whose "
+            "explicit share-class token matches the source-observed SEC security title. "
+            "Ambiguous cases remain unresolved."
+        ),
+        "querySamplingPolicy": (
+            "Round-robin by issuer CIK: one unresolved issuer-session per CIK before "
+            "second dates for the same issuer."
         ),
         "qualifiedIssuerSessionEvents": qualified_events,
         "identityProblemEvents": total_problem_events,
@@ -322,6 +438,7 @@ def run(
         "onePctGateMaxMissingEventsApprox": max_missing,
         "wouldCombinedSecPlusMassiveMeetOnePctIdentityGate": complete and remaining <= max_missing,
         "statusCounts": dict(sorted(status_counts.items())),
+        "resolutionMethodCounts": dict(sorted(resolution_methods.items())),
         "topMassiveRecoveredTickers": [
             {"ticker": ticker, "issuerSessionEvents": count}
             for ticker, count in recovered_tickers.most_common(30)
