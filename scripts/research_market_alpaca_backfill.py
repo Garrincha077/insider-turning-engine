@@ -24,6 +24,15 @@ BATCH_SIZE = 50
 MAX_ATTEMPTS = 6
 
 
+class DeterministicRequestError(RuntimeError):
+    """An Alpaca 4xx response that retries cannot fix."""
+
+    def __init__(self, status_code: int, body: str) -> None:
+        super().__init__(f"Alpaca HTTP {status_code}: {body}")
+        self.status_code = status_code
+        self.body = body
+
+
 def _load_year_symbols(source: Path, year: int) -> tuple[list[str], dict[str, int]]:
     """Return symbols needed for one year plus inventory diagnostics.
 
@@ -82,11 +91,16 @@ def _request_page(
                 time.sleep(max(0.5, min(sleep_for, 30.0)))
                 delay = min(delay * 2, 30.0)
                 continue
+            if 400 <= response.status_code < 500:
+                body = response.text[:1000].replace("\n", " ")
+                raise DeterministicRequestError(response.status_code, body)
             response.raise_for_status()
             payload = response.json()
             if not isinstance(payload, dict):
                 raise ValueError("Alpaca response is not an object")
             return payload
+        except DeterministicRequestError:
+            raise
         except (httpx.HTTPError, json.JSONDecodeError, ValueError) as exc:
             last_error = exc
             if attempt == MAX_ATTEMPTS:
@@ -111,6 +125,7 @@ def run(*, source: Path, year: int, output: Path) -> dict[str, object]:
     output.mkdir(parents=True, exist_ok=True)
     csv_path = output / f"canonical-market-{year}.csv"
     failures: list[dict[str, object]] = []
+    symbol_quarantines: list[dict[str, object]] = []
     returned_symbols: set[str] = set()
     total_rows = 0
     zero_volume_rows = 0
@@ -148,7 +163,9 @@ def run(*, source: Path, year: int, output: Path) -> dict[str, object]:
         writer.writeheader()
 
         with httpx.Client(timeout=60.0, follow_redirects=False) as client:
-            for batch_index, batch in enumerate(_batches(symbols)):
+
+            def fetch_batch(batch: list[str], batch_index: int) -> bool:
+                nonlocal first_date, last_date, total_rows, zero_volume_rows
                 page_token: str | None = None
                 while True:
                     params: dict[str, str | int] = {
@@ -166,6 +183,31 @@ def run(*, source: Path, year: int, output: Path) -> dict[str, object]:
                         params["page_token"] = page_token
                     try:
                         payload = _request_page(client, headers, params)
+                    except DeterministicRequestError as exc:
+                        if page_token is None and len(batch) > 1:
+                            midpoint = len(batch) // 2
+                            left_ok = fetch_batch(batch[:midpoint], batch_index)
+                            right_ok = fetch_batch(batch[midpoint:], batch_index)
+                            return left_ok and right_ok
+                        if page_token is None and len(batch) == 1:
+                            symbol_quarantines.append(
+                                {
+                                    "batchIndex": batch_index,
+                                    "symbol": batch[0],
+                                    "statusCode": exc.status_code,
+                                    "error": exc.body,
+                                }
+                            )
+                            return True
+                        failures.append(
+                            {
+                                "batchIndex": batch_index,
+                                "symbols": batch,
+                                "pageToken": page_token,
+                                "error": str(exc),
+                            }
+                        )
+                        return False
                     except RuntimeError as exc:
                         failures.append(
                             {
@@ -175,7 +217,7 @@ def run(*, source: Path, year: int, output: Path) -> dict[str, object]:
                                 "error": str(exc),
                             }
                         )
-                        break
+                        return False
 
                     bars = payload.get("bars") or {}
                     if not isinstance(bars, dict):
@@ -187,7 +229,7 @@ def run(*, source: Path, year: int, output: Path) -> dict[str, object]:
                                 "error": "bars payload is not an object",
                             }
                         )
-                        break
+                        return False
 
                     for ticker, ticker_bars in bars.items():
                         if not isinstance(ticker_bars, list):
@@ -197,7 +239,9 @@ def run(*, source: Path, year: int, output: Path) -> dict[str, object]:
                             timestamp = str(bar["t"])
                             day = timestamp[:10]
                             if not day.startswith(str(year)):
-                                raise ValueError(f"out-of-bounds Alpaca row: {normalized} {day}")
+                                raise ValueError(
+                                    f"out-of-bounds Alpaca row: {normalized} {day}"
+                                )
                             volume = int(bar.get("v", 0) or 0)
                             trade_count = int(bar.get("n", 0) or 0)
                             terminal = volume == 0 and trade_count == 0
@@ -232,12 +276,16 @@ def run(*, source: Path, year: int, output: Path) -> dict[str, object]:
                     page_token_raw = payload.get("next_page_token")
                     page_token = str(page_token_raw) if page_token_raw else None
                     if not page_token:
-                        break
-                if failures:
+                        return True
+
+            for batch_index, batch in enumerate(_batches(symbols)):
+                if not fetch_batch(batch, batch_index):
                     break
 
+    quarantined_symbols = {str(item["symbol"]) for item in symbol_quarantines}
+    symbols_without_bars = sorted(set(symbols) - returned_symbols - quarantined_symbols)
     summary: dict[str, object] = {
-        "schemaVersion": "1.0.0",
+        "schemaVersion": "1.1.0",
         "dataset": "Alpaca SIP adjusted historical market backfill",
         "year": year,
         "feed": "sip",
@@ -245,6 +293,9 @@ def run(*, source: Path, year: int, output: Path) -> dict[str, object]:
         "symbolMapping": "disabled-with-asof-dash",
         "requestedSymbols": diagnostics["requestedSymbols"],
         "returnedSymbols": len(returned_symbols),
+        "symbolsWithoutBars": len(symbols_without_bars),
+        "symbolsWithoutBarsSample": symbols_without_bars[:100],
+        "symbolQuarantines": len(symbol_quarantines),
         "rows": total_rows,
         "zeroVolumeTerminalCandidateRows": zero_volume_rows,
         "firstDate": first_date,
@@ -265,6 +316,10 @@ def run(*, source: Path, year: int, output: Path) -> dict[str, object]:
     )
     (output / "request-failures.json").write_text(
         json.dumps(failures, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    (output / "symbol-quarantines.json").write_text(
+        json.dumps(symbol_quarantines, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
     if failures:
