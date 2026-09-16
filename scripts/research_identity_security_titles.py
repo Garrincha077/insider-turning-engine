@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import Any
 
 import exchange_calendars as xcals
-
 from research_market_event_audit import (
     END_YEAR,
     SEALED_YEAR,
