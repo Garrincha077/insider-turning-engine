@@ -1,0 +1,103 @@
+name: Inventory SEC tickers for Alpaca 2016-2022
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/research-market-alpaca-inventory.yml"
+
+permissions:
+  contents: read
+
+env:
+  RELEASE_TAG: research-sec-amendments-v1
+
+jobs:
+  inventory:
+    name: Build PIT ticker inventory
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download reconciled SEC history
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/reconciliation
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'sec-amendment-reconciliation-2013-2022.tar.gz' \
+            --dir work
+          tar -xzf work/sec-amendment-reconciliation-2013-2022.tar.gz \
+            -C work/reconciliation effective-end-2022.jsonl
+      - name: Inventory 2016-2022 historical tickers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from collections import defaultdict
+          from pathlib import Path
+
+          source = Path("work/reconciliation/effective-end-2022.jsonl")
+          tickers = set()
+          issuer_tickers = set()
+          rows_by_year = defaultdict(int)
+          tickers_by_year = defaultdict(set)
+          missing_ticker_rows = 0
+          total = 0
+
+          with source.open(encoding="utf-8") as stream:
+              for line in stream:
+                  if not line.strip():
+                      continue
+                  row = json.loads(line)
+                  knowledge = row["timestamps"]["knowledgeAt"]
+                  year = int(knowledge[:4])
+                  if year >= 2023:
+                      raise SystemExit("sealed OOS boundary violated")
+                  if not 2016 <= year <= 2022:
+                      continue
+                  total += 1
+                  rows_by_year[year] += 1
+                  issuer = row.get("issuer", {})
+                  ticker = issuer.get("ticker")
+                  cik = issuer.get("cik")
+                  if not ticker:
+                      missing_ticker_rows += 1
+                      continue
+                  ticker = str(ticker).upper()
+                  tickers.add(ticker)
+                  tickers_by_year[year].add(ticker)
+                  issuer_tickers.add((str(cik), ticker))
+
+          summary = {
+              "schemaVersion": "1.0.0",
+              "period": "2016-2022",
+              "effectiveRows": total,
+              "uniqueHistoricalTickers": len(tickers),
+              "uniqueIssuerTickerPairs": len(issuer_tickers),
+              "missingTickerRows": missing_ticker_rows,
+              "rowsByYear": {str(y): rows_by_year[y] for y in range(2016, 2023)},
+              "uniqueTickersByYear": {
+                  str(y): len(tickers_by_year[y]) for y in range(2016, 2023)
+              },
+              "oosOpened": False,
+          }
+          Path("work/alpaca-inventory.json").write_text(
+              json.dumps(summary, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          Path("work/alpaca-tickers.txt").write_text(
+              "\n".join(sorted(tickers)) + "\n",
+              encoding="utf-8",
+          )
+          print(json.dumps(summary, indent=2, sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: alpaca-sec-ticker-inventory-${{ github.run_id }}
+          path: |
+            work/alpaca-inventory.json
+            work/alpaca-tickers.txt
+          retention-days: 90
