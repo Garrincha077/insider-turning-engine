@@ -224,8 +224,10 @@ def run(*, source: Path, year: int, output: Path) -> dict[str, object]:
                             total_rows += 1
                             if terminal:
                                 zero_volume_rows += 1
-                            first_date = day if first_date is None or day < first_date else first_date
-                            last_date = day if last_date is None or day > last_date else last_date
+                            if first_date is None or day < first_date:
+                                first_date = day
+                            if last_date is None or day > last_date:
+                                last_date = day
 
                     page_token_raw = payload.get("next_page_token")
                     page_token = str(page_token_raw) if page_token_raw else None
