@@ -443,7 +443,9 @@ def audit(*, sec_path: Path, market_root: Path, output: Path) -> dict[str, Any]:
         "period": "2016-2022",
         "baselineUniverse": "non-derivative open-market purchase P/A",
         "eventUnit": "issuer CIK + first eligible XNYS evaluation session",
-        "executionClock": "knowledgeAt -> first eligible daily evaluation close -> next session open",
+        "executionClock": (
+            "knowledgeAt -> first eligible daily evaluation close -> next session open"
+        ),
         "regularSessionRule": "terminal_candidate=false AND volume>0 AND trade_count>0",
         "horizonsSessions": list(HORIZONS),
         "sec": sec_diag,
