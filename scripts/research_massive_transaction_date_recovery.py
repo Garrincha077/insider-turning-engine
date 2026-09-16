@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+
 from research_massive_identity_recovery import (
     RateLimiter,
     _candidate_rows,
@@ -248,13 +249,21 @@ def run(
 
     qualified = int(identity_summary["qualifiedIssuerSessionEvents"])
     sec_remaining = int(identity_summary["remainingAfterStrictPlus365PlusEvaluationClose"])
-    provisional_remaining = sec_remaining - recovered_events
+    evaluation_recovered_events = sum(
+        1
+        for event in identity_events
+        if _is_still_unresolved(event)
+        and isinstance(evaluation_cache.get(_event_key(event)), dict)
+        and evaluation_cache[_event_key(event)].get("recoveredTicker")
+    )
+    provisional_remaining = sec_remaining - evaluation_recovered_events - recovered_events
     summary: dict[str, Any] = {
         "schemaVersion": "1.0.0",
         "dataset": "Massive PIT transaction-date historical identity fallback diagnostic",
         "period": "2016-2022 target events; 2013-2022 transaction-date evidence",
         "eligibleNoEvaluationTickerEvents": len(events),
         "eventsWithCompleteTransactionDateEvidence": completed_events,
+        "evaluationSessionRecoveredEventsInInputCache": evaluation_recovered_events,
         "historicalIdentityRecoveredEvents": recovered_events,
         "historicalIdentityRecoveryRateAmongCompleted": (
             recovered_events / completed_events if completed_events else 0.0
@@ -264,8 +273,8 @@ def run(
         "httpRequestsThisRun": http_requests,
         "cachedUniqueCikTransactionDates": len(date_cache),
         "requestsPerMinuteConfigured": requests_per_minute,
-        "provisionalIdentityProblemEventsAfterHistoricalEvidence": provisional_remaining,
-        "provisionalIdentityMissingRateAfterHistoricalEvidence": (
+        "provisionalIdentityProblemEventsAfterEvaluationAndHistoricalEvidence": provisional_remaining,
+        "provisionalIdentityMissingRateAfterEvaluationAndHistoricalEvidence": (
             provisional_remaining / qualified if qualified else 0.0
         ),
         "topHistoricalRecoveredTickers": [
@@ -275,7 +284,7 @@ def run(
         "identityEvidenceOnly": True,
         "countsTowardMarketEntryCoverage": False,
         "evaluationSessionTradabilityChanged": False,
-        "complete": completed_events == len(events),
+        "completeForCurrentlyCachedNoEvaluationTickerEvents": completed_events == len(events),
         "oosOpened": False,
         "productionScoringChanged": False,
         "canonicalSecChanged": False,
