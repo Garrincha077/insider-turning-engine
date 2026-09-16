@@ -1,0 +1,230 @@
+name: Finalize SEC PIT amendment reconciliation (sharded)
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "Completed amendment acquisition run containing predecessor catalogs"
+        required: true
+        default: "35081263705"
+        type: string
+  push:
+    paths:
+      - ".github/workflows/research-sec-amendment-reconcile-sharded.yml"
+      - "scripts/research_sec_reconcile_amendments_shard.py"
+      - "scripts/research_sec_merge_amendment_shards.py"
+      - "scripts/research_sec_reconcile_amendments.py"
+      - "scripts/research_sec_reconcile_amendments_v2.py"
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: research-sec-amendment-reconcile-sharded-v1
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: research-sec-amendments-v1
+  SOURCE_RUN_ID: ${{ inputs.source_run_id || '35081263705' }}
+  SHARD_COUNT: "8"
+
+jobs:
+  preflight:
+    name: Verify persistent amendment acquisition evidence
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all 40 amendment quarter archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets > release-assets.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          release = json.loads(Path("release-assets.json").read_text())
+          assets = {item["name"] for item in release.get("assets", [])}
+          expected = {
+              f"sec-amendments-{year}q{quarter}.tar.gz"
+              for year in range(2013, 2023)
+              for quarter in range(1, 5)
+          }
+          missing = sorted(expected - assets)
+          if missing:
+              raise SystemExit(f"missing persistent amendment evidence: {missing}")
+          print(f"Verified {len(expected)} persistent amendment quarter archives.")
+          PY
+      - name: Require all ten predecessor catalog artifacts from acquisition run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --paginate \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/artifacts?per_page=100" \
+            --jq '.artifacts[].name' > artifact-names.txt
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          run_id = os.environ["SOURCE_RUN_ID"]
+          names = set(Path("artifact-names.txt").read_text().splitlines())
+          expected = {f"sec-amendment-source-{year}-{run_id}" for year in range(2013, 2023)}
+          missing = sorted(expected - names)
+          if missing:
+              raise SystemExit(f"missing predecessor catalog artifacts: {missing}")
+          print(f"Verified {len(expected)} predecessor catalog artifacts from run {run_id}.")
+          PY
+
+  reconcile_shard:
+    name: Reconcile issuer shard ${{ matrix.shard }} of 8
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
+    env:
+      SHARD_INDEX: ${{ matrix.shard }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Download predecessor catalogs from completed acquisition run
+        uses: actions/download-artifact@v4
+        with:
+          pattern: sec-amendment-source-*-${{ env.SOURCE_RUN_ID }}
+          path: work/catalogs
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.SOURCE_RUN_ID }}
+      - name: Download persistent original and amendment archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/original-assets work/amendment-assets
+          gh release download research-sec-warmup-v1 --repo "$GITHUB_REPOSITORY" \
+            --pattern 'sec-pit-warmup-*.tar.gz' --dir work/original-assets
+          gh release download research-sec-pit-v1 --repo "$GITHUB_REPOSITORY" \
+            --pattern 'sec-pit-20??q?.tar.gz' --dir work/original-assets
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'sec-amendments-*.tar.gz' --dir work/amendment-assets
+      - name: Extract historical PIT archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/original work/amendments
+          for file in work/original-assets/*.tar.gz; do
+            name=$(basename "$file" .tar.gz)
+            mkdir -p "work/original/$name"
+            tar -xzf "$file" -C "work/original/$name"
+          done
+          for file in work/amendment-assets/sec-amendments-*.tar.gz; do
+            name=$(basename "$file" .tar.gz)
+            mkdir -p "work/amendments/$name"
+            tar -xzf "$file" -C "work/amendments/$name"
+          done
+      - name: Reconcile one complete issuer-safe shard
+        shell: bash
+        run: >-
+          uv run python scripts/research_sec_reconcile_amendments_shard.py
+          --original-root work/original
+          --amendment-root work/amendments
+          --catalog-root work/catalogs
+          --output work/reconciliation-shard
+          --shard-index "$SHARD_INDEX"
+          --shard-count "$SHARD_COUNT"
+      - name: Assert shard research boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run python - <<'PY'
+          import json, os
+          from pathlib import Path
+          s = json.loads(Path("work/reconciliation-shard/summary.json").read_text())
+          assert s["issuerShard"]["index"] == int(os.environ["SHARD_INDEX"])
+          assert s["issuerShard"]["count"] == int(os.environ["SHARD_COUNT"])
+          assert s["shardReconciliationComplete"] is True
+          assert s["amendmentReconciliationComplete"] is False
+          assert s["globalMergeRequired"] is True
+          assert s["oosOpened"] is False
+          assert s["canonicalReady"] is False
+          assert s["marketDataJoined"] is False
+          assert s["signalReady"] is False
+          assert s["lifecycleHistoricalClockNormalization"]["productionParserChanged"] is False
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sec-amendment-reconcile-shard-${{ matrix.shard }}-${{ github.run_id }}
+          path: work/reconciliation-shard
+          retention-days: 90
+
+  merge:
+    name: Deterministic global merge and audit
+    needs: reconcile_shard
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Download all completed shard evidence
+        uses: actions/download-artifact@v4
+        with:
+          pattern: sec-amendment-reconcile-shard-*-${{ github.run_id }}
+          path: work/shards
+      - name: Merge shard evidence deterministically
+        shell: bash
+        run: >-
+          uv run python scripts/research_sec_merge_amendment_shards.py
+          --shard-root work/shards
+          --output work/reconciliation
+          --shard-count "$SHARD_COUNT"
+      - name: Assert global reconciliation boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run python - <<'PY'
+          import json
+          from pathlib import Path
+          s = json.loads(Path("work/reconciliation/summary.json").read_text())
+          assert s["amendmentReconciliationComplete"] is True
+          assert s["issuerSharding"]["count"] == 8
+          assert len(s["shardEvidence"]) == 8
+          assert s["oosOpened"] is False
+          assert s["canonicalReady"] is False
+          assert s["marketDataJoined"] is False
+          assert s["signalReady"] is False
+          assert s["lifecycleHistoricalClockNormalization"]["productionParserChanged"] is False
+          PY
+      - name: Package and persist reconciliation evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C work/reconciliation -czf work/sec-amendment-reconciliation-2013-2022.tar.gz \
+            summary.json amendment-linkage.jsonl quarantines.jsonl reconciled-all-revisions.jsonl effective-end-2022.jsonl
+          sha256sum work/sec-amendment-reconciliation-2013-2022.tar.gz
+          gh release upload "$RELEASE_TAG" work/sec-amendment-reconciliation-2013-2022.tar.gz \
+            --repo "$GITHUB_REPOSITORY" --clobber
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sec-amendment-reconciliation-2013-2022-${{ github.run_id }}
+          path: work/reconciliation
+          retention-days: 90
