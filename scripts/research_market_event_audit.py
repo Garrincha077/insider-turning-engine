@@ -24,6 +24,7 @@ HORIZONS = (21, 63, 126, 252)
 START_YEAR = 2016
 END_YEAR = 2022
 SEALED_YEAR = 2023
+IDENTITY_PLACEHOLDERS = frozenset({"NA", "NONE"})
 
 
 def _bool(value: object) -> bool:
@@ -108,7 +109,9 @@ def _load_events(sec_path: Path) -> tuple[dict[str, list[dict[str, Any]]], dict[
     total_events = len(grouped)
     events_by_year: dict[int, int] = defaultdict(int)
     missing_ticker_events = 0
-    multi_ticker_events = 0
+    placeholder_only_events = 0
+    placeholder_with_real_events = 0
+    multi_real_ticker_events = 0
     by_ticker: dict[str, list[dict[str, Any]]] = defaultdict(list)
     ticker_session_ciks: dict[tuple[str, str], set[str]] = defaultdict(set)
 
@@ -119,10 +122,19 @@ def _load_events(sec_path: Path) -> tuple[dict[str, list[dict[str, Any]]], dict[
         if not tickers:
             missing_ticker_events += 1
             continue
-        if len(tickers) != 1:
-            multi_ticker_events += 1
+
+        real_tickers = [ticker for ticker in tickers if ticker not in IDENTITY_PLACEHOLDERS]
+        placeholder_tickers = [ticker for ticker in tickers if ticker in IDENTITY_PLACEHOLDERS]
+        if not real_tickers:
+            placeholder_only_events += 1
             continue
-        ticker = tickers[0]
+        if placeholder_tickers:
+            placeholder_with_real_events += 1
+        if len(real_tickers) != 1:
+            multi_real_ticker_events += 1
+            continue
+
+        ticker = real_tickers[0]
         event["ticker"] = ticker
         event["identityAmbiguous"] = False
         by_ticker[ticker].append(event)
@@ -150,7 +162,10 @@ def _load_events(sec_path: Path) -> tuple[dict[str, list[dict[str, Any]]], dict[
         "qualifiedIssuerSessionEvents": total_events,
         "qualifiedIssuerSessionEventsByYear": dict(sorted(events_by_year.items())),
         "issuerSessionEventsMissingTicker": missing_ticker_events,
-        "issuerSessionEventsWithMultipleTickers": multi_ticker_events,
+        "issuerSessionEventsPlaceholderOnly": placeholder_only_events,
+        "issuerSessionEventsPlaceholderWithRealTicker": placeholder_with_real_events,
+        "issuerSessionEventsWithMultipleRealTickers": multi_real_ticker_events,
+        "identityPlaceholders": sorted(IDENTITY_PLACEHOLDERS),
         "tickerSessionIdentityCollisions": len(collisions),
         "issuerSessionEventsInTickerCollisions": collision_events,
         "collisions": collisions,
@@ -340,7 +355,7 @@ def audit(*, sec_path: Path, market_root: Path, output: Path) -> dict[str, Any]:
                     else "validation2021To2022"
                 )
                 stats = split_stats[split]
-                stats["qualifiedWithSingleTicker"] += 1
+                stats["qualifiedWithSingleRealTicker"] += 1
                 if event["identityAmbiguous"]:
                     stats["tickerSessionIdentityAmbiguous"] += 1
                     identity_collision_events += 1
@@ -395,13 +410,16 @@ def audit(*, sec_path: Path, market_root: Path, output: Path) -> dict[str, Any]:
 
     total_events = int(sec_diag["qualifiedIssuerSessionEvents"])
     missing_ticker = int(sec_diag["issuerSessionEventsMissingTicker"])
-    multi_ticker = int(sec_diag["issuerSessionEventsWithMultipleTickers"])
-    with_ticker = total_events - missing_ticker
-    ambiguous_total = multi_ticker + identity_collision_events
-    identity_eligible = with_ticker - ambiguous_total
+    placeholder_only = int(sec_diag["issuerSessionEventsPlaceholderOnly"])
+    multi_real_ticker = int(sec_diag["issuerSessionEventsWithMultipleRealTickers"])
+    identity_missing = missing_ticker + placeholder_only
+    with_usable_ticker = total_events - identity_missing
+    ambiguous_total = multi_real_ticker + identity_collision_events
+    identity_eligible = with_usable_ticker - ambiguous_total
     entry_coverage_eligible = entry_matched_total / identity_eligible if identity_eligible else 0.0
-    missing_ticker_rate = missing_ticker / total_events if total_events else 0.0
-    identity_ambiguous_rate = ambiguous_total / with_ticker if with_ticker else 0.0
+    raw_missing_ticker_rate = missing_ticker / total_events if total_events else 0.0
+    identity_missing_rate = identity_missing / total_events if total_events else 0.0
+    identity_ambiguous_rate = ambiguous_total / with_usable_ticker if with_usable_ticker else 0.0
 
     strict_terminal_tails = sum(
         1 for row in terminal_tails if row["strictTerminalValueCandidate"]
@@ -409,7 +427,7 @@ def audit(*, sec_path: Path, market_root: Path, output: Path) -> dict[str, Any]:
     gate_checks = {
         "spyComplete": not missing_spy,
         "eligibleEntryCoverageAtLeast95Pct": entry_coverage_eligible >= 0.95,
-        "qualifiedMissingTickerAtMost1Pct": missing_ticker_rate <= 0.01,
+        "qualifiedIdentityMissingOrPlaceholderAtMost1Pct": identity_missing_rate <= 0.01,
         "identityAmbiguityAtMost0_5Pct": identity_ambiguous_rate <= 0.005,
         "oosClosed": True,
         "terminalRowsExcludedFromRegularSessions": True,
@@ -438,7 +456,7 @@ def audit(*, sec_path: Path, market_root: Path, output: Path) -> dict[str, Any]:
     )
 
     summary: dict[str, Any] = {
-        "schemaVersion": "1.1.0",
+        "schemaVersion": "1.2.0",
         "dataset": "Issuer-session market coverage and terminal audit",
         "period": "2016-2022",
         "baselineUniverse": "non-derivative open-market purchase P/A",
@@ -446,19 +464,25 @@ def audit(*, sec_path: Path, market_root: Path, output: Path) -> dict[str, Any]:
         "executionClock": (
             "knowledgeAt -> first eligible daily evaluation close -> next session open"
         ),
+        "identityPolicy": (
+            "NA/NONE are research-only placeholder identities; raw SEC evidence is unchanged"
+        ),
         "regularSessionRule": "terminal_candidate=false AND volume>0 AND trade_count>0",
         "horizonsSessions": list(HORIZONS),
         "sec": sec_diag,
         "market": market_diag,
         "entry": {
             "qualifiedIssuerSessionEvents": total_events,
-            "issuerSessionEventsWithTicker": with_ticker,
+            "issuerSessionEventsWithUsableTicker": with_usable_ticker,
+            "identityMissingOrPlaceholderEvents": identity_missing,
+            "identityPlaceholderOnlyEvents": placeholder_only,
             "identityAmbiguousEvents": ambiguous_total,
             "identityEligibleEvents": identity_eligible,
             "entryMatchedEvents": entry_matched_total,
             "eligibleEntryCoverage": entry_coverage_eligible,
-            "qualifiedMissingTickerRate": missing_ticker_rate,
-            "identityAmbiguousRateAmongTickered": identity_ambiguous_rate,
+            "rawMissingTickerRate": raw_missing_ticker_rate,
+            "identityMissingOrPlaceholderRate": identity_missing_rate,
+            "identityAmbiguousRateAmongUsableTickered": identity_ambiguous_rate,
         },
         "splits": {split: dict(values) for split, values in split_stats.items()},
         "horizonAvailability": {
