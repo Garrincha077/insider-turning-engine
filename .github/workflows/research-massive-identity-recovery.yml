@@ -14,6 +14,7 @@ on:
   push:
     paths:
       - ".github/workflows/research-massive-identity-recovery.yml"
+      - "scripts/research_massive_identity_recovery.py"
 
 permissions:
   contents: write
