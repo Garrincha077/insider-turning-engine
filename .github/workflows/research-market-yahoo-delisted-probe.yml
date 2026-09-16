@@ -1,0 +1,62 @@
+name: Research Yahoo delisted probe 2013-2022
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/research-market-yahoo-delisted-probe.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: Bounded Yahoo delisted coverage probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Fetch bounded delisted sample
+        run: >-
+          uv run python scripts/research_market_yahoo_pilot.py
+          --symbols TWTR,XLNX,CERN,WORK,FIT,CELG,MON,LNKD,RHT
+          --start 2013-01-01
+          --end 2022-12-30
+          --output work/yahoo-delisted-probe
+      - name: Summarize probe without promoting gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run python - <<'PY'
+          import csv
+          import json
+          from pathlib import Path
+
+          root = Path("work/yahoo-delisted-probe")
+          summary = json.loads((root / "summary.json").read_text())
+          rows = list(csv.DictReader((root / "symbol-summary.csv").open()))
+          covered = [row["symbol"] for row in rows if int(row["rows"]) > 0]
+          missing = [row["symbol"] for row in rows if int(row["rows"]) == 0]
+          print(json.dumps({
+              "requested": len(rows),
+              "historicalBarsPresent": covered,
+              "historicalBarsMissing": missing,
+              "presenceRate": len(covered) / len(rows) if rows else 0.0,
+              "oosOpened": summary["oosOpened"],
+              "marketDataJoined": summary["marketDataJoined"],
+          }, indent=2))
+          assert summary["oosOpened"] is False
+          assert summary["marketDataJoined"] is False
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yahoo-delisted-probe-2013-2022-${{ github.run_id }}
+          path: work/yahoo-delisted-probe
+          retention-days: 90
