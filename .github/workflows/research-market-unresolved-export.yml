@@ -1,0 +1,102 @@
+name: Export unresolved market identities 2016-2022
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "scripts/research_market_unresolved_export.py"
+      - "scripts/research_market_event_audit.py"
+      - ".github/workflows/research-market-unresolved-export.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-market-unresolved-export-v1
+  cancel-in-progress: false
+
+env:
+  SEC_RELEASE_TAG: research-sec-amendments-v1
+  MARKET_RELEASE_TAG: research-market-alpaca-v1
+  EXPORT_RELEASE_TAG: research-market-unresolved-v1
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Ruff research scripts
+        run: >-
+          uv run ruff check
+          scripts/research_market_event_audit.py
+          scripts/research_market_unresolved_export.py
+      - name: Download bounded SEC and market evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/sec work/market work/downloads
+          gh release download "$SEC_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'sec-amendment-reconciliation-2013-2022.tar.gz' \
+            --dir work/downloads
+          tar -xzf work/downloads/sec-amendment-reconciliation-2013-2022.tar.gz \
+            -C work/sec effective-end-2022.jsonl
+          gh release download "$MARKET_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'alpaca-market-20*.tar.gz' \
+            --dir work/downloads
+          for year in 2016 2017 2018 2019 2020 2021 2022; do
+            mkdir -p "work/market/$year"
+            tar -xzf "work/downloads/alpaca-market-${year}.tar.gz" -C "work/market/$year"
+          done
+          test ! -e work/market/2023
+      - name: Export unresolved issuer-session identities
+        run: >-
+          uv run python scripts/research_market_unresolved_export.py
+          --sec work/sec/effective-end-2022.jsonl
+          --market-root work/market
+          --output work/unresolved
+      - name: Assert research boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          s = json.loads(Path("work/unresolved/summary.json").read_text())
+          assert s["status"] == "MARKET_UNRESOLVED_IDENTITY_EXPORT_COMPLETE"
+          assert s["period"] == "2016-2022"
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["unresolvedIssuerSessionEvents"] > 0
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: market-unresolved-identities-${{ github.run_id }}
+          path: work/unresolved
+          retention-days: 90
+      - name: Persist bounded unresolved evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$EXPORT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$EXPORT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+              --title "Research unresolved market identities v1" \
+              --notes "Bounded 2016-2022 unresolved issuer-session identities for targeted market-data supplementation. 2023+ remains sealed."
+          fi
+          gh release upload "$EXPORT_RELEASE_TAG" \
+            work/unresolved/summary.json \
+            work/unresolved/unresolved-market-events.json \
+            work/unresolved/top-unresolved-tickers.json \
+            --repo "$GITHUB_REPOSITORY" --clobber
