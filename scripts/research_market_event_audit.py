@@ -162,7 +162,9 @@ def _build_market_db(files: list[Path], db_path: Path) -> dict[str, Any]:
                     day = str(row["date"])[:10]
                     year = int(day[:4])
                     if not START_YEAR <= year <= END_YEAR:
-                        raise ValueError(f"sealed OOS boundary violated by market row {ticker} {day}")
+                        raise ValueError(
+                            f"sealed OOS boundary violated by market row {ticker} {day}"
+                        )
                     key = (ticker, day)
                     if key in seen_keys:
                         duplicate_rows += 1
