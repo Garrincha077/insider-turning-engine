@@ -1,0 +1,80 @@
+name: Probe Alpaca direct historical API
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/research-market-alpaca-smoke.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY_ID }}
+      ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET_KEY }}
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Probe TWTR 2016 requests
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ALPACA_API_KEY_ID"
+          test -n "$ALPACA_API_SECRET_KEY"
+          python - <<'PY'
+          import json
+          import os
+          import urllib.parse
+          import urllib.request
+          import urllib.error
+
+          url = "https://data.alpaca.markets/v2/stocks/bars"
+          headers = {
+              "APCA-API-KEY-ID": os.environ["ALPACA_API_KEY_ID"],
+              "APCA-API-SECRET-KEY": os.environ["ALPACA_API_SECRET_KEY"],
+              "Accept": "application/json",
+          }
+          base = {
+              "symbols": "TWTR",
+              "timeframe": "1Day",
+              "start": "2016-01-01",
+              "end": "2016-12-31T23:59:59Z",
+              "limit": "1000",
+              "adjustment": "all",
+              "feed": "sip",
+              "sort": "asc",
+          }
+          variants = [
+              ("with_asof_dash", {**base, "asof": "-"}),
+              ("without_asof", base),
+          ]
+          success = False
+          for name, params in variants:
+              request = urllib.request.Request(
+                  url + "?" + urllib.parse.urlencode(params), headers=headers
+              )
+              try:
+                  with urllib.request.urlopen(request, timeout=60) as response:
+                      payload = json.loads(response.read().decode("utf-8"))
+                      bars = payload.get("bars") or {}
+                      rows = bars.get("TWTR") or []
+                      print(json.dumps({
+                          "variant": name,
+                          "status": response.status,
+                          "rows": len(rows),
+                          "first": rows[0]["t"] if rows else None,
+                          "last": rows[-1]["t"] if rows else None,
+                          "nextPageToken": bool(payload.get("next_page_token")),
+                      }))
+                      success = success or bool(rows)
+              except urllib.error.HTTPError as exc:
+                  body = exc.read().decode("utf-8", errors="replace")[:1000]
+                  print(json.dumps({"variant": name, "status": exc.code, "body": body}))
+          if not success:
+              raise SystemExit("No smoke-test variant returned TWTR bars")
+          PY
