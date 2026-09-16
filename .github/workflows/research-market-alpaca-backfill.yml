@@ -39,7 +39,7 @@ jobs:
   backfill:
     name: Alpaca SIP adjusted ${{ matrix.year }}
     needs: lint
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'Run Alpaca market backfill v2'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
@@ -117,7 +117,7 @@ jobs:
   persist:
     name: Persist bounded Alpaca market evidence
     needs: backfill
-    if: github.event_name == 'workflow_dispatch' && needs.backfill.result == 'success'
+    if: (github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'Run Alpaca market backfill v2') && needs.backfill.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -145,7 +145,7 @@ jobs:
                   raise SystemExit(f"invalid annual market evidence for {year}")
               summaries.append(summary)
           index = {
-              "schemaVersion": "1.0.0",
+              "schemaVersion": "1.1.0",
               "dataset": "Alpaca SIP adjusted market backfill index",
               "period": "2016-2022",
               "years": summaries,
@@ -163,7 +163,7 @@ jobs:
             dir=$(find work/years -maxdepth 1 -type d -name "alpaca-market-${year}-*" | head -n 1)
             test -n "$dir"
             tar -C "$dir" -czf "work/release/alpaca-market-${year}.tar.gz" \
-              "canonical-market-${year}.csv" summary.json request-failures.json
+              "canonical-market-${year}.csv" summary.json request-failures.json symbol-quarantines.json
           done
           sha256sum work/release/*
       - name: Persist research market evidence
