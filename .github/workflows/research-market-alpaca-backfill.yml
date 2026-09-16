@@ -39,7 +39,7 @@ jobs:
   backfill:
     name: Alpaca SIP adjusted ${{ matrix.year }}
     needs: lint
-    if: github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'Run Alpaca market backfill'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
@@ -117,7 +117,7 @@ jobs:
   persist:
     name: Persist bounded Alpaca market evidence
     needs: backfill
-    if: (github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'Run Alpaca market backfill') && needs.backfill.result == 'success'
+    if: github.event_name == 'workflow_dispatch' && needs.backfill.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
