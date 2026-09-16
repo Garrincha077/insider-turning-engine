@@ -1,0 +1,163 @@
+name: Backfill Alpaca SIP market history 2016-2022
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: research-market-alpaca-backfill-v1
+  cancel-in-progress: false
+
+env:
+  SEC_RELEASE_TAG: research-sec-amendments-v1
+  MARKET_RELEASE_TAG: research-market-alpaca-v1
+
+jobs:
+  backfill:
+    name: Alpaca SIP adjusted ${{ matrix.year }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        year: [2016, 2017, 2018, 2019, 2020, 2021, 2022]
+    env:
+      ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY_ID }}
+      ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Require Alpaca credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ALPACA_API_KEY_ID"
+          test -n "$ALPACA_API_SECRET_KEY"
+      - name: Download reconciled SEC PIT history
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/reconciliation
+          gh release download "$SEC_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'sec-amendment-reconciliation-2013-2022.tar.gz' \
+            --dir work
+          tar -xzf work/sec-amendment-reconciliation-2013-2022.tar.gz \
+            -C work/reconciliation effective-end-2022.jsonl
+      - name: Fetch bounded Alpaca SIP adjusted history
+        shell: bash
+        run: >-
+          uv run python scripts/research_market_alpaca_backfill.py
+          --source work/reconciliation/effective-end-2022.jsonl
+          --year ${{ matrix.year }}
+          --output work/alpaca-${{ matrix.year }}
+      - name: Assert research boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          year = os.environ["MATRIX_YEAR"]
+          s = json.loads(Path(f"work/alpaca-{year}/summary.json").read_text())
+          assert s["status"] == "ALPACA_BACKFILL_PASS"
+          assert s["year"] == int(year)
+          assert s["feed"] == "sip"
+          assert s["adjustment"] == "all"
+          assert s["symbolMapping"] == "disabled-with-asof-dash"
+          assert not s["requestFailures"]
+          assert s["marketDataJoined"] is False
+          assert s["canonicalReady"] is False
+          assert s["signalReady"] is False
+          assert s["oosOpened"] is False
+          PY
+        env:
+          MATRIX_YEAR: ${{ matrix.year }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: alpaca-market-${{ matrix.year }}-${{ github.run_id }}
+          path: work/alpaca-${{ matrix.year }}
+          retention-days: 90
+
+  persist:
+    name: Persist bounded Alpaca market evidence
+    needs: backfill
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: alpaca-market-*-${{ github.run_id }}
+          path: work/years
+      - name: Build index and package annual evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/release
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path("work/years")
+          summaries = []
+          for year in range(2016, 2023):
+              matches = list(root.glob(f"alpaca-market-{year}-*/summary.json"))
+              if len(matches) != 1:
+                  raise SystemExit(f"expected one summary for {year}, got {len(matches)}")
+              summary = json.loads(matches[0].read_text())
+              if summary["status"] != "ALPACA_BACKFILL_PASS" or summary["oosOpened"]:
+                  raise SystemExit(f"invalid annual market evidence for {year}")
+              summaries.append(summary)
+          index = {
+              "schemaVersion": "1.0.0",
+              "dataset": "Alpaca SIP adjusted market backfill index",
+              "period": "2016-2022",
+              "years": summaries,
+              "marketDataJoined": False,
+              "canonicalReady": False,
+              "signalReady": False,
+              "oosOpened": False,
+              "nextGate": "event-level market coverage and delisting/terminal-outcome audit",
+          }
+          Path("work/release/alpaca-market-2016-2022-index.json").write_text(
+              json.dumps(index, indent=2, sort_keys=True) + "\n"
+          )
+          PY
+          for year in 2016 2017 2018 2019 2020 2021 2022; do
+            dir=$(find work/years -maxdepth 1 -type d -name "alpaca-market-${year}-*" | head -n 1)
+            test -n "$dir"
+            tar -C "$dir" -czf "work/release/alpaca-market-${year}.tar.gz" \
+              "canonical-market-${year}.csv" summary.json request-failures.json
+          done
+          sha256sum work/release/*
+      - name: Persist research market evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$MARKET_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$MARKET_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+              --title "Research market data - Alpaca SIP 2016-2022" \
+              --notes "Research-only adjusted SIP market history. 2023+ remains sealed."
+          fi
+          gh release upload "$MARKET_RELEASE_TAG" work/release/* \
+            --repo "$GITHUB_REPOSITORY" --clobber
+      - uses: actions/upload-artifact@v4
+        with:
+          name: alpaca-market-index-${{ github.run_id }}
+          path: work/release/alpaca-market-2016-2022-index.json
+          retention-days: 90
