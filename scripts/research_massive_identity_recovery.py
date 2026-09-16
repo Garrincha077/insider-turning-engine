@@ -316,7 +316,9 @@ def run(
         "unqueriedUnresolvedEvents": unresolved_after_sec - queried_events,
         "massivePitRecoveredEvents": recovered_events,
         "remainingIdentityProblemEvents": remaining,
-        "identityMissingRateAfterMassive": remaining / qualified_events if qualified_events else 0.0,
+        "identityMissingRateAfterMassive": (
+            remaining / qualified_events if qualified_events else 0.0
+        ),
         "onePctGateMaxMissingEventsApprox": max_missing,
         "wouldCombinedSecPlusMassiveMeetOnePctIdentityGate": complete and remaining <= max_missing,
         "statusCounts": dict(sorted(status_counts.items())),
