@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - "scripts/research_sec_identity_recovery.py"
+      - "scripts/research_identity_security_titles.py"
       - "scripts/research_market_event_audit.py"
       - ".github/workflows/research-sec-identity-recovery.yml"
 
@@ -33,6 +34,7 @@ jobs:
           uv run ruff check
           scripts/research_market_event_audit.py
           scripts/research_sec_identity_recovery.py
+          scripts/research_identity_security_titles.py
       - name: Download bounded SEC evidence
         env:
           GH_TOKEN: ${{ github.token }}
@@ -51,6 +53,12 @@ jobs:
           uv run python scripts/research_sec_identity_recovery.py
           --sec work/sec/effective-end-2022.jsonl
           --output work/identity
+      - name: Attach SEC security-title evidence
+        run: >-
+          uv run python scripts/research_identity_security_titles.py
+          --sec work/sec/effective-end-2022.jsonl
+          --events work/identity/identity-recovery-events.json
+          --summary work/identity/security-title-summary.json
       - name: Assert research boundary
         shell: bash
         run: |
@@ -60,16 +68,25 @@ jobs:
           from pathlib import Path
 
           s = json.loads(Path("work/identity/summary.json").read_text())
+          t = json.loads(Path("work/identity/security-title-summary.json").read_text())
+          events = json.loads(Path("work/identity/identity-recovery-events.json").read_text())
           assert s["status"] == "SEC_PIT_IDENTITY_RECOVERY_DIAGNOSTIC_COMPLETE"
           assert s["period"] == "2016-2022"
           assert s["oosOpened"] is False
           assert s["productionScoringChanged"] is False
           assert s["canonicalSecChanged"] is False
           assert s["identityProblemEvents"] > 0
+          assert t["status"] == "SEC_IDENTITY_SECURITY_TITLE_EVIDENCE_COMPLETE"
+          assert t["period"] == "2016-2022"
+          assert t["identityTargetEvents"] == s["identityProblemEvents"]
+          assert t["oosOpened"] is False
+          assert t["productionScoringChanged"] is False
+          assert t["canonicalSecChanged"] is False
+          assert all("securityTitles" in event for event in events)
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: sec-identity-recovery-${{ github.run_id }}
+          name: sec-identity-recovery-${{ github.run_id }}-${{ github.run_attempt }}
           path: work/identity
           retention-days: 90
       - name: Persist research diagnostic
@@ -85,5 +102,6 @@ jobs:
           fi
           gh release upload "$IDENTITY_RELEASE_TAG" \
             work/identity/summary.json \
+            work/identity/security-title-summary.json \
             work/identity/identity-recovery-events.json \
             --repo "$GITHUB_REPOSITORY" --clobber
