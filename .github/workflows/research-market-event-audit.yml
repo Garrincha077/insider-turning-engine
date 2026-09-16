@@ -1,0 +1,102 @@
+name: Audit event-level market coverage 2016-2022
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "scripts/research_market_event_audit.py"
+      - ".github/workflows/research-market-event-audit.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-market-event-audit-v1
+  cancel-in-progress: false
+
+env:
+  SEC_RELEASE_TAG: research-sec-amendments-v1
+  MARKET_RELEASE_TAG: research-market-alpaca-v1
+  AUDIT_RELEASE_TAG: research-market-audit-v1
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Ruff audit script
+        run: uv run ruff check scripts/research_market_event_audit.py
+      - name: Download bounded SEC and market evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/sec work/market work/downloads
+          gh release download "$SEC_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'sec-amendment-reconciliation-2013-2022.tar.gz' \
+            --dir work/downloads
+          tar -xzf work/downloads/sec-amendment-reconciliation-2013-2022.tar.gz \
+            -C work/sec effective-end-2022.jsonl
+          gh release download "$MARKET_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'alpaca-market-20*.tar.gz' \
+            --dir work/downloads
+          for year in 2016 2017 2018 2019 2020 2021 2022; do
+            mkdir -p "work/market/$year"
+            tar -xzf "work/downloads/alpaca-market-${year}.tar.gz" -C "work/market/$year"
+          done
+          test ! -e work/market/2023
+      - name: Run event-level coverage and terminal audit
+        run: >-
+          uv run python scripts/research_market_event_audit.py
+          --sec work/sec/effective-end-2022.jsonl
+          --market-root work/market
+          --output work/audit
+      - name: Assert research boundary and audit integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          s = json.loads(Path("work/audit/summary.json").read_text())
+          assert s["status"] == "MARKET_EVENT_AUDIT_COMPLETE"
+          assert s["period"] == "2016-2022"
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["canonicalReady"] is False
+          assert s["signalReady"] is False
+          assert s["spy"]["observedRegularSessions"] > 0
+          assert s["entry"]["qualifiedEvents"] > 0
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: market-event-audit-${{ github.run_id }}
+          path: work/audit
+          retention-days: 90
+      - name: Persist research audit evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$AUDIT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$AUDIT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+              --title "Research market event audit v1" \
+              --notes "Bounded 2016-2022 event-level market coverage and terminal audit. 2023+ remains sealed."
+          fi
+          gh release upload "$AUDIT_RELEASE_TAG" \
+            work/audit/summary.json \
+            work/audit/identity-collisions.json \
+            work/audit/terminal-tails.json \
+            work/audit/missing-entry-tickers.json \
+            --repo "$GITHUB_REPOSITORY" --clobber
