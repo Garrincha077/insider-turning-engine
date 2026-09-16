@@ -1,0 +1,400 @@
+name: Build SEC PIT warm-up 2013-2015
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/research-sec-warmup-2013-2015.yml"
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: research-sec-pit-warmup-v1
+  cancel-in-progress: false
+
+env:
+  SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT }}
+  RELEASE_TAG: research-sec-warmup-v1
+
+jobs:
+  prepare:
+    name: Prepare persistent warm-up release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create warm-up research release if absent
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists."
+          else
+            gh release create "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Research SEC PIT warm-up 2013-2015" \
+              --notes "Research-only ownership-history warm-up for feature history. Not a tuning window. OOS 2023+ excluded. No production scoring changes." \
+              --prerelease
+          fi
+
+  build_sources:
+    name: Build warm-up source ${{ matrix.year }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: true
+      max-parallel: 1
+      matrix:
+        year: [2013, 2014, 2015]
+    env:
+      YEAR: ${{ matrix.year }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Require SEC User-Agent
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SEC_USER_AGENT:-}" || {
+            echo "SEC_USER_AGENT repository variable is required"
+            exit 1
+          }
+      - name: Backfill and validate all four warm-up quarters
+        shell: bash
+        run: >-
+          uv run insider-turning backfill-sec-history
+          --start-year "$YEAR" --start-quarter 1
+          --end-year "$YEAR" --end-quarter 4
+          --cache-dir work/sec-history/cache
+          --staging-dir work/sec-history/staging
+          --execute
+      - name: Build bounded P/S accession universe
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run python - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          import polars as pl
+
+          year = int(os.environ["YEAR"])
+          root = Path("work/sec-history/staging")
+          year_dirs = list(root.rglob(f"year={year}"))
+          if len(year_dirs) != 1:
+              raise SystemExit(f"expected one year={year} directory, found {len(year_dirs)}")
+          year_root = year_dirs[0]
+          rows = []
+          quarter_summaries = []
+          accession_re = re.compile(r"^\d{10}-\d{2}-\d{6}$")
+
+          for quarter in range(1, 5):
+              qroot = year_root / f"quarter={quarter}"
+              trans_path = qroot / "NONDERIV_TRANS.parquet"
+              sub_path = qroot / "SUBMISSION.parquet"
+              owner_path = qroot / "REPORTINGOWNER.parquet"
+              for path in (trans_path, sub_path, owner_path):
+                  if not path.exists():
+                      raise SystemExit(f"missing verified table: {path}")
+
+              trans = pl.read_parquet(trans_path).select(
+                  "ACCESSION_NUMBER", "NONDERIV_TRANS_SK", "TRANS_DATE", "TRANS_CODE",
+                  "TRANS_SHARES", "TRANS_PRICEPERSHARE", "TRANS_ACQUIRED_DISP_CD",
+              )
+              sub = pl.read_parquet(sub_path).select(
+                  "ACCESSION_NUMBER", "FILING_DATE", "DOCUMENT_TYPE", "ISSUERCIK"
+              )
+              joined = trans.join(sub, on="ACCESSION_NUMBER", validate="m:1").with_columns(
+                  pl.col("TRANS_SHARES").cast(pl.Float64, strict=False).alias("shares"),
+                  pl.col("TRANS_PRICEPERSHARE").cast(pl.Float64, strict=False).alias("price"),
+              )
+              relevant = joined.filter(
+                  (((pl.col("TRANS_CODE") == "P") & (pl.col("TRANS_ACQUIRED_DISP_CD") == "A"))
+                   | ((pl.col("TRANS_CODE") == "S") & (pl.col("TRANS_ACQUIRED_DISP_CD") == "D")))
+                  & (pl.col("shares") > 0) & pl.col("shares").is_finite()
+                  & (pl.col("price") > 0) & pl.col("price").is_finite()
+              )
+              if relevant.filter(pl.col("ACCESSION_NUMBER").is_null()).height:
+                  raise SystemExit("null accession in candidate rows")
+              if relevant.filter(pl.col("ISSUERCIK").is_null()).height:
+                  raise SystemExit("null issuer CIK in candidate rows")
+
+              grouped = relevant.group_by(
+                  "ACCESSION_NUMBER", "ISSUERCIK", "FILING_DATE", "DOCUMENT_TYPE"
+              ).agg(
+                  pl.len().alias("transactionCount"),
+                  (pl.col("TRANS_CODE") == "P").sum().alias("buyCount"),
+                  (pl.col("TRANS_CODE") == "S").sum().alias("saleCount"),
+                  pl.col("TRANS_DATE").min().alias("firstTransactionDate"),
+                  pl.col("TRANS_DATE").max().alias("lastTransactionDate"),
+              )
+              quarter_summaries.append({
+                  "quarter": quarter,
+                  "relevantTransactionRows": relevant.height,
+                  "candidateAccessions": grouped.height,
+              })
+              for item in grouped.to_dicts():
+                  accession = str(item["ACCESSION_NUMBER"])
+                  cik = str(item["ISSUERCIK"]).strip()
+                  if not accession_re.fullmatch(accession):
+                      raise SystemExit(f"invalid accession {accession!r}")
+                  if not cik.isdigit() or len(cik) > 10:
+                      raise SystemExit(f"invalid issuer CIK {cik!r}")
+                  rows.append({
+                      "accession": accession,
+                      "issuerCik": cik.zfill(10),
+                      "filingDate": str(item["FILING_DATE"]),
+                      "documentType": str(item["DOCUMENT_TYPE"]),
+                      "transactionCount": int(item["transactionCount"]),
+                      "buyCount": int(item["buyCount"]),
+                      "saleCount": int(item["saleCount"]),
+                      "firstTransactionDate": str(item["firstTransactionDate"]),
+                      "lastTransactionDate": str(item["lastTransactionDate"]),
+                      "sourceYear": year,
+                      "sourceQuarter": quarter,
+                  })
+
+          by_accession = {}
+          for row in rows:
+              key = row["accession"]
+              prior = by_accession.get(key)
+              if prior is not None and prior != row:
+                  raise SystemExit(f"conflicting candidate accession across quarters: {key}")
+              by_accession[key] = row
+          rows = sorted(by_accession.values(), key=lambda x: (x["filingDate"], x["accession"]))
+          out = Path("work/sec-candidates") / str(year)
+          out.mkdir(parents=True, exist_ok=True)
+          with (out / "candidates.jsonl").open("w", encoding="utf-8") as stream:
+              for row in rows:
+                  stream.write(json.dumps(row, sort_keys=True) + "\n")
+          summary = {
+              "schemaVersion": "1.0.0",
+              "source": "verified-sec-quarterly-bulk",
+              "year": year,
+              "candidateAccessions": len(rows),
+              "candidateIssuerCiks": len({row["issuerCik"] for row in rows}),
+              "buyAccessions": sum(row["buyCount"] > 0 for row in rows),
+              "saleAccessions": sum(row["saleCount"] > 0 for row in rows),
+              "quarters": quarter_summaries,
+              "warmupOnly": True,
+              "oosOpened": False,
+              "canonicalReady": False,
+              "nextGate": "exact accepted_at hydration for original-buy warm-up history",
+          }
+          (out / "summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          print(json.dumps(summary, indent=2, sort_keys=True))
+          PY
+      - name: Stage source bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "work/source-bundle/$YEAR"
+          cp -R "work/sec-history/staging/year=$YEAR" "work/source-bundle/$YEAR/"
+          cp "work/sec-candidates/$YEAR/candidates.jsonl" "work/source-bundle/$YEAR/"
+          cp "work/sec-candidates/$YEAR/summary.json" "work/source-bundle/$YEAR/candidate-summary.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sec-warmup-source-${{ matrix.year }}-${{ github.run_id }}
+          path: work/source-bundle/${{ matrix.year }}
+          retention-days: 90
+          compression-level: 0
+
+  hydrate_warmup:
+    name: Hydrate warm-up ${{ matrix.year }} Q${{ matrix.quarter }}
+    needs: build_sources
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: true
+      max-parallel: 1
+      matrix:
+        include:
+          - {year: 2013, quarter: 1}
+          - {year: 2013, quarter: 2}
+          - {year: 2013, quarter: 3}
+          - {year: 2013, quarter: 4}
+          - {year: 2014, quarter: 1}
+          - {year: 2014, quarter: 2}
+          - {year: 2014, quarter: 3}
+          - {year: 2014, quarter: 4}
+          - {year: 2015, quarter: 1}
+          - {year: 2015, quarter: 2}
+          - {year: 2015, quarter: 3}
+          - {year: 2015, quarter: 4}
+    env:
+      YEAR: ${{ matrix.year }}
+      QUARTER: ${{ matrix.quarter }}
+      ASSET_NAME: sec-pit-warmup-${{ matrix.year }}q${{ matrix.quarter }}.tar.gz
+      CANDIDATE_RUN_ID: warmup-${{ github.run_id }}-${{ matrix.year }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check whether quarter already has a persistent PASS archive
+        id: persisted
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq "$ASSET_NAME"; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "$ASSET_NAME already exists; treating quarter as previously completed."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-python@v5
+        if: steps.persisted.outputs.skip != 'true'
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        if: steps.persisted.outputs.skip != 'true'
+        with:
+          enable-cache: true
+      - name: Install locked environment
+        if: steps.persisted.outputs.skip != 'true'
+        run: uv sync --all-groups --frozen
+      - name: Download verified warm-up source year
+        if: steps.persisted.outputs.skip != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: sec-warmup-source-${{ matrix.year }}-${{ github.run_id }}
+          path: work/warmup-source/${{ matrix.year }}
+      - name: Prepare source paths
+        if: steps.persisted.outputs.skip != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "work/sec-candidates/$YEAR" "work/sec-history/$YEAR"
+          cp "work/warmup-source/$YEAR/candidates.jsonl" "work/sec-candidates/$YEAR/candidates.jsonl"
+          cp -R "work/warmup-source/$YEAR/year=$YEAR" "work/sec-history/$YEAR/"
+      - name: Enrich quarter candidates with reporting-owner CIK evidence
+        if: steps.persisted.outputs.skip != 'true'
+        shell: bash
+        run: >-
+          uv run python scripts/research_sec_enrich_reporting_owners.py
+          --candidate-path "work/sec-candidates/$YEAR/candidates.jsonl"
+          --history-root "work/sec-history/$YEAR"
+          --year "$YEAR" --quarter "$QUARTER"
+      - name: Hydrate and audit warm-up quarter in bounded shards
+        if: steps.persisted.outputs.skip != 'true'
+        shell: bash
+        run: >-
+          uv run python scripts/research_sec_hydrate_quarter_v2.py
+          --candidate-path "work/sec-candidates/$YEAR/candidates.jsonl"
+          --output "work/sec-quarter/${YEAR}q${QUARTER}"
+          --year "$YEAR" --quarter "$QUARTER"
+          --candidate-run-id "$CANDIDATE_RUN_ID"
+          --shard-size 500 --workers 4
+      - name: Assert warm-up-only PIT contract
+        if: steps.persisted.outputs.skip != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p = Path("work/sec-quarter") / f"{os.environ['YEAR']}q{os.environ['QUARTER']}" / "quarter-summary.json"
+          s = json.loads(p.read_text())
+          q = s["qualityGates"]
+          assert q["completeAccessionCoverage"] is True
+          assert q["zeroFailures"] is True
+          assert q["knowledgeEqualsAccepted"] is True
+          assert q["oosOpened"] is False
+          assert q["canonicalReady"] is False
+          assert q["signalReady"] is False
+          PY
+      - name: Package deterministic warm-up quarter archive
+        if: steps.persisted.outputs.skip != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C "work/sec-quarter/${YEAR}q${QUARTER}" -czf "work/$ASSET_NAME" \
+            quarter-summary.json checksums.json raw-manifest.jsonl canonical-research.jsonl failures.jsonl
+          sha256sum "work/$ASSET_NAME"
+      - name: Preserve temporary warm-up audit artifact
+        if: steps.persisted.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sec-pit-warmup-${{ matrix.year }}q${{ matrix.quarter }}-audit-${{ github.run_id }}
+          path: work/sec-quarter/${{ matrix.year }}q${{ matrix.quarter }}
+          retention-days: 90
+      - name: Upload persistent PASS warm-up quarter
+        if: steps.persisted.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release upload "$RELEASE_TAG" "work/$ASSET_NAME" --repo "$GITHUB_REPOSITORY" --clobber
+
+  completeness:
+    name: Warm-up PIT completeness gate
+    needs: hydrate_warmup
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify all 12 warm-up quarter archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets > release-assets.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          release = json.loads(Path("release-assets.json").read_text())
+          assets = {item["name"]: item for item in release.get("assets", [])}
+          expected = [f"sec-pit-warmup-{year}q{quarter}.tar.gz" for year in range(2013, 2016) for quarter in range(1, 5)]
+          missing = [name for name in expected if name not in assets]
+          if missing:
+              raise SystemExit(f"missing persistent warm-up quarter archives: {missing}")
+          index = {
+              "schemaVersion": "1.0.0",
+              "dataset": "SEC original-buy PIT warm-up",
+              "period": "2013-2015",
+              "quarterCount": 12,
+              "quarterArchivesComplete": True,
+              "warmupOnly": True,
+              "developmentWindow": "2016-2020",
+              "validationWindow": "2021-2022",
+              "oosOpened": False,
+              "amendmentsReconciled": False,
+              "marketDataJoined": False,
+              "canonicalReady": False,
+              "signalReady": False,
+              "status": "ORIGINAL_BUY_PIT_WARMUP_2013_2015_PASS",
+              "nextGates": ["PIT amendment reconciliation", "historical security/market data join", "simple insider baseline"],
+          }
+          Path("sec-pit-warmup-2013-2015-index.json").write_text(json.dumps(index, indent=2, sort_keys=True) + "\n")
+          print(json.dumps(index, indent=2, sort_keys=True))
+          PY
+      - name: Upload warm-up index
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release upload "$RELEASE_TAG" sec-pit-warmup-2013-2015-index.json --repo "$GITHUB_REPOSITORY" --clobber
+      - name: Summarize gate
+        shell: bash
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## SEC PIT warm-up 2013-2015
+
+          All 12 warm-up quarter archives are persistently present.
+
+          - Purpose: owner-history warm-up only
+          - Development: 2016-2020
+          - Validation: 2021-2022
+          - OOS 2023+: unopened
+          - Production scoring: unchanged
+          - Amendments/market join: still pending
+          EOF
