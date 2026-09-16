@@ -18,6 +18,7 @@ concurrency:
 env:
   SEC_RELEASE_TAG: research-sec-amendments-v1
   MARKET_RELEASE_TAG: research-market-alpaca-v1
+  RESEARCH_RUN_VERSION: "2"
 
 jobs:
   lint:
