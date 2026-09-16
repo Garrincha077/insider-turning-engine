@@ -16,7 +16,6 @@ from typing import Any
 
 import exchange_calendars as xcals
 import pandas as pd
-
 from research_market_event_audit import (
     END_YEAR,
     IDENTITY_PLACEHOLDERS,
