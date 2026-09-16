@@ -1,0 +1,127 @@
+name: Diagnose Massive PIT historical identity recovery 2016-2022
+
+on:
+  workflow_dispatch:
+    inputs:
+      requests_per_minute:
+        description: "Massive request rate. Use 5 for Stocks Basic Free."
+        required: true
+        default: "5"
+      max_queries:
+        description: "Maximum new issuer-session PIT queries in this run. Re-run to resume."
+        required: true
+        default: "250"
+
+permissions:
+  contents: write
+
+env:
+  IDENTITY_RELEASE_TAG: research-sec-identity-recovery-v1
+  MASSIVE_RELEASE_TAG: research-massive-identity-recovery-v1
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Ruff Massive PIT diagnostic
+        run: uv run ruff check scripts/research_massive_identity_recovery.py
+      - name: Require Massive API key
+        env:
+          MASSIVE_API_KEY: ${{ secrets.MASSIVE_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$MASSIVE_API_KEY" ]; then
+            echo "Repository secret MASSIVE_API_KEY is not configured."
+            exit 1
+          fi
+      - name: Download bounded SEC identity diagnostic
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/identity work/massive work/prior
+          gh release download "$IDENTITY_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'identity-recovery-events.json' \
+            --pattern 'summary.json' \
+            --dir work/identity
+          test -f work/identity/identity-recovery-events.json
+          test -f work/identity/summary.json
+      - name: Download prior Massive cache when available
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$MASSIVE_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release download "$MASSIVE_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+              --pattern 'massive-query-cache.json' \
+              --dir work/prior || true
+          fi
+      - name: Run exact-date Massive PIT identity recovery
+        env:
+          MASSIVE_API_KEY: ${{ secrets.MASSIVE_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          CACHE_ARGS=()
+          if [ -f work/prior/massive-query-cache.json ]; then
+            CACHE_ARGS+=(--cache work/prior/massive-query-cache.json)
+          fi
+          uv run python scripts/research_massive_identity_recovery.py \
+            --identity-events work/identity/identity-recovery-events.json \
+            --identity-summary work/identity/summary.json \
+            --output work/massive \
+            --requests-per-minute '${{ inputs.requests_per_minute }}' \
+            --max-queries '${{ inputs.max_queries }}' \
+            "${CACHE_ARGS[@]}"
+      - name: Assert frozen research boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          s = json.loads(Path("work/massive/summary.json").read_text())
+          assert s["period"] == "2016-2022"
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["canonicalSecChanged"] is False
+          assert s["unresolvedAfterSecRecoveryTiers"] > 0
+          assert s["status"] in {
+              "MASSIVE_PIT_IDENTITY_RECOVERY_PARTIAL",
+              "MASSIVE_PIT_IDENTITY_RECOVERY_COMPLETE",
+          }
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: massive-identity-recovery-${{ github.run_id }}
+          path: work/massive
+          retention-days: 90
+      - name: Persist resumable research diagnostic
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$MASSIVE_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$MASSIVE_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+              --title "Research Massive PIT identity recovery v1" \
+              --notes "Resumable exact-date CIK-to-ticker identity diagnostic for bounded 2016-2022 research. Canonical SEC data and production scoring remain unchanged; 2023+ remains sealed."
+          fi
+          gh release upload "$MASSIVE_RELEASE_TAG" \
+            work/massive/summary.json \
+            work/massive/massive-query-cache.json \
+            work/massive/massive-identity-recovery-events.json \
+            --repo "$GITHUB_REPOSITORY" --clobber
