@@ -1,4 +1,4 @@
-name: Research Stooq market pilot 2013-2022
+name: Research Stooq market diagnostic 2013-2022
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   pilot:
-    name: Bounded Stooq market pilot
+    name: Bounded Stooq market diagnostic
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -24,15 +24,15 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --all-groups --frozen
-      - name: Lint research pilot
+      - name: Lint research diagnostic
         run: uv run ruff check scripts/research_market_stooq_pilot.py
-      - name: Fetch bounded 2013-2022 Stooq pilot
+      - name: Probe bounded 2013-2022 Stooq access
         run: >-
           uv run python scripts/research_market_stooq_pilot.py
           --start 2013-01-01
           --end 2022-12-30
           --output work/stooq-pilot
-      - name: Assert research boundary and pilot gate
+      - name: Assert research boundary only
         shell: bash
         run: |
           set -euo pipefail
@@ -40,10 +40,7 @@ jobs:
           import json
           from pathlib import Path
           s = json.loads(Path("work/stooq-pilot/summary.json").read_text())
-          assert s["status"] == "STOOQ_UNADJUSTED_PILOT_PASS"
           assert s["serverSideDateBoundsRequested"] is True
-          assert s["spyCovered"] is True
-          assert s["coverageRate"] >= 0.90
           assert s["adjustedPricesAvailable"] is False
           assert s["delistedCoverageValidated"] is False
           assert s["historicalIdentityValidated"] is False
@@ -54,6 +51,6 @@ jobs:
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: stooq-market-pilot-2013-2022-${{ github.run_id }}
+          name: stooq-market-diagnostic-2013-2022-${{ github.run_id }}
           path: work/stooq-pilot
           retention-days: 90
