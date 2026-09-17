@@ -1,0 +1,137 @@
+name: Diagnose Massive PIT transaction-date identity fallback 2016-2022
+
+on:
+  workflow_dispatch:
+    inputs:
+      requests_per_minute:
+        description: "Massive request rate"
+        required: true
+        default: "5"
+      max_queries:
+        description: "Maximum new CIK+transaction-date PIT queries. Re-run to resume."
+        required: true
+        default: "54"
+  push:
+    paths:
+      - ".github/workflows/research-massive-transaction-date-recovery.yml"
+      - "scripts/research_massive_transaction_date_recovery.py"
+
+permissions:
+  contents: write
+
+env:
+  IDENTITY_RELEASE_TAG: research-sec-identity-recovery-v1
+  MASSIVE_EVAL_RELEASE_TAG: research-massive-identity-recovery-v1
+  MASSIVE_TX_RELEASE_TAG: research-massive-transaction-date-recovery-v1
+  MASSIVE_REQUESTS_PER_MINUTE: ${{ inputs.requests_per_minute || '5' }}
+  MASSIVE_MAX_QUERIES: ${{ inputs.max_queries || '54' }}
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Ruff transaction-date fallback
+        run: uv run ruff check scripts/research_massive_transaction_date_recovery.py scripts/research_massive_identity_recovery.py
+      - name: Require Massive API key
+        env:
+          MASSIVE_API_KEY: ${{ secrets.MASSIVE_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$MASSIVE_API_KEY" ]; then
+            echo "Repository secret MASSIVE_API_KEY is not configured."
+            exit 1
+          fi
+      - name: Download bounded identity and evaluation evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/identity work/evaluation work/prior work/tx
+          gh release download "$IDENTITY_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'identity-recovery-events.json' \
+            --pattern 'summary.json' \
+            --dir work/identity
+          gh release download "$MASSIVE_EVAL_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'massive-query-cache.json' \
+            --dir work/evaluation
+          test -f work/identity/identity-recovery-events.json
+          test -f work/identity/summary.json
+          test -f work/evaluation/massive-query-cache.json
+      - name: Download prior transaction-date cache when available
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$MASSIVE_TX_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release download "$MASSIVE_TX_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+              --pattern 'massive-transaction-date-query-cache.json' \
+              --dir work/prior || true
+          fi
+      - name: Run transaction-date Massive PIT identity fallback
+        env:
+          MASSIVE_API_KEY: ${{ secrets.MASSIVE_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          CACHE_ARGS=()
+          if [ -f work/prior/massive-transaction-date-query-cache.json ]; then
+            CACHE_ARGS+=(--cache work/prior/massive-transaction-date-query-cache.json)
+          fi
+          uv run python scripts/research_massive_transaction_date_recovery.py \
+            --identity-events work/identity/identity-recovery-events.json \
+            --identity-summary work/identity/summary.json \
+            --evaluation-cache work/evaluation/massive-query-cache.json \
+            --output work/tx \
+            --requests-per-minute "$MASSIVE_REQUESTS_PER_MINUTE" \
+            --max-queries "$MASSIVE_MAX_QUERIES" \
+            "${CACHE_ARGS[@]}"
+      - name: Assert frozen research boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          s = json.loads(Path("work/tx/summary.json").read_text())
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["canonicalSecChanged"] is False
+          assert s["identityEvidenceOnly"] is True
+          assert s["countsTowardMarketEntryCoverage"] is False
+          assert s["evaluationSessionTradabilityChanged"] is False
+          assert s["status"] == "MASSIVE_TRANSACTION_DATE_IDENTITY_FALLBACK_DIAGNOSTIC"
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: massive-transaction-date-recovery-${{ github.run_id }}
+          path: work/tx
+          retention-days: 90
+      - name: Persist resumable transaction-date diagnostic
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$MASSIVE_TX_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$MASSIVE_TX_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+              --title "Research Massive transaction-date identity recovery v1" \
+              --notes "Research-only historical identity fallback using source-observed SEC transaction dates. It does not change evaluation-session tradability, canonical SEC data, production scoring, or sealed 2023+ OOS."
+          fi
+          gh release upload "$MASSIVE_TX_RELEASE_TAG" \
+            work/tx/summary.json \
+            work/tx/massive-transaction-date-query-cache.json \
+            work/tx/massive-transaction-date-recovery-events.json \
+            --repo "$GITHUB_REPOSITORY" --clobber
