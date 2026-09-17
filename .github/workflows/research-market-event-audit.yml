@@ -5,13 +5,15 @@ on:
   push:
     paths:
       - "scripts/research_market_event_audit.py"
+      - "scripts/research_market_event_audit_v2.py"
       - ".github/workflows/research-market-event-audit.yml"
+      - "docs/P0_PHASE1_IMPLEMENTATION.md"
 
 permissions:
   contents: write
 
 concurrency:
-  group: research-market-event-audit-v1
+  group: research-market-event-audit-v2
   cancel-in-progress: false
 
 env:
@@ -32,8 +34,11 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --all-groups --frozen
-      - name: Ruff audit script
-        run: uv run ruff check scripts/research_market_event_audit.py
+      - name: Ruff audit scripts
+        run: >-
+          uv run ruff check
+          scripts/research_market_event_audit.py
+          scripts/research_market_event_audit_v2.py
       - name: Download bounded SEC and market evidence
         env:
           GH_TOKEN: ${{ github.token }}
@@ -54,9 +59,9 @@ jobs:
             tar -xzf "work/downloads/alpaca-market-${year}.tar.gz" -C "work/market/$year"
           done
           test ! -e work/market/2023
-      - name: Run issuer-session coverage and terminal audit
+      - name: Run exact-XNYS issuer-session coverage and tier audit
         run: >-
-          uv run python scripts/research_market_event_audit.py
+          uv run python scripts/research_market_event_audit_v2.py
           --sec work/sec/effective-end-2022.jsonl
           --market-root work/market
           --output work/audit
@@ -69,18 +74,27 @@ jobs:
           from pathlib import Path
 
           s = json.loads(Path("work/audit/summary.json").read_text())
-          assert s["status"] == "MARKET_ISSUER_SESSION_AUDIT_COMPLETE"
+          assert s["status"] == "MARKET_ISSUER_SESSION_AUDIT_V2_COMPLETE"
           assert s["period"] == "2016-2022"
           assert s["oosOpened"] is False
           assert s["productionScoringChanged"] is False
+          assert s["researchOnly"] is True
           assert s["canonicalReady"] is False
           assert s["signalReady"] is False
-          assert s["spy"]["observedRegularSessions"] > 0
+          assert s["dataQualityGate"]["invariants"]["exactXnysEntrySessionRequired"] is True
+          assert s["dataQualityGate"]["invariants"]["exactXnysHorizonSessionRequired"] is True
           assert s["entry"]["qualifiedIssuerSessionEvents"] > 0
+          assert s["spy"]["expectedSessions"] > 0
+          assert s["dataQualityGate"]["tier"] in {
+              "A_HIGH_CONFIDENCE",
+              "B_RESEARCH_GRADE",
+              "C_EXPLORATORY",
+              "FAIL_BELOW_EXPLORATORY",
+          }
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: market-event-audit-${{ github.run_id }}
+          name: market-event-audit-v2-${{ github.run_id }}
           path: work/audit
           retention-days: 90
       - name: Persist research audit evidence
