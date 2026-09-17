@@ -21,7 +21,6 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-
 from research_massive_identity_recovery import (
     RateLimiter,
     _candidate_rows,
@@ -273,7 +272,9 @@ def run(
         "httpRequestsThisRun": http_requests,
         "cachedUniqueCikTransactionDates": len(date_cache),
         "requestsPerMinuteConfigured": requests_per_minute,
-        "provisionalIdentityProblemEventsAfterEvaluationAndHistoricalEvidence": provisional_remaining,
+        "provisionalIdentityProblemEventsAfterEvaluationAndHistoricalEvidence": (
+            provisional_remaining
+        ),
         "provisionalIdentityMissingRateAfterEvaluationAndHistoricalEvidence": (
             provisional_remaining / qualified if qualified else 0.0
         ),
