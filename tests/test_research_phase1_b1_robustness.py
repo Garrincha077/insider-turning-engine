@@ -118,7 +118,8 @@ def test_run_persists_boundaries_and_reproduces_canonical_summary(tmp_path: Path
     summary = tmp_path / "b1-summary.json"
     output = tmp_path / "robustness.json"
     _write_events(events, rows)
-    summary.write_text(json.dumps(_summary({h: values for h in robustness.HORIZONS})), encoding="utf-8")
+    payload = _summary({h: values for h in robustness.HORIZONS})
+    summary.write_text(json.dumps(payload), encoding="utf-8")
 
     result = robustness.run(
         events_path=events,
@@ -167,7 +168,8 @@ def test_run_rejects_sealed_oos_date(tmp_path: Path) -> None:
     events = tmp_path / "events.csv"
     summary = tmp_path / "summary.json"
     _write_events(events, [row])
-    summary.write_text(json.dumps(_summary({h: [0.1] for h in robustness.HORIZONS})), encoding="utf-8")
+    payload = _summary({h: [0.1] for h in robustness.HORIZONS})
+    summary.write_text(json.dumps(payload), encoding="utf-8")
 
     with pytest.raises(ValueError, match="sealed OOS boundary"):
         robustness.run(
