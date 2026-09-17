@@ -30,6 +30,16 @@ def _cluster_trigger_events(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             new_rows = session_rows[session]
             known.extend(new_rows)
             new_ids = {int(row["sourceSeq"]) for row in new_rows}
+
+            # The reference implementation evaluates anchors in disclosure/known order,
+            # not transaction-date order. The optimized sliding window must therefore
+            # preserve that order as the deterministic tie-break when two anchor dates
+            # produce the same maximum number of distinct owners.
+            anchor_priority: dict[str, int] = {}
+            for known_index, known_row in enumerate(known):
+                anchor_date = str(known_row["transactionDate"])
+                anchor_priority.setdefault(anchor_date, known_index)
+
             ordered = sorted(
                 known,
                 key=lambda row: (
@@ -43,6 +53,7 @@ def _cluster_trigger_events(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             left = 0
             best_owners: set[str] = set()
             best_anchor: str | None = None
+            best_priority: int | None = None
 
             for right, row in enumerate(ordered):
                 owner = str(row["ownerCik"])
@@ -64,9 +75,20 @@ def _cluster_trigger_events(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                         new_in_window -= 1
                     left += 1
 
-                if new_in_window > 0 and len(owner_counts) > len(best_owners):
+                if new_in_window <= 0:
+                    continue
+                candidate_anchor = right_date.isoformat()
+                candidate_priority = anchor_priority[candidate_anchor]
+                better_count = len(owner_counts) > len(best_owners)
+                same_count_earlier_reference_anchor = (
+                    len(owner_counts) == len(best_owners)
+                    and best_priority is not None
+                    and candidate_priority < best_priority
+                )
+                if better_count or same_count_earlier_reference_anchor:
                     best_owners = set(owner_counts)
-                    best_anchor = right_date.isoformat()
+                    best_anchor = candidate_anchor
+                    best_priority = candidate_priority
 
             if len(best_owners) < b2.IMPORTANT_OWNER_COUNT:
                 continue
