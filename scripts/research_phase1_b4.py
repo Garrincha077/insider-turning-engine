@@ -109,6 +109,14 @@ def _intersect_events(
     return combined, dict(diag)
 
 
+def _delta(left: object, right: object) -> float | None:
+    """Return a numeric delta, preserving missing descriptive outcomes as null."""
+
+    if left is None or right is None:
+        return None
+    return float(left) - float(right)
+
+
 def _comparison(
     horizons: dict[str, dict[str, Any]], summary_path: Path | None
 ) -> dict[str, Any]:
@@ -121,9 +129,13 @@ def _comparison(
         base = reference["horizons"][key]
         current = horizons[key]
         comparison[key] = {
-            "spyExcessMeanDelta": current["spyExcessMean"] - base["spyExcessMean"],
-            "spyExcessMedianDelta": current["spyExcessMedian"] - base["spyExcessMedian"],
-            "spyExcessWinRateDelta": current["spyExcessWinRate"] - base["spyExcessWinRate"],
+            "spyExcessMeanDelta": _delta(current["spyExcessMean"], base["spyExcessMean"]),
+            "spyExcessMedianDelta": _delta(
+                current["spyExcessMedian"], base["spyExcessMedian"]
+            ),
+            "spyExcessWinRateDelta": _delta(
+                current["spyExcessWinRate"], base["spyExcessWinRate"]
+            ),
             "maturedOutcomeCountRatio": (
                 current["maturedOutcomeCount"] / base["maturedOutcomeCount"]
                 if base["maturedOutcomeCount"]
