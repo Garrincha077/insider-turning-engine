@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Any
 
 import exchange_calendars as xcals
-
 import research_market_event_audit as v1
 import research_market_event_audit_v2 as p0
 import research_phase1_b0 as b0
