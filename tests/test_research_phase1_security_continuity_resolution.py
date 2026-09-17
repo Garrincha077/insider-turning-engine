@@ -255,7 +255,7 @@ def test_production_frozen_contract_has_exact_54_row_scope() -> None:
     )
     if not contract_path.exists():
         contract_path = Path("/mnt/data/b1-security-continuity-resolution-v1.json")
-    payload = json.loads(contract_path.read_text(encoding="utf-8"))
+    payload, _ = resolution_module._load_contract(contract_path)
 
     assert len(payload["resolutions"]) == 54
     decisions = [row["resolutionDecision"] for row in payload["resolutions"]]
