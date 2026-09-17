@@ -1,0 +1,353 @@
+name: Build Phase-1 B3 P/S PIT history 2013-2022
+
+# Dormant until the frozen 2016Q1 pilot passes.
+on:
+  workflow_dispatch:
+    inputs:
+      pilot_run_id:
+        description: Successful frozen 2016Q1 P/S pilot run
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: research-phase1-b3-ps-pit-history-v1
+  cancel-in-progress: false
+
+env:
+  SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT }}
+  PILOT_RUN_ID: ${{ inputs.pilot_run_id }}
+  RELEASE_TAG: research-sec-ps-pit-v1
+  WARMUP_SOURCE_RUN_ID: "35060455633"
+  CANDIDATE_RUN_ID: "34884538222"
+  HISTORY_RUN_ID: "34883719192"
+
+jobs:
+  preflight:
+    name: Verify frozen P/S pilot before scale
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require explicit successful pilot evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${PILOT_RUN_ID:-}"
+          mkdir -p work/pilot
+          gh run download "$PILOT_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'phase1-b3-ps-pit-pilot-*' --dir work/pilot
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          paths = list(Path("work/pilot").rglob("quarter-summary.json"))
+          assert len(paths) == 1, paths
+          s = json.loads(paths[0].read_text())
+          assert s["year"] == 2016 and s["quarter"] == 1
+          assert s["researchOnly"] is True
+          assert s["psHistoryScalePilotPassed"] is True
+          assert s["bulkCanonicalConcordance"]["buyConcordanceRate"] >= 0.995
+          assert s["bulkCanonicalConcordance"]["saleConcordanceRate"] >= 0.995
+          assert s["candidateMix"]["saleOnlyFilings"] > 0
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["b3Eligible"] is False
+          PY
+
+  prepare:
+    name: Prepare persistent P/S research release
+    needs: preflight
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create release if absent
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "$RELEASE_TAG already exists"
+          else
+            gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+              --title "Research SEC original P/S PIT history v1" \
+              --notes "Research-only original Form 4/5 P/A and S/D PIT history, 2013-2022. OOS 2023+ sealed. B3 remains blocked until broader P/S amendment reconciliation and a separately frozen B3 definition." \
+              --prerelease
+          fi
+
+  sources:
+    name: Normalize frozen P/S source ${{ matrix.year }}
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: true
+      max-parallel: 3
+      matrix:
+        year: [2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022]
+    env:
+      YEAR: ${{ matrix.year }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+
+      - name: Verify and download exact frozen source artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/input
+          python - <<'PY' > work/source-env.sh
+          import json
+          import os
+          from pathlib import Path
+          m = json.loads(Path("research/b3-ps-source-manifest-v1.json").read_text())
+          year = str(int(os.environ["YEAR"]))
+          item = m["years"][year]
+          if "combined" in item:
+              print(f'KIND=combined')
+              print(f'RUN={m["warmupSourceRunId"]}')
+              print(f'ARTIFACT={item["combined"]["artifact"]}')
+              print(f'DIGEST={item["combined"]["digest"]}')
+          else:
+              print(f'KIND=split')
+              print(f'CRUN={m["developmentValidationCandidateRunId"]}')
+              print(f'CART={item["candidate"]["artifact"]}')
+              print(f'CDIG={item["candidate"]["digest"]}')
+              print(f'HRUN={m["developmentValidationHistoryRunId"]}')
+              print(f'HART={item["history"]["artifact"]}')
+              print(f'HDIG={item["history"]["digest"]}')
+          PY
+          source work/source-env.sh
+
+          verify() {
+            local run_id="$1" name="$2" digest="$3"
+            raw=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts?per_page=100")
+            actual=$(printf '%s' "$raw" | python -c '
+          import json,sys,os
+          name=os.environ["VERIFY_NAME"]
+          xs=[x for x in json.load(sys.stdin)["artifacts"] if x["name"]==name]
+          assert len(xs)==1, (name,len(xs))
+          assert xs[0]["expired"] is False
+          print(xs[0]["digest"])
+          ')
+            test "$actual" = "$digest"
+          }
+
+          if [ "$KIND" = combined ]; then
+            export VERIFY_NAME="$ARTIFACT"
+            verify "$RUN" "$ARTIFACT" "$DIGEST"
+            gh run download "$RUN" --repo "$GITHUB_REPOSITORY" --name "$ARTIFACT" --dir work/input
+          else
+            export VERIFY_NAME="$CART"
+            verify "$CRUN" "$CART" "$CDIG"
+            export VERIFY_NAME="$HART"
+            verify "$HRUN" "$HART" "$HDIG"
+            gh run download "$CRUN" --repo "$GITHUB_REPOSITORY" --name "$CART" --dir work/input/candidates
+            gh run download "$HRUN" --repo "$GITHUB_REPOSITORY" --name "$HART" --dir work/input/history
+          fi
+
+      - name: Normalize source layout and enrich owner CIKs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/source
+          cand=$(find work/input -type f -name candidates.jsonl | head -n 1)
+          yearroot=$(find work/input -type d -name "year=$YEAR" | head -n 1)
+          test -n "$cand" && test -n "$yearroot"
+          cp "$cand" work/source/candidates.jsonl
+          cp -R "$yearroot" "work/source/year=$YEAR"
+
+          for q in 1 2 3 4; do
+            uv run python scripts/research_sec_enrich_reporting_owners.py \
+              --candidate-path work/source/candidates.jsonl \
+              --history-root work/source \
+              --year "$YEAR" --quarter "$q"
+          done
+
+          uv run python - <<'PY'
+          import os, sys
+          from pathlib import Path
+          sys.path.insert(0, "scripts")
+          import research_sec_hydrate_ps as ps
+          year = int(os.environ["YEAR"])
+          p = Path("work/source/candidates.jsonl")
+          counts=[]
+          for q in range(1,5):
+              rows=ps._load_ps_candidates(p, year, q)
+              assert rows, (year,q)
+              assert all(row.get("reportingOwnerCiks") for row in rows)
+              assert all(int(row["sourceYear"]) <= 2022 for row in rows)
+              counts.append(len(rows))
+          print({"year":year,"quarterCandidateCounts":counts,"total":sum(counts)})
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3-ps-source-${{ matrix.year }}-${{ github.run_id }}
+          path: work/source
+          retention-days: 90
+          compression-level: 0
+
+  hydrate:
+    name: Hydrate original P/S ${{ matrix.year }} Q${{ matrix.quarter }}
+    needs: [prepare, sources]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: true
+      max-parallel: 1
+      matrix:
+        year: [2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022]
+        quarter: [1, 2, 3, 4]
+    env:
+      YEAR: ${{ matrix.year }}
+      QUARTER: ${{ matrix.quarter }}
+      ASSET_NAME: sec-ps-pit-${{ matrix.year }}q${{ matrix.quarter }}.tar.gz
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check persistent quarter
+        id: persisted
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq "$ASSET_NAME"; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-python@v5
+        if: steps.persisted.outputs.skip != 'true'
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        if: steps.persisted.outputs.skip != 'true'
+        with:
+          enable-cache: true
+      - if: steps.persisted.outputs.skip != 'true'
+        run: uv sync --all-groups --frozen
+      - name: Require SEC User-Agent
+        if: steps.persisted.outputs.skip != 'true'
+        shell: bash
+        run: test -n "${SEC_USER_AGENT:-}"
+      - name: Download normalized frozen source year
+        if: steps.persisted.outputs.skip != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: b3-ps-source-${{ matrix.year }}-${{ github.run_id }}
+          path: work/source
+      - name: Hydrate frozen original P/S quarter
+        if: steps.persisted.outputs.skip != 'true'
+        shell: bash
+        run: >-
+          uv run python scripts/research_sec_hydrate_ps.py
+          --candidate-path work/source/candidates.jsonl
+          --output "work/output/${YEAR}q${QUARTER}"
+          --year "$YEAR" --quarter "$QUARTER"
+          --candidate-run-id "b3-ps-${GITHUB_RUN_ID}-${YEAR}"
+          --shard-size 500 --workers 4
+      - name: Assert quarter contract
+        if: steps.persisted.outputs.skip != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=Path("work/output")/f"{os.environ['YEAR']}q{os.environ['QUARTER']}"/"quarter-summary.json"
+          s=json.loads(p.read_text())
+          q=s["qualityGates"]
+          assert s["researchOnly"] is True
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["fullPsHistoryComplete"] is False
+          assert s["amendmentsReconciledForPsUniverse"] is False
+          assert s["b3Eligible"] is False
+          assert q["completeAccessionCoverage"] is True
+          assert q["zeroFailures"] is True
+          assert q["knowledgeEqualsAccepted"] is True
+          assert q["saleOnlyFilingsPresent"] is True
+          assert s["bulkCanonicalConcordance"]["buyConcordanceRate"] >= 0.995
+          assert s["bulkCanonicalConcordance"]["saleConcordanceRate"] >= 0.995
+          PY
+      - name: Package deterministic quarter
+        if: steps.persisted.outputs.skip != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C "work/output/${YEAR}q${QUARTER}" -czf "work/$ASSET_NAME" \
+            quarter-summary.json checksums.json raw-manifest.jsonl canonical-research.jsonl failures.jsonl
+          sha256sum "work/$ASSET_NAME"
+      - name: Persist P/S quarter
+        if: steps.persisted.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$RELEASE_TAG" "work/$ASSET_NAME" --repo "$GITHUB_REPOSITORY" --clobber
+      - uses: actions/upload-artifact@v4
+        if: steps.persisted.outputs.skip != 'true'
+        with:
+          name: b3-ps-pit-${{ matrix.year }}q${{ matrix.quarter }}-${{ github.run_id }}
+          path: work/output/${{ matrix.year }}q${{ matrix.quarter }}
+          retention-days: 90
+
+  completeness:
+    name: Original P/S PIT completeness gate
+    needs: hydrate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify all 40 persistent quarter archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets > assets.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          release=json.loads(Path("assets.json").read_text())
+          assets={x["name"]:x for x in release.get("assets",[])}
+          expected=[f"sec-ps-pit-{y}q{q}.tar.gz" for y in range(2013,2023) for q in range(1,5)]
+          missing=[x for x in expected if x not in assets]
+          if missing:
+              raise SystemExit(f"missing P/S PIT quarter archives: {missing}")
+          index={
+              "schemaVersion":"1.0.0",
+              "dataset":"SEC original P/S PIT history",
+              "period":"2013-2022",
+              "quarterCount":40,
+              "quarterArchivesComplete":True,
+              "researchOnly":True,
+              "fullPsHistoryComplete":True,
+              "amendmentsReconciledForPsUniverse":False,
+              "b3Eligible":False,
+              "b3DefinitionFrozen":False,
+              "oosOpened":False,
+              "productionScoringChanged":False,
+              "canonicalReady":False,
+              "signalReady":False,
+              "status":"ORIGINAL_PS_PIT_2013_2022_PASS",
+              "nextGate":"reconcile existing PIT amendment evidence against the broader P/S original universe",
+          }
+          Path("sec-ps-pit-2013-2022-index.json").write_text(json.dumps(index,indent=2,sort_keys=True)+"\n")
+          print(json.dumps(index,indent=2,sort_keys=True))
+          PY
+      - name: Persist full-history index
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release upload "$RELEASE_TAG"
+          sec-ps-pit-2013-2022-index.json
+          --repo "$GITHUB_REPOSITORY" --clobber
