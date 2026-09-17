@@ -1,4 +1,9 @@
-from scripts.research_phase1_b2 import _cluster_trigger_events
+import importlib
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+_cluster_trigger_events = importlib.import_module("research_phase1_b2")._cluster_trigger_events
 
 
 def _row(
