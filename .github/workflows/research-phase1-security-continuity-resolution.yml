@@ -1,0 +1,133 @@
+name: Resolve frozen Phase-1 B1 security continuity
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/security-continuity-resolution]
+    paths:
+      - "research/b1-security-continuity-resolution-v1.json"
+      - "scripts/research_phase1_security_continuity_resolution.py"
+      - "tests/test_research_phase1_security_continuity_resolution.py"
+      - ".github/workflows/research-phase1-security-continuity-resolution.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: research-phase1-security-continuity-resolution-v1
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    name: Performance-blind frozen 54-row continuity resolution
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+
+      - name: Ruff frozen resolution runner and tests
+        run: >-
+          uv run ruff check
+          scripts/research_phase1_security_continuity_resolution.py
+          tests/test_research_phase1_security_continuity_resolution.py
+
+      - name: Test frozen resolution semantics
+        run: >-
+          uv run pytest
+          tests/test_research_phase1_security_continuity_resolution.py
+          -q
+
+      - name: Verify authoritative artifact digests
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ledger_digest="$(gh api \
+            "repos/$GITHUB_REPOSITORY/actions/runs/35272112415/artifacts" \
+            --jq '.artifacts[] | select(.name == "phase1-security-continuity-ledger-35272112415") | .digest')"
+          test "$ledger_digest" = \
+            "sha256:7e67aa271d60f8f3837e3db76f3a8a0e20312fdea5baf7f031e387d25349c4b8"
+
+          gap_digest="$(gh api \
+            "repos/$GITHUB_REPOSITORY/actions/runs/35272945732/artifacts" \
+            --jq '.artifacts[] | select(.name == "phase1-security-gap-diagnostics-35272945732") | .digest')"
+          test "$gap_digest" = \
+            "sha256:f203552b0b52e51ec91338827ea8d87b2989fe5bbe462a4e36b3862f36ccee08"
+
+      - name: Download only the authoritative frozen continuity ledger
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/source work/resolved
+          gh run download 35272112415 \
+            --repo "$GITHUB_REPOSITORY" \
+            --name phase1-security-continuity-ledger-35272112415 \
+            --dir work/source
+          test -s work/source/ledger/continuity-ledger.csv
+          test ! -e work/source/market
+          sha256sum work/source/ledger/continuity-ledger.csv > work/source-ledger.sha256.before
+
+      - name: Apply frozen performance-blind resolution overlay
+        run: >-
+          uv run python scripts/research_phase1_security_continuity_resolution.py
+          --ledger work/source/ledger/continuity-ledger.csv
+          --contract research/b1-security-continuity-resolution-v1.json
+          --output-dir work/resolved
+
+      - name: Assert zero-unresolved gate and sealed boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum work/source/ledger/continuity-ledger.csv > work/source-ledger.sha256.after
+          cmp work/source-ledger.sha256.before work/source-ledger.sha256.after
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          summary = json.loads(Path("work/resolved/summary.json").read_text())
+          assert summary["status"] == "PHASE1_SECURITY_CONTINUITY_RESOLUTION_COMPLETE"
+          assert summary["sourceEventHorizonRows"] == 24376
+          assert summary["sourceUnresolvedEventHorizonRows"] == 54
+          assert summary["resolutionContractRows"] == 54
+          assert summary["resolvedByContractRows"] == 54
+          assert summary["sameSecurityRows"] == 33
+          assert summary["transformedHolderRows"] == 21
+          assert summary["unresolvedEventHorizonRows"] == 0
+          assert summary["performanceStageBlocked"] is False
+          assert summary["researchOnly"] is True
+          assert summary["oosOpened"] is False
+          assert summary["productionScoringChanged"] is False
+          assert summary["performanceRead"] is False
+          assert summary["performanceFieldsRead"] == []
+          assert summary["priceFieldsRead"] == []
+          assert summary["sourceLedgerUntouched"] is True
+          assert summary["frozenScopeExpanded"] is False
+          assert summary["developmentCohortYears"] == [2016, 2017, 2018, 2019, 2020]
+          assert summary["outcomeEnd"] == "2022-12-31"
+          assert summary["sealedYear"] == 2023
+          assert summary["horizons"] == [21, 63, 126, 252]
+          assert summary["primaryHorizon"] == 126
+          assert summary["gapThresholdSessions"] == 10
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase1-security-continuity-resolution-${{ github.run_id }}
+          path: |
+            research/b1-security-continuity-resolution-v1.json
+            work/resolved/resolution-overlay.csv
+            work/resolved/resolved-continuity-ledger.csv
+            work/resolved/summary.json
+          retention-days: 90
