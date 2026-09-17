@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import csv
+import importlib
 import json
+import sys
 from pathlib import Path
 
 import pytest
-import research_cmp_history_window as window
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+window = importlib.import_module("research_cmp_history_window")
 FIELDS = list(window.REQUIRED_FIELDS)
 
 
