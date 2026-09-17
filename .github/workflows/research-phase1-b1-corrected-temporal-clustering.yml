@@ -1,0 +1,163 @@
+name: Run Phase-1 corrected B1 temporal clustering diagnostic
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b1-corrected-temporal-clustering]
+    paths:
+      - "scripts/research_phase1_b1_corrected_temporal_clustering.py"
+      - "tests/test_research_phase1_b1_corrected_temporal_clustering.py"
+      - "docs/research-phase1-b1-corrected-temporal-clustering-gate.md"
+      - ".github/workflows/research-phase1-b1-corrected-temporal-clustering.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  CORRECTED_RUN_ID: "35277369958"
+  CORRECTED_ARTIFACT: phase1-b1-continuity-corrected-performance-35277369958
+  CORRECTED_ARTIFACT_DIGEST: sha256:d750c85b6019740ad381b2f53a9d6ceb379a5665cf8b43f0c70e799484bfa775
+  CANONICAL_RUN_ID: "35263058619"
+  CANONICAL_ARTIFACT: phase1-b1-b4-development-35263058619
+  CANONICAL_ARTIFACT_DIGEST: sha256:1021de09ebaa190604bf1762714fe014ebc75e3e197b47d2d684003289ed638d
+
+concurrency:
+  group: research-phase1-b1-corrected-temporal-clustering-v1
+  cancel-in-progress: false
+
+jobs:
+  corrected-temporal-clustering:
+    name: Frozen temporal clustering diagnostic on corrected B1
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+
+      - name: Ruff temporal clustering runner and tests
+        run: >-
+          uv run ruff check
+          scripts/research_phase1_b1_corrected_temporal_clustering.py
+          tests/test_research_phase1_b1_corrected_temporal_clustering.py
+
+      - name: Test frozen temporal clustering semantics before source download
+        run: >-
+          uv run pytest
+          tests/test_research_phase1_b1_corrected_temporal_clustering.py
+          -q
+
+      - name: Verify frozen source artifact identities
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          expected = [
+              (
+                  os.environ["CORRECTED_RUN_ID"],
+                  os.environ["CORRECTED_ARTIFACT"],
+                  os.environ["CORRECTED_ARTIFACT_DIGEST"],
+              ),
+              (
+                  os.environ["CANONICAL_RUN_ID"],
+                  os.environ["CANONICAL_ARTIFACT"],
+                  os.environ["CANONICAL_ARTIFACT_DIGEST"],
+              ),
+          ]
+          for run_id, name, digest in expected:
+              raw = subprocess.check_output(
+                  ["gh", "api", f"repos/{repo}/actions/runs/{run_id}/artifacts"],
+                  text=True,
+              )
+              matches = [
+                  item for item in json.loads(raw)["artifacts"] if item["name"] == name
+              ]
+              assert len(matches) == 1, (run_id, name, len(matches))
+              assert matches[0]["expired"] is False
+              assert matches[0]["digest"] == digest, (name, matches[0]["digest"], digest)
+          PY
+
+      - name: Download only frozen corrected and canonical development evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/corrected work/canonical work/output
+          gh run download "$CORRECTED_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name "$CORRECTED_ARTIFACT" --dir work/corrected
+          gh run download "$CANONICAL_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name "$CANONICAL_ARTIFACT" --dir work/canonical
+          test -s work/corrected/summary.json
+          test -s work/corrected/b1-corrected-event-horizons.csv
+          test -s work/canonical/b1/events.csv
+          test -s work/canonical/b1/summary.json
+          ! find work -type f -iname '*2023*' -print -quit | grep -q .
+
+      - name: Run frozen corrected temporal clustering diagnostic
+        run: >-
+          uv run python scripts/research_phase1_b1_corrected_temporal_clustering.py
+          --corrected-event-horizons work/corrected/b1-corrected-event-horizons.csv
+          --corrected-summary work/corrected/summary.json
+          --canonical-events work/canonical/b1/events.csv
+          --canonical-summary work/canonical/b1/summary.json
+          --output work/output/corrected-temporal-clustering-summary.json
+          --corrected-run-id "$CORRECTED_RUN_ID"
+          --corrected-artifact "$CORRECTED_ARTIFACT"
+          --corrected-artifact-digest "$CORRECTED_ARTIFACT_DIGEST"
+          --canonical-run-id "$CANONICAL_RUN_ID"
+          --canonical-artifact "$CANONICAL_ARTIFACT"
+          --canonical-artifact-digest "$CANONICAL_ARTIFACT_DIGEST"
+
+      - name: Assert frozen scope and no progression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          s = json.loads(
+              Path("work/output/corrected-temporal-clustering-summary.json").read_text()
+          )
+          assert s["status"] == "PHASE1_B1_CONTINUITY_CORRECTED_TEMPORAL_CLUSTERING_COMPLETE"
+          assert s["resultClass"] == "research/descriptive"
+          assert s["diagnosticOnly"] is True
+          assert s["newFilterCreated"] is False
+          assert s["researchOnly"] is True
+          assert s["formalAlphaClaim"] is False
+          assert s["oosEligible"] is False
+          assert s["oosOpened"] is False
+          assert s["calendarTimeHacStageOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["primaryHorizonSessions"] == 126
+          assert s["correctedSource"]["runId"] == "35277369958"
+          assert s["canonicalMetadataSource"]["runId"] == "35263058619"
+          assert s["scope"]["canonicalB1Events"] == 6094
+          assert s["scope"]["correctedPrimaryRows"] == 6094
+          assert s["scope"]["correctedMaturePrimaryRows"] == 5965
+          assert set(s["leaveOneYearOut"]) == {"2016", "2017", "2018", "2019", "2020"}
+          assert s["entrySessionClusteringReproduction"]["uniqueEntrySessions"] == 1202
+          assert s["entrySessionClusteringReproduction"]["maxEventsPerGroup"] == 45
+          assert len(s["monthly"]["buckets"]) <= 60
+          assert len(s["quarterly"]["buckets"]) <= 20
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase1-b1-corrected-temporal-clustering-${{ github.run_id }}
+          path: work/output/corrected-temporal-clustering-summary.json
+          retention-days: 90
