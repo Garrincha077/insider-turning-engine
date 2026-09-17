@@ -17,7 +17,6 @@ from pathlib import Path
 from typing import Any
 
 import exchange_calendars as xcals
-
 import research_market_event_audit as market_audit
 
 HORIZONS = (21, 63, 126, 252)
@@ -191,7 +190,10 @@ def _max_internal_gap(
     bounded = observed_indices[left:right]
     if len(bounded) < 2:
         return 0
-    return max(next_index - index - 1 for index, next_index in zip(bounded, bounded[1:]))
+    return max(
+        next_index - index - 1
+        for index, next_index in zip(bounded, bounded[1:], strict=False)
+    )
 
 
 def _fixture_state(
