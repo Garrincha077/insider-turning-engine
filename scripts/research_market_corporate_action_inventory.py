@@ -162,10 +162,14 @@ def _normalize(bucket: str, row: dict[str, Any]) -> dict[str, Any]:
 
 
 def _page_actions(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    """Read Alpaca's top-level CA arrays without expanding the frozen type set."""
+    """Read the raw Alpaca corporate_actions object at the frozen type scope."""
+    corporate_actions = payload.get("corporate_actions")
+    if not isinstance(corporate_actions, dict):
+        raise ValueError("corporate-action response missing corporate_actions object")
+
     normalized: list[dict[str, Any]] = []
     for bucket in FROZEN_BUCKETS:
-        rows = payload.get(bucket) or []
+        rows = corporate_actions.get(bucket) or []
         if not isinstance(rows, list):
             raise ValueError(f"corporate-action bucket {bucket} is not a list")
         for raw in rows:
