@@ -5,7 +5,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 import research_cmp_history_window as window
 
 
