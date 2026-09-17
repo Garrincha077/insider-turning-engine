@@ -19,6 +19,16 @@ import research_phase1_b1_tail_attribution as tail_base
 PRIMARY_HORIZON = 126
 STATUS = "PHASE1_B1_CONTINUITY_CORRECTED_TEMPORAL_CLUSTERING_COMPLETE"
 YEARS = tuple(range(2016, 2021))
+GUARDRAILS = {
+    "diagnosticOnly": True,
+    "newFilterCreated": False,
+    "researchOnly": True,
+    "formalAlphaClaim": False,
+    "oosEligible": False,
+    "oosOpened": False,
+    "calendarTimeHacStageOpened": False,
+    "productionScoringChanged": False,
+}
 
 
 def _bucket_key(value: str, granularity: str) -> str:
@@ -55,14 +65,15 @@ def _bucket_rows(rows: list[dict[str, str]], granularity: str) -> list[dict[str,
         issuers = Counter(str(row["issuerCik"]).strip() for row in bucket)
         if "" in issuers:
             raise ValueError("missing issuer in temporal bucket")
-        item = {
-            "bucket": key,
-            **_summary(values),
-            "positiveExcessSum": sum(value for value in values if value > 0.0),
-            "uniqueIssuers": len(issuers),
-            "largestIssuerEventCount": max(issuers.values()),
-        }
-        output.append(item)
+        output.append(
+            {
+                "bucket": key,
+                **_summary(values),
+                "positiveExcessSum": sum(value for value in values if value > 0.0),
+                "uniqueIssuers": len(issuers),
+                "largestIssuerEventCount": max(issuers.values()),
+            }
+        )
     return output
 
 
@@ -221,14 +232,7 @@ def run(
         "schemaVersion": 1,
         "status": STATUS,
         "resultClass": "research/descriptive",
-        "diagnosticOnly": True,
-        "newFilterCreated": False,
-        "researchOnly": True,
-        "formalAlphaClaim": False,
-        "oosEligible": False,
-        "oosOpened": False,
-        "calendarTimeHacStageOpened": False,
-        "productionScoringChanged": False,
+        **GUARDRAILS,
         "primaryHorizonSessions": PRIMARY_HORIZON,
         "correctedSource": {
             "runId": str(corrected_run_id),
