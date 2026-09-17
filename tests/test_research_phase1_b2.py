@@ -3,7 +3,12 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-_cluster_trigger_events = importlib.import_module("research_phase1_b2")._cluster_trigger_events
+_reference_cluster_trigger_events = importlib.import_module(
+    "research_phase1_b2"
+)._cluster_trigger_events
+_cluster_trigger_events = importlib.import_module(
+    "research_phase1_b2_fast"
+)._cluster_trigger_events
 
 
 def _row(
@@ -84,3 +89,15 @@ def test_three_independent_owners_are_strong_cluster() -> None:
     assert events[0]["strongCluster"] is False
     assert events[1]["clusterOwnerCount"] == 3
     assert events[1]["strongCluster"] is True
+
+
+def test_optimized_matches_reference_on_mixed_disclosure_fixture() -> None:
+    rows = [
+        _row(1, "0000000101", "2019-04-01", "2019-04-03"),
+        _row(2, "0000000102", "2019-04-08", "2019-04-10"),
+        _row(3, "0000000101", "2019-04-12", "2019-04-15"),
+        _row(4, "0000000103", "2019-03-30", "2019-04-18"),
+        _row(5, "0000000104", "2019-06-01", "2019-06-03"),
+    ]
+
+    assert _cluster_trigger_events(rows) == _reference_cluster_trigger_events(rows)
