@@ -1,0 +1,91 @@
+name: Run Phase-1 B1 tail attribution
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/research_phase1_b1_tail_attribution.py"
+      - "tests/test_research_phase1_b1_tail_attribution.py"
+      - "docs/research-phase1-b1-tail-attribution-gate.md"
+      - ".github/workflows/research-phase1-b1-tail-attribution.yml"
+
+permissions:
+  contents: read
+
+env:
+  BASELINE_RELEASE_TAG: research-phase1-baselines-v1
+  SOURCE_B1_RUN_ID: "35263058619"
+
+concurrency:
+  group: research-phase1-b1-tail-attribution-v1
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: B1 tail and 2020 attribution audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Ruff frozen tail-attribution runner and tests
+        run: >-
+          uv run ruff check
+          scripts/research_phase1_b1_tail_attribution.py
+          tests/test_research_phase1_b1_tail_attribution.py
+      - name: Test frozen tail-attribution semantics
+        run: uv run pytest tests/test_research_phase1_b1_tail_attribution.py -q
+      - name: Download persisted canonical B1 evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/source work/b1-tail-attribution
+          gh release download "$BASELINE_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'b1-events.csv' --dir work/source
+          gh release download "$BASELINE_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'b1-summary.json' --dir work/source
+          test -s work/source/b1-events.csv
+          test -s work/source/b1-summary.json
+      - name: Run frozen B1 tail attribution
+        run: >-
+          uv run python scripts/research_phase1_b1_tail_attribution.py
+          --events work/source/b1-events.csv
+          --source-summary work/source/b1-summary.json
+          --output work/b1-tail-attribution/b1-tail-attribution-summary.json
+          --source-run-id "$SOURCE_B1_RUN_ID"
+      - name: Assert research boundaries and output contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path("work/b1-tail-attribution/b1-tail-attribution-summary.json")
+          s = json.loads(p.read_text())
+          assert s["status"] == "PHASE1_B1_TAIL_ATTRIBUTION_COMPLETE"
+          assert s["primaryHorizonSessions"] == 126
+          assert s["researchOnly"] is True
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["formalAlphaClaim"] is False
+          assert s["oosEligible"] is False
+          assert s["canonicalReproduction"]["maturedOutcomeCount"] == 5944
+          assert s["globalTop1Pct"]["count"] == 59
+          assert s["topSetSanity"]["checked"] == 59
+          assert set(s["withinYearTailSensitivity"]) == {
+              "2016", "2017", "2018", "2019", "2020"
+          }
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase1-b1-tail-attribution-${{ github.run_id }}
+          path: work/b1-tail-attribution/b1-tail-attribution-summary.json
+          retention-days: 90
