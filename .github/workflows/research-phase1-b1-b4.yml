@@ -1,0 +1,338 @@
+name: Run Phase-1 B1 and B4 baselines
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/research_cmp_trade_history.py"
+      - "scripts/research_phase1_b1.py"
+      - "scripts/research_phase1_b2.py"
+      - "scripts/research_phase1_b2_fast.py"
+      - "scripts/research_phase1_b4.py"
+      - "tests/test_research_phase1_b1.py"
+      - "tests/test_research_phase1_b2.py"
+      - "tests/test_research_phase1_b4.py"
+      - ".github/workflows/research-phase1-b1-b4.yml"
+
+permissions:
+  contents: write
+
+env:
+  SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT }}
+  CMP_RELEASE_TAG: research-cmp-history-v1
+  SEC_RELEASE_TAG: research-sec-amendments-v1
+  MARKET_RELEASE_TAG: research-market-alpaca-v1
+  BASELINE_RELEASE_TAG: research-phase1-baselines-v1
+
+concurrency:
+  group: research-phase1-b1-b4-v1
+  cancel-in-progress: false
+
+jobs:
+  prepare-cmp-history:
+    name: Prepare persistent CMP history release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create research release if absent
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$CMP_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $CMP_RELEASE_TAG already exists."
+          else
+            gh release create "$CMP_RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Research CMP owner-month P/S history v1" \
+              --notes "Research-only original-form SEC P/S owner-month history for annual CMP classification. Development support only; 2023+ excluded; no production scoring changes." \
+              --prerelease
+          fi
+
+  cmp-history:
+    name: Build CMP owner-month history ${{ matrix.year }}
+    needs: prepare-cmp-history
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: true
+      max-parallel: 1
+      matrix:
+        year: [2013, 2014, 2015, 2016, 2017, 2018, 2019]
+    env:
+      YEAR: ${{ matrix.year }}
+      ASSET_NAME: cmp-owner-month-${{ matrix.year }}.csv
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check persistent yearly CMP artifact
+        id: persisted
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$CMP_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq "$ASSET_NAME"; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "$ASSET_NAME already exists; preserving frozen research history."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-python@v5
+        if: steps.persisted.outputs.skip != 'true'
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        if: steps.persisted.outputs.skip != 'true'
+        with:
+          enable-cache: true
+      - name: Install locked environment
+        if: steps.persisted.outputs.skip != 'true'
+        run: uv sync --all-groups --frozen
+      - name: Require SEC User-Agent
+        if: steps.persisted.outputs.skip != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SEC_USER_AGENT:-}" || {
+            echo "SEC_USER_AGENT repository variable is required"
+            exit 1
+          }
+      - name: Backfill verified quarterly bulk source
+        if: steps.persisted.outputs.skip != 'true'
+        shell: bash
+        run: >-
+          uv run insider-turning backfill-sec-history
+          --start-year "$YEAR" --start-quarter 1
+          --end-year "$YEAR" --end-quarter 4
+          --cache-dir work/sec-history/cache
+          --staging-dir work/sec-history/staging
+          --execute
+      - name: Extract conservative original-form P/S owner-month history
+        if: steps.persisted.outputs.skip != 'true'
+        shell: bash
+        run: >-
+          uv run python scripts/research_cmp_trade_history.py
+          --staging-root work/sec-history/staging
+          --start-year "$YEAR" --end-year "$YEAR"
+          --output "work/cmp/$ASSET_NAME"
+      - name: Assert CMP history boundary
+        if: steps.persisted.outputs.skip != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          year = os.environ["YEAR"]
+          summary = Path("work/cmp") / f"cmp-owner-month-{year}.summary.json"
+          s = json.loads(summary.read_text())
+          assert s["period"] == year
+          assert s["amendmentsIncluded"] is False
+          assert s["researchOnly"] is True
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["ownerMonthRows"] > 0
+          assert s["distinctOwners"] > 0
+          PY
+      - uses: actions/upload-artifact@v4
+        if: steps.persisted.outputs.skip != 'true'
+        with:
+          name: cmp-owner-month-${{ matrix.year }}-${{ github.run_id }}
+          path: |
+            work/cmp/cmp-owner-month-${{ matrix.year }}.csv
+            work/cmp/cmp-owner-month-${{ matrix.year }}.summary.json
+          retention-days: 90
+      - name: Persist frozen yearly CMP history
+        if: steps.persisted.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release upload "$CMP_RELEASE_TAG" \
+            "work/cmp/cmp-owner-month-$YEAR.csv" \
+            "work/cmp/cmp-owner-month-$YEAR.summary.json" \
+            --repo "$GITHUB_REPOSITORY"
+
+  b1-b4-development:
+    name: Run B1 and B4 development cohorts
+    needs: cmp-history
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Ruff research runners and regression tests
+        run: >-
+          uv run ruff check
+          scripts/research_cmp_trade_history.py
+          scripts/research_phase1_b1.py
+          scripts/research_phase1_b2.py
+          scripts/research_phase1_b2_fast.py
+          scripts/research_phase1_b4.py
+          tests/test_research_phase1_b1.py
+          tests/test_research_phase1_b2.py
+          tests/test_research_phase1_b4.py
+      - name: Test B1/B2/B4 PIT semantics
+        run: >-
+          uv run pytest
+          tests/test_research_phase1_b1.py
+          tests/test_research_phase1_b2.py
+          tests/test_research_phase1_b4.py
+          -q
+      - name: Download bounded research evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/cmp-history work/sec work/market work/downloads work/b0-reference work/b2-reference
+
+          gh release download "$CMP_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'cmp-owner-month-20??.csv' --dir work/cmp-history
+          for year in 2013 2014 2015 2016 2017 2018 2019; do
+            test -s "work/cmp-history/cmp-owner-month-${year}.csv"
+          done
+
+          gh release download "$SEC_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'sec-amendment-reconciliation-2013-2022.tar.gz' \
+            --dir work/downloads
+          tar -xzf work/downloads/sec-amendment-reconciliation-2013-2022.tar.gz \
+            -C work/sec effective-end-2022.jsonl
+
+          gh release download "$MARKET_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'alpaca-market-20*.tar.gz' --dir work/downloads
+          for year in 2016 2017 2018 2019 2020 2021 2022; do
+            mkdir -p "work/market/$year"
+            tar -xzf "work/downloads/alpaca-market-${year}.tar.gz" -C "work/market/$year"
+          done
+
+          gh release download "$BASELINE_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'summary.json' --dir work/b0-reference
+          gh release download "$BASELINE_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'b2-summary.json' --dir work/b2-reference
+
+          test -s work/b0-reference/summary.json
+          test -s work/b2-reference/b2-summary.json
+          test ! -e work/market/2023
+      - name: Recompute authoritative P0 exact-calendar tier
+        run: >-
+          uv run python scripts/research_market_event_audit_v2.py
+          --sec work/sec/effective-end-2022.jsonl
+          --market-root work/market
+          --output work/p0
+      - name: Require at least exploratory P0 tier
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          s = json.loads(Path("work/p0/summary.json").read_text())
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["dataQualityGate"]["tier"] in {
+              "A_HIGH_CONFIDENCE", "B_RESEARCH_GRADE", "C_EXPLORATORY"
+          }
+          PY
+      - name: Run canonical B1 development cohort
+        run: >-
+          uv run python scripts/research_phase1_b1.py
+          --sec work/sec/effective-end-2022.jsonl
+          --cmp-history-root work/cmp-history
+          --market-root work/market
+          --p0-summary work/p0/summary.json
+          --b0-summary work/b0-reference/summary.json
+          --output work/b1
+      - name: Assert B1 research boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          s = json.loads(Path("work/b1/summary.json").read_text())
+          assert s["status"] == "PHASE1_B1_DEVELOPMENT_DESCRIPTIVE_COMPLETE"
+          assert s["period"] == "2016-2020 XNYS evaluation-session cohort"
+          assert s["outcomeMarketBoundary"] == "2016-2022 only"
+          assert s["definition"]["classificationTiming"] == "start of each calendar year"
+          assert s["definition"]["historyYears"] == 3
+          assert s["primaryHorizonSessions"] == 126
+          assert s["dedupSessions"] == 20
+          assert s["researchOnly"] is True
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["canonicalReady"] is False
+          assert s["signalReady"] is False
+          assert s["selection"]["retainedAfterDedup"] > 0
+          assert s["selection"]["exactEntryMatched"] > 0
+          PY
+      - name: Run predeclared B4 intersection development cohort
+        run: >-
+          uv run python scripts/research_phase1_b4.py
+          --sec work/sec/effective-end-2022.jsonl
+          --cmp-history-root work/cmp-history
+          --market-root work/market
+          --p0-summary work/p0/summary.json
+          --b0-summary work/b0-reference/summary.json
+          --b1-summary work/b1/summary.json
+          --b2-summary work/b2-reference/b2-summary.json
+          --output work/b4
+      - name: Assert B4 research boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          s = json.loads(Path("work/b4/summary.json").read_text())
+          assert s["status"] == "PHASE1_B4_DEVELOPMENT_DESCRIPTIVE_COMPLETE"
+          assert s["period"] == "2016-2020 XNYS evaluation-session cohort"
+          assert s["outcomeMarketBoundary"] == "2016-2022 only"
+          assert s["definition"]["intersectionKey"] == "issuer CIK + exact XNYS evaluation session"
+          assert s["definition"]["futureConfirmationAllowed"] is False
+          assert s["definition"]["intersectionTiming"] == "form intersection before common issuer-level deduplication"
+          assert s["primaryHorizonSessions"] == 126
+          assert s["dedupSessions"] == 20
+          assert s["researchOnly"] is True
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["canonicalReady"] is False
+          assert s["signalReady"] is False
+          assert s["selection"]["jointEventsBeforeDedup"] >= s["selection"]["retainedAfterDedup"]
+          assert s["selection"]["retainedAfterDedup"] >= s["selection"]["exactEntryMatched"]
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase1-b1-b4-development-${{ github.run_id }}
+          path: |
+            work/p0/summary.json
+            work/b1/summary.json
+            work/b1/events.csv
+            work/b4/summary.json
+            work/b4/events.csv
+          retention-days: 90
+      - name: Persist B1 and B4 research evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp work/b1/summary.json work/b1/b1-summary.json
+          cp work/b1/events.csv work/b1/b1-events.csv
+          cp work/b4/summary.json work/b4/b4-summary.json
+          cp work/b4/events.csv work/b4/b4-events.csv
+          gh release upload "$BASELINE_RELEASE_TAG" \
+            work/b1/b1-summary.json \
+            work/b1/b1-events.csv \
+            work/b4/b4-summary.json \
+            work/b4/b4-events.csv \
+            --repo "$GITHUB_REPOSITORY" --clobber
