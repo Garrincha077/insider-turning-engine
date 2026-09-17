@@ -46,6 +46,53 @@ For cohort-wide machine-readable screening, use the Alpaca corporate-actions end
 
 For identity-changing or ambiguous cases, primary SEC/exchange/issuer evidence controls over provider labels.
 
+## Frozen performance-blind screening triggers
+
+The pre-performance ledger must screen **every retained event/horizon** using only identity, dates, corporate actions and market-bar availability. It must not load or inspect `raw_*`, `excess_*`, MAE or any realized-performance field.
+
+### Provider corporate-action trigger
+
+An event/horizon becomes an affected candidate when an Alpaca corporate action whose effective/process date falls strictly after entry and on or before the target exit is associated with the event ticker/security and is one of:
+
+- `unit_split`;
+- `stock_dividend`;
+- `cash_merger`;
+- `stock_merger`;
+- `stock_and_cash_merger`;
+- `redemption`;
+- `name_change`;
+- `worthless_removal`;
+- `rights_distribution`.
+
+`forward_split`, `reverse_split`, `cash_dividend` and `spin_off` alone do **not** make an event affected because the frozen market feed already uses Alpaca `adjustment=all`. They are still counted in diagnostics.
+
+A `name_change` with identical old/new CUSIP is initially a `SYMBOL_CHANGED_SAME_SECURITY` candidate. Merger/redemption/worthless/removal and changed-CUSIP actions require holder-consideration/identity resolution before performance is read.
+
+### Long internal market-gap trigger
+
+The provider corporate-action feed is known not to contain every cancellation/reorganization case. Therefore an independent, return-blind ticker-continuity screen is also frozen.
+
+For each event/horizon:
+
+1. use the XNYS calendar from the canonical entry session through the canonical target exit session;
+2. inspect only whether an adjusted daily bar exists for the event's original ticker on each XNYS session;
+3. find internal gaps bounded by an observed bar before and an observed bar after the gap;
+4. if an internal gap contains **10 or more consecutive XNYS sessions without a bar**, mark the event/horizon `LONG_INTERNAL_TICKER_GAP_CANDIDATE`;
+5. the gap trigger does not itself classify the security as invalid; absent authoritative resolution it maps to `UNRESOLVED_CONTINUITY` and blocks performance recomputation.
+
+The threshold of 10 XNYS sessions is frozen before scanning the full cohort. It is not chosen from corrected returns. Its purpose is to catch delisting/relisting, old-symbol reuse and cancellation/reissue patterns such as the already verified OAS/AI cases while avoiding ordinary one-day/non-trading noise.
+
+### Verified regression fixtures
+
+The top-10 verification record may resolve its already frozen cases in tests/ledger output, but it may not be used as a hand-picked detection universe. In particular:
+
+- OAS must never chain old common to reorganized new common;
+- AI/Arlington must never chain to later C3.ai `AI` prices;
+- LOV must retain the documented 10:1 holder exchange;
+- HEAR must remain split-adjusted, not receive a second 4:1 correction.
+
+All other events are processed by the same provider-action and long-gap rules.
+
 ## Frozen event classifications
 
 Each event/horizon receives exactly one outcome-continuity state:
@@ -148,6 +195,7 @@ Before recomputing returns, persist a deterministic continuity ledger and summar
 - affected events by action type and continuity state;
 - unique affected issuers/tickers;
 - affected counts by development year;
+- long internal gap counts/distribution;
 - unresolved count;
 - source coverage diagnostics;
 - explicit `performanceRead=false` for this screening stage;
@@ -161,6 +209,8 @@ Regression tests must include at least:
 - AI/Arlington -> symbol changed to AAIC and old `AI` ticker reuse by C3.ai must not be chained;
 - LOV -> 10:1 old-common-to-successor-ADS transformation;
 - HEAR -> split remains price-continuous because adjusted bars already handle it;
+- a synthetic >=10-XNYS-session internal gap -> unresolved candidate;
+- a shorter gap -> not affected by the gap rule;
 - a normal unaffected security -> price-continuous;
 - any 2023+ evidence/date -> hard failure.
 
