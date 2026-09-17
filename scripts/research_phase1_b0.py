@@ -1,8 +1,8 @@
 """Phase-1 B0 development baseline: any qualified PIT insider purchase.
 
-Research-only descriptive runner. Selection is restricted to 2016-2020 events, exact
-XNYS sessions define evaluation/entry/horizons, 2023+ market outcomes are never read,
-and no production scoring object is created or modified.
+Research-only descriptive runner. Selection is restricted to 2016-2020 XNYS evaluation
+sessions, exact XNYS sessions define evaluation/entry/horizons, 2023+ market outcomes
+are never read, and no production scoring object is created or modified.
 """
 
 from __future__ import annotations
@@ -20,6 +20,8 @@ from typing import Any
 import research_market_event_audit as v1
 import research_market_event_audit_v2 as p0
 
+DEVELOPMENT_START = "2016-01-01"
+DEVELOPMENT_END = "2020-12-31"
 DEVELOPMENT_END_YEAR = 2020
 DEDUP_SESSIONS = 20
 PRIMARY_HORIZON = 126
@@ -91,6 +93,7 @@ def run(*, sec_path: Path, market_root: Path, p0_summary: Path, output: Path) ->
     v1._build_market_db(market_files, db_path)
 
     candidates: list[dict[str, Any]] = []
+    boundary_excluded = 0
     for ticker, events in events_by_ticker.items():
         for event in events:
             if int(event["knowledgeYear"]) > DEVELOPMENT_END_YEAR:
@@ -98,6 +101,9 @@ def run(*, sec_path: Path, market_root: Path, p0_summary: Path, output: Path) ->
             if event["identityAmbiguous"]:
                 continue
             evaluation_session = str(event["evaluationSession"])
+            if not (DEVELOPMENT_START <= evaluation_session <= DEVELOPMENT_END):
+                boundary_excluded += 1
+                continue
             index = session_index.get(evaluation_session)
             if index is None:
                 continue
@@ -118,7 +124,7 @@ def run(*, sec_path: Path, market_root: Path, p0_summary: Path, output: Path) ->
         year: defaultdict(int) for year in range(v1.START_YEAR, DEVELOPMENT_END_YEAR + 1)
     }
     for event in candidates:
-        year = int(event["knowledgeYear"])
+        year = int(str(event["evaluationSession"])[:4])
         annual[year]["identityEligibleCandidates"] += 1
         cik = str(event["issuerCik"])
         index = int(event["evaluationIndex"])
@@ -151,7 +157,7 @@ def run(*, sec_path: Path, market_root: Path, p0_summary: Path, output: Path) ->
             rows_by_ticker[ticker] = {str(row[0]): row for row in rows}
 
         for event in retained:
-            year = int(event["knowledgeYear"])
+            year = int(str(event["evaluationSession"])[:4])
             evaluation_index = int(event["evaluationIndex"])
             entry_index = evaluation_index + 1
             if entry_index >= len(sessions):
@@ -175,7 +181,8 @@ def run(*, sec_path: Path, market_root: Path, p0_summary: Path, output: Path) ->
             result: dict[str, Any] = {
                 "issuerCik": str(event["issuerCik"]),
                 "ticker": ticker,
-                "knowledgeYear": year,
+                "knowledgeYear": int(event["knowledgeYear"]),
+                "evaluationYear": year,
                 "knowledgeAtFirst": str(event["knowledgeAtFirst"]),
                 "evaluationSession": str(event["evaluationSession"]),
                 "entrySession": entry_session,
@@ -231,9 +238,7 @@ def run(*, sec_path: Path, market_root: Path, p0_summary: Path, output: Path) ->
                 spy_return = float(spy_exit[4]) / spy_entry_open - 1.0
                 path_rows = [stock.get(day) for day in sessions[entry_index : target_index + 1]]
                 if all(_regular(row) for row in path_rows):
-                    path_low = min(
-                        float(row[3]) for row in path_rows if row is not None
-                    )
+                    path_low = min(float(row[3]) for row in path_rows if row is not None)
                     mae = path_low / entry_open - 1.0
                 else:
                     mae = None
@@ -255,6 +260,7 @@ def run(*, sec_path: Path, market_root: Path, p0_summary: Path, output: Path) ->
         "issuerCik",
         "ticker",
         "knowledgeYear",
+        "evaluationYear",
         "knowledgeAtFirst",
         "evaluationSession",
         "entrySession",
@@ -288,10 +294,10 @@ def run(*, sec_path: Path, market_root: Path, p0_summary: Path, output: Path) ->
         }
 
     summary: dict[str, Any] = {
-        "schemaVersion": "1.0.0",
+        "schemaVersion": "1.1.0",
         "benchmark": "B0_ANY_QUALIFIED_PURCHASE",
         "status": "PHASE1_B0_DEVELOPMENT_DESCRIPTIVE_COMPLETE",
-        "period": "2016-2020 event cohort",
+        "period": "2016-2020 XNYS evaluation-session cohort",
         "outcomeMarketBoundary": "2016-2022 only",
         "p0DataQualityTier": tier,
         "eventUnit": "issuer CIK + eligible XNYS evaluation session",
@@ -306,6 +312,7 @@ def run(*, sec_path: Path, market_root: Path, p0_summary: Path, output: Path) ->
             "qualifiedIssuerSessionEvents2016To2022": int(
                 sec_diag["qualifiedIssuerSessionEvents"]
             ),
+            "developmentBoundaryExcludedByEvaluationSession": boundary_excluded,
             "developmentIdentityEligibleCandidates": len(candidates),
             "dedupSuppressed": duplicate_count,
             "retainedAfterDedup": len(retained),
