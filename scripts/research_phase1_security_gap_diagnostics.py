@@ -16,7 +16,6 @@ from pathlib import Path
 from typing import Any
 
 import exchange_calendars as xcals
-
 import research_market_event_audit as market_audit
 
 SEALED_YEAR = 2023
@@ -142,8 +141,10 @@ def run(*, ledger_path: Path, market_root: Path, output_dir: Path) -> dict[str, 
             observed.get(ticker, []), start_index, end_index
         )
         if gap != int(row["maxInternalGapSessions"]):
+            frozen_gap = row["maxInternalGapSessions"]
             raise ValueError(
-                f"frozen gap mismatch for {ticker}: ledger={row['maxInternalGapSessions']} recomputed={gap}"
+                f"frozen gap mismatch for {ticker}: "
+                f"ledger={frozen_gap} recomputed={gap}"
             )
         if previous_index is None or next_index is None:
             raise ValueError(f"cannot bracket frozen long gap for {ticker}")
