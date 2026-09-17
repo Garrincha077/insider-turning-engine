@@ -1,0 +1,139 @@
+name: Build Phase-1 security continuity ledger
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/research_market_corporate_action_inventory.py"
+      - "scripts/research_phase1_security_continuity_ledger.py"
+      - "tests/test_research_market_corporate_action_inventory.py"
+      - "tests/test_research_phase1_security_continuity_ledger.py"
+      - "research/b1-security-continuity-fixtures.json"
+      - "docs/research-phase1-market-security-continuity-correction-gate.md"
+      - ".github/workflows/research-phase1-security-continuity-ledger.yml"
+
+permissions:
+  contents: read
+
+env:
+  BASELINE_RELEASE_TAG: research-phase1-baselines-v1
+  MARKET_RELEASE_TAG: research-market-alpaca-v1
+
+concurrency:
+  group: research-phase1-security-continuity-ledger-v1
+  cancel-in-progress: false
+
+jobs:
+  ledger:
+    name: Performance-blind B1 security continuity ledger
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY_ID }}
+      ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Ruff frozen continuity runners and tests
+        run: >-
+          uv run ruff check
+          scripts/research_market_corporate_action_inventory.py
+          scripts/research_phase1_security_continuity_ledger.py
+          tests/test_research_market_corporate_action_inventory.py
+          tests/test_research_phase1_security_continuity_ledger.py
+      - name: Test frozen continuity semantics
+        run: >-
+          uv run pytest
+          tests/test_research_market_corporate_action_inventory.py
+          tests/test_research_phase1_security_continuity_ledger.py
+          -q
+      - name: Require Alpaca credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ALPACA_API_KEY_ID"
+          test -n "$ALPACA_API_SECRET_KEY"
+      - name: Download persisted canonical B1 and bounded market evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/source work/downloads work/market work/ca work/ledger
+          gh release download "$BASELINE_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'b1-events.csv' --dir work/source
+          test -s work/source/b1-events.csv
+
+          gh release download "$MARKET_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'alpaca-market-20*.tar.gz' --dir work/downloads
+          for year in 2016 2017 2018 2019 2020 2021 2022; do
+            mkdir -p "work/market/$year"
+            tar -xzf "work/downloads/alpaca-market-${year}.tar.gz" -C "work/market/$year"
+            test -s "work/market/$year/canonical-market-${year}.csv"
+          done
+          test ! -e work/market/2023
+      - name: Build performance-blind corporate-action inventory
+        run: >-
+          uv run python scripts/research_market_corporate_action_inventory.py
+          --events work/source/b1-events.csv
+          --output-dir work/ca
+      - name: Assert corporate-action inventory boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          s = json.loads(Path("work/ca/summary.json").read_text())
+          assert s["period"] == ["2016-01-01", "2022-12-31"]
+          assert s["performanceRead"] is False
+          assert s["researchOnly"] is True
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["eventTickerCount"] > 0
+          assert s["actionCount"] > 0
+          PY
+      - name: Build frozen performance-blind continuity ledger
+        run: >-
+          uv run python scripts/research_phase1_security_continuity_ledger.py
+          --events work/source/b1-events.csv
+          --corporate-actions work/ca/corporate-actions.json
+          --fixtures research/b1-security-continuity-fixtures.json
+          --market-root work/market
+          --output-dir work/ledger
+      - name: Assert ledger boundaries and output contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          s = json.loads(Path("work/ledger/summary.json").read_text())
+          assert s["status"] == "PHASE1_SECURITY_CONTINUITY_LEDGER_COMPLETE"
+          assert s["performanceRead"] is False
+          assert s["researchOnly"] is True
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["gapThresholdSessions"] == 10
+          assert s["eventRowsScanned"] > 0
+          assert s["eventHorizonRows"] > 0
+          assert "raw_126" in s["performanceColumnsIgnored"]
+          assert "excess_126" in s["performanceColumnsIgnored"]
+          assert isinstance(s["performanceStageBlocked"], bool)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase1-security-continuity-ledger-${{ github.run_id }}
+          path: |
+            work/ca/corporate-actions.json
+            work/ca/summary.json
+            work/ledger/continuity-ledger.csv
+            work/ledger/summary.json
+          retention-days: 90
