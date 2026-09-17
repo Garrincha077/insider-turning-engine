@@ -2,6 +2,8 @@
 
 Frozen: 2026-09-17, after the canonical B1/B4 development summaries were persisted and **before** running the diagnostics specified here.
 
+Boundary clarification: the first implementation attempt halted before producing diagnostics because a valid event evaluated on the final 2020 XNYS session can enter on the next XNYS session in 2021. The cohort clock is therefore explicitly the canonical `evaluationSession`, not `entrySession`. This clarification was made before any robustness output was observed and does not change the event set or signal definition.
+
 This is a research-only development gate. It does not change B1, B2, B4, production scoring, or the sealed OOS boundary.
 
 ## Motivation
@@ -16,7 +18,8 @@ The next step is therefore **not** to optimize B1. It is to test how much of the
 - signal definition: unchanged;
 - primary outcome: `excess_126`;
 - secondary descriptive horizons: 21, 63 and 252 sessions;
-- development event dates: 2016-01-01 through 2020-12-31;
+- development **evaluation sessions**: 2016-01-01 through 2020-12-31;
+- execution remains next XNYS open, so a late-2020 evaluation may validly have an `entrySession` in early 2021;
 - available outcomes: through 2022 only;
 - 2023+ OOS: sealed and forbidden;
 - event source: persisted canonical B1 `events.csv` from `research-phase1-baselines-v1` / run `35263058619`;
@@ -32,6 +35,8 @@ For each horizon, and especially 126 sessions, report on mature exact-entry even
 4. P01/P05/P95/P99 quantiles;
 5. share of aggregate positive excess contributed by the top 1%, 5% and 10% of positive observations;
 6. share of the total signed excess sum contributed by the ten largest winners, reported as a concentration diagnostic only.
+
+Tail-cut semantics are deterministic: for trimming/removal use `floor(N * p)` observations per requested tail; empirical quantiles use linear interpolation on `(N-1)*q`; positive-tail concentration uses the largest `ceil(N_positive * p)` positive observations.
 
 The canonical untrimmed mean remains the primary descriptive statistic. Trimmed and top-tail-removed means are diagnostics and must not replace it post hoc.
 
@@ -61,7 +66,7 @@ This is **not** a full calendar-time portfolio and must not be described as one 
 
 ## Diagnostic family D — development-year stability
 
-Using `entrySession` year and mature `excess_126`:
+Using canonical **`evaluationSession` year** and mature `excess_126`:
 
 - report N, mean, median and win rate for each of 2016, 2017, 2018, 2019 and 2020;
 - report the number of development years with positive mean excess;
