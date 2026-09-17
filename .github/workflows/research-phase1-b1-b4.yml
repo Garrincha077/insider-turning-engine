@@ -128,7 +128,7 @@ jobs:
           year = os.environ["YEAR"]
           summary = Path("work/cmp") / f"cmp-owner-month-{year}.summary.json"
           s = json.loads(summary.read_text())
-          assert s["period"] == year
+          assert s["period"] == f"{year}-{year}"
           assert s["amendmentsIncluded"] is False
           assert s["researchOnly"] is True
           assert s["oosOpened"] is False
