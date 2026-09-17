@@ -15,8 +15,9 @@ import json
 import math
 import statistics
 from collections import defaultdict
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 HORIZONS = (21, 63, 126, 252)
 PRIMARY_HORIZON = 126
@@ -145,7 +146,11 @@ def _validate_row_dates(row: dict[str, str]) -> None:
         if year is not None and year >= SEALED_YEAR:
             raise ValueError(f"sealed OOS boundary violated by {field}")
     evaluation_year = _date_year(row.get("evaluationSession"))
-    if evaluation_year is None or not DEVELOPMENT_START_YEAR <= evaluation_year <= DEVELOPMENT_END_YEAR:
+    in_development = (
+        evaluation_year is not None
+        and DEVELOPMENT_START_YEAR <= evaluation_year <= DEVELOPMENT_END_YEAR
+    )
+    if not in_development:
         raise ValueError("evaluationSession outside frozen development cohort")
 
 
@@ -295,7 +300,13 @@ def _warnings(
     }
 
 
-def run(*, events_path: Path, source_summary_path: Path, output_path: Path, source_run_id: str) -> dict[str, Any]:
+def run(
+    *,
+    events_path: Path,
+    source_summary_path: Path,
+    output_path: Path,
+    source_run_id: str,
+) -> dict[str, Any]:
     summary_text = source_summary_path.read_bytes()
     source_summary = json.loads(summary_text)
     _validate_source_summary(source_summary)
@@ -335,9 +346,10 @@ def run(*, events_path: Path, source_summary_path: Path, output_path: Path, sour
         "warningConditions": warnings,
         "blockingWarningPresent": any(warnings.values()),
         "interpretation": (
-            "Development-only dependence/tail diagnostics. No formal alpha claim and no OOS opening. "
-            "A clean warning set is necessary but not sufficient for progression to a separately frozen "
-            "daily-path calendar-time/HAC inference design."
+            "Development-only dependence/tail diagnostics. No formal alpha claim "
+            "and no OOS opening. A clean warning set is necessary but not sufficient "
+            "for progression to a separately frozen daily-path calendar-time/HAC "
+            "inference design."
         ),
     }
     output_path.parent.mkdir(parents=True, exist_ok=True)
