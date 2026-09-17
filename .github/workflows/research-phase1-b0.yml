@@ -1,0 +1,139 @@
+name: Run Phase-1 B0 development baseline
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "scripts/research_phase1_b0.py"
+      - "scripts/research_market_event_audit_v2.py"
+      - ".github/workflows/research-phase1-b0.yml"
+      - "docs/P0_PHASE1_IMPLEMENTATION.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-b0-v1
+  cancel-in-progress: false
+
+env:
+  SEC_RELEASE_TAG: research-sec-amendments-v1
+  MARKET_RELEASE_TAG: research-market-alpaca-v1
+  B0_RELEASE_TAG: research-phase1-baselines-v1
+
+jobs:
+  b0-development:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Ruff research runners
+        run: >-
+          uv run ruff check
+          scripts/research_market_event_audit.py
+          scripts/research_market_event_audit_v2.py
+          scripts/research_phase1_b0.py
+      - name: Download bounded SEC and market evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/sec work/market work/downloads
+          gh release download "$SEC_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'sec-amendment-reconciliation-2013-2022.tar.gz' \
+            --dir work/downloads
+          tar -xzf work/downloads/sec-amendment-reconciliation-2013-2022.tar.gz \
+            -C work/sec effective-end-2022.jsonl
+          gh release download "$MARKET_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'alpaca-market-20*.tar.gz' \
+            --dir work/downloads
+          for year in 2016 2017 2018 2019 2020 2021 2022; do
+            mkdir -p "work/market/$year"
+            tar -xzf "work/downloads/alpaca-market-${year}.tar.gz" -C "work/market/$year"
+          done
+          test ! -e work/market/2023
+      - name: Recompute authoritative P0 exact-calendar tier
+        run: >-
+          uv run python scripts/research_market_event_audit_v2.py
+          --sec work/sec/effective-end-2022.jsonl
+          --market-root work/market
+          --output work/p0
+      - name: Require at least exploratory P0 tier
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          s = json.loads(Path("work/p0/summary.json").read_text())
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["dataQualityGate"]["tier"] in {
+              "A_HIGH_CONFIDENCE",
+              "B_RESEARCH_GRADE",
+              "C_EXPLORATORY",
+          }
+          PY
+      - name: Run B0 development cohort only
+        run: >-
+          uv run python scripts/research_phase1_b0.py
+          --sec work/sec/effective-end-2022.jsonl
+          --market-root work/market
+          --p0-summary work/p0/summary.json
+          --output work/b0
+      - name: Assert B0 research boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          s = json.loads(Path("work/b0/summary.json").read_text())
+          assert s["status"] == "PHASE1_B0_DEVELOPMENT_DESCRIPTIVE_COMPLETE"
+          assert s["period"] == "2016-2020 event cohort"
+          assert s["outcomeMarketBoundary"] == "2016-2022 only"
+          assert s["primaryHorizonSessions"] == 126
+          assert s["dedupSessions"] == 20
+          assert s["researchOnly"] is True
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["canonicalReady"] is False
+          assert s["signalReady"] is False
+          assert s["selection"]["retainedAfterDedup"] > 0
+          assert s["selection"]["exactEntryMatched"] > 0
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase1-b0-development-${{ github.run_id }}
+          path: |
+            work/p0/summary.json
+            work/b0/summary.json
+            work/b0/events.csv
+          retention-days: 90
+      - name: Persist B0 research evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp work/p0/summary.json work/b0/p0-summary.json
+          if ! gh release view "$B0_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$B0_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+              --title "Phase-1 research baselines v1" \
+              --notes "Research-only insider baselines. 2023+ remains sealed; production scoring unchanged."
+          fi
+          gh release upload "$B0_RELEASE_TAG" \
+            work/b0/summary.json \
+            work/b0/events.csv \
+            work/b0/p0-summary.json \
+            --repo "$GITHUB_REPOSITORY" --clobber
