@@ -93,7 +93,9 @@ def _join_corrected_to_canonical(
             }
         )
     if seen_events != set(range(1, len(canonical_rows) + 1)):
-        raise ValueError("corrected primary eventNumber set diverges from frozen canonical B1 order")
+        raise ValueError(
+            "corrected primary eventNumber set diverges from frozen canonical B1 order"
+        )
     return joined
 
 
@@ -212,7 +214,8 @@ def run(
         "interpretation": (
             "Development-only residual tail/year attribution using the same audit semantics frozen "
             "before the canonical top-tail identities were inspected. No discovered identity, year "
-            "or return magnitude is an exclusion rule. HAC/calendar-time and 2023+ OOS remain closed."
+            "or return magnitude is an exclusion rule. HAC/calendar-time and 2023+ OOS remain "
+            "closed."
         ),
     }
     output_path.parent.mkdir(parents=True, exist_ok=True)
