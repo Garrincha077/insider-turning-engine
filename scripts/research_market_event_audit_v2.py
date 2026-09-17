@@ -91,6 +91,7 @@ def audit(*, sec_path: Path, market_root: Path, output: Path) -> dict[str, Any]:
     market_files = v1._market_files(market_root)
     expected_sessions = _expected_sessions()
     session_index = {day: index for index, day in enumerate(expected_sessions)}
+    last_study_session = expected_sessions[-1]
 
     db_path = output / "market-audit.sqlite"
     db_path.unlink(missing_ok=True)
@@ -110,6 +111,7 @@ def audit(*, sec_path: Path, market_root: Path, output: Path) -> dict[str, Any]:
     missing_tickers: dict[str, int] = defaultdict(int)
     terminal_tails: list[dict[str, Any]] = []
     entry_matched_total = 0
+    entry_boundary_censored_total = 0
     identity_collision_events = 0
     terminal_interaction_events = 0
 
@@ -155,13 +157,20 @@ def audit(*, sec_path: Path, market_root: Path, output: Path) -> dict[str, Any]:
                 evaluation_session = str(event["evaluationSession"])
                 evaluation_index = session_index.get(evaluation_session)
                 if evaluation_index is None:
+                    if evaluation_session > last_study_session:
+                        stats["evaluationStudyBoundaryRightCensored"] += 1
+                        ystats["evaluationStudyBoundaryRightCensored"] += 1
+                        entry_boundary_censored_total += 1
+                        continue
                     raise ValueError(
                         f"evaluation session outside bounded XNYS calendar: {evaluation_session}"
                     )
+
                 entry_index = evaluation_index + 1
                 if entry_index >= len(expected_sessions):
                     stats["entryStudyBoundaryRightCensored"] += 1
                     ystats["entryStudyBoundaryRightCensored"] += 1
+                    entry_boundary_censored_total += 1
                     continue
 
                 entry_date = expected_sessions[entry_index]
@@ -224,8 +233,9 @@ def audit(*, sec_path: Path, market_root: Path, output: Path) -> dict[str, Any]:
     usable_ticker = total_events - identity_missing
     ambiguous_total = multi_real_ticker + identity_collision_events
     identity_eligible = usable_ticker - ambiguous_total
+    entry_assessable = identity_eligible - entry_boundary_censored_total
 
-    entry_coverage = entry_matched_total / identity_eligible if identity_eligible else 0.0
+    entry_coverage = entry_matched_total / entry_assessable if entry_assessable else 0.0
     identity_missing_rate = identity_missing / total_events if total_events else 0.0
     identity_ambiguity_rate = ambiguous_total / usable_ticker if usable_ticker else 0.0
     total_identity_problem_rate = (
@@ -236,9 +246,12 @@ def audit(*, sec_path: Path, market_root: Path, output: Path) -> dict[str, Any]:
     coverage_by_year: dict[str, float | None] = {}
     observed_year_coverages: list[float] = []
     for year, values in year_stats.items():
-        eligible = int(values.get("identityEligible", 0))
+        boundary = int(values.get("evaluationStudyBoundaryRightCensored", 0)) + int(
+            values.get("entryStudyBoundaryRightCensored", 0)
+        )
+        assessable = int(values.get("identityEligible", 0)) - boundary
         matched = int(values.get("entryMatched", 0))
-        coverage = matched / eligible if eligible else None
+        coverage = matched / assessable if assessable else None
         coverage_by_year[str(year)] = coverage
         if coverage is not None:
             observed_year_coverages.append(coverage)
@@ -274,7 +287,7 @@ def audit(*, sec_path: Path, market_root: Path, output: Path) -> dict[str, Any]:
     )
 
     summary: dict[str, Any] = {
-        "schemaVersion": "2.0.0",
+        "schemaVersion": "2.1.0",
         "dataset": "Exact-XNYS issuer-session market coverage and terminal audit",
         "period": "2016-2022",
         "baselineUniverse": "non-derivative open-market purchase P/A",
@@ -292,6 +305,8 @@ def audit(*, sec_path: Path, market_root: Path, output: Path) -> dict[str, Any]:
             "identityMissingOrPlaceholderEvents": identity_missing,
             "identityAmbiguousEvents": ambiguous_total,
             "identityEligibleEvents": identity_eligible,
+            "studyBoundaryRightCensoredBeforeEntry": entry_boundary_censored_total,
+            "identityEligibleAssessableForEntry": entry_assessable,
             "entryMatchedEvents": entry_matched_total,
             "eligibleExactEntryCoverage": entry_coverage,
             "identityMissingOrPlaceholderRate": identity_missing_rate,
@@ -328,6 +343,7 @@ def audit(*, sec_path: Path, market_root: Path, output: Path) -> dict[str, Any]:
                 "oosClosed": True,
                 "exactXnysEntrySessionRequired": True,
                 "exactXnysHorizonSessionRequired": True,
+                "studyBoundaryCensoringExcludedFromEntryCoverage": True,
                 "terminalRowsExcludedFromRegularSessions": True,
                 "missingOutcomesNotImputed": True,
             },
