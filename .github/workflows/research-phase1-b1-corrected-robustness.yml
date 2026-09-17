@@ -1,0 +1,143 @@
+name: Run Phase-1 corrected B1 robustness gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/security-continuity-resolution]
+    paths:
+      - "scripts/research_phase1_b1_corrected_robustness.py"
+      - "tests/test_research_phase1_b1_corrected_robustness.py"
+      - "docs/research-phase1-b1-corrected-robustness-gate.md"
+      - ".github/workflows/research-phase1-b1-corrected-robustness.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  CORRECTED_RUN_ID: "35277369958"
+  CORRECTED_ARTIFACT: phase1-b1-continuity-corrected-performance-35277369958
+  CORRECTED_ARTIFACT_DIGEST: sha256:d750c85b6019740ad381b2f53a9d6ceb379a5665cf8b43f0c70e799484bfa775
+
+concurrency:
+  group: research-phase1-b1-corrected-robustness-v1
+  cancel-in-progress: false
+
+jobs:
+  corrected-robustness:
+    name: Frozen dependence and tail diagnostics on corrected B1
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+
+      - name: Ruff corrected robustness runner and tests
+        run: >-
+          uv run ruff check
+          scripts/research_phase1_b1_corrected_robustness.py
+          tests/test_research_phase1_b1_corrected_robustness.py
+
+      - name: Test frozen corrected robustness semantics
+        run: >-
+          uv run pytest
+          tests/test_research_phase1_b1_corrected_robustness.py
+          -q
+
+      - name: Verify frozen corrected-performance artifact identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          run_id = os.environ["CORRECTED_RUN_ID"]
+          name = os.environ["CORRECTED_ARTIFACT"]
+          digest = os.environ["CORRECTED_ARTIFACT_DIGEST"]
+          raw = subprocess.check_output(
+              ["gh", "api", f"repos/{repo}/actions/runs/{run_id}/artifacts"],
+              text=True,
+          )
+          matches = [item for item in json.loads(raw)["artifacts"] if item["name"] == name]
+          assert len(matches) == 1, (name, len(matches))
+          assert matches[0]["expired"] is False
+          assert matches[0]["digest"] == digest, (matches[0]["digest"], digest)
+          PY
+
+      - name: Download frozen corrected-performance artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/source work/output
+          gh run download "$CORRECTED_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name "$CORRECTED_ARTIFACT" --dir work/source
+          test -s work/source/summary.json
+          test -s work/source/b1-corrected-event-horizons.csv
+
+      - name: Run unchanged frozen robustness gate on corrected B1
+        run: >-
+          uv run python scripts/research_phase1_b1_corrected_robustness.py
+          --event-horizons work/source/b1-corrected-event-horizons.csv
+          --source-summary work/source/summary.json
+          --output work/output/corrected-robustness-summary.json
+          --source-run-id "$CORRECTED_RUN_ID"
+          --source-artifact "$CORRECTED_ARTIFACT"
+          --source-artifact-digest "$CORRECTED_ARTIFACT_DIGEST"
+
+      - name: Assert research boundaries and fail-closed progression semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          s = json.loads(Path("work/output/corrected-robustness-summary.json").read_text())
+          assert s["status"] == "PHASE1_B1_CONTINUITY_CORRECTED_ROBUSTNESS_COMPLETE"
+          assert s["resultClass"] == "research/descriptive"
+          assert s["researchOnly"] is True
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["formalAlphaClaim"] is False
+          assert s["oosEligible"] is False
+          assert s["calendarTimeHacStageOpened"] is False
+          assert s["primaryHorizonSessions"] == 126
+          assert s["horizonsSessions"] == [21, 63, 126, 252]
+          assert s["source"]["runId"] == "35277369958"
+          assert s["source"]["artifactDigest"] == "sha256:d750c85b6019740ad381b2f53a9d6ceb379a5665cf8b43f0c70e799484bfa775"
+          assert s["source"]["continuityUnresolvedRows"] == 0
+          assert s["scope"]["events"] == 6094
+          assert s["scope"]["eventHorizonRows"] == 24376
+          assert set(s["correctedReproduction"]) == {"21", "63", "126", "252"}
+          assert set(s["warningConditions"]) == {
+              "issuerEqualWeightMeanNonPositive",
+              "entrySessionEqualWeightMeanNonPositive",
+              "top1PctRemovedMeanNonPositive",
+              "fewerThanThreePositiveMeanYears",
+              "top1PctPositiveTailAtLeastHalf",
+          }
+          assert isinstance(s["blockingWarningPresent"], bool)
+          if s["blockingWarningPresent"]:
+              assert s["progression"] == "BLOCK_HAC_AND_OOS"
+          else:
+              assert s["progression"] == "MAY_FREEZE_SEPARATE_DAILY_PATH_HAC_DESIGN"
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase1-b1-corrected-robustness-${{ github.run_id }}
+          path: work/output/corrected-robustness-summary.json
+          retention-days: 90
