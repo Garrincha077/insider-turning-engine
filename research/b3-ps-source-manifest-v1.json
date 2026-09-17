@@ -1,0 +1,99 @@
+{
+  "schemaVersion": "1.0.0",
+  "period": "2013-2022",
+  "researchOnly": true,
+  "oosOpened": false,
+  "warmupSourceRunId": "35060455633",
+  "developmentValidationCandidateRunId": "34884538222",
+  "developmentValidationHistoryRunId": "34883719192",
+  "years": {
+    "2013": {
+      "combined": {
+        "artifact": "sec-warmup-source-2013-35060455633",
+        "digest": "sha256:6e3d61197d8bd44d873ee6a8463dc0e342e853bf2afdab203f8514f1fcfe4555"
+      }
+    },
+    "2014": {
+      "combined": {
+        "artifact": "sec-warmup-source-2014-35060455633",
+        "digest": "sha256:08990ce69345eaf2c189948a8d53b485ad38f54b3efd89d98a28c2086cf66458"
+      }
+    },
+    "2015": {
+      "combined": {
+        "artifact": "sec-warmup-source-2015-35060455633",
+        "digest": "sha256:6fb75c28c1c243620f7b1e93e14a2c92778a6dde118779e27af962cafe7f3694"
+      }
+    },
+    "2016": {
+      "candidate": {
+        "artifact": "sec-candidates-2016-34884538222",
+        "digest": "sha256:0b0b8015a664a341c312db3fa0a7d870b4369b3080186582feb135f40afd3b27"
+      },
+      "history": {
+        "artifact": "sec-history-2016-34883719192",
+        "digest": "sha256:8c3950ea61535bde0fc2301b8f50e167453ae343bbe33743823769d9860b8516"
+      }
+    },
+    "2017": {
+      "candidate": {
+        "artifact": "sec-candidates-2017-34884538222",
+        "digest": "sha256:679b4ec37bbc83b72426c2fc80651a884870e3949c772e550b54068da7b268b4"
+      },
+      "history": {
+        "artifact": "sec-history-2017-34883719192",
+        "digest": "sha256:840fb06dccc99fc10d6600c4c2d190c8cc98f9eb1efa7631169fbe98bd8cc96e"
+      }
+    },
+    "2018": {
+      "candidate": {
+        "artifact": "sec-candidates-2018-34884538222",
+        "digest": "sha256:9946b6e1860129ce8637214df3f71a3b862f5c43a69eb234eb3df514841b83a9"
+      },
+      "history": {
+        "artifact": "sec-history-2018-34883719192",
+        "digest": "sha256:90725c42243f78d78a5b027400f53038acb6417be06b5d18cb33a3b4446d6390"
+      }
+    },
+    "2019": {
+      "candidate": {
+        "artifact": "sec-candidates-2019-34884538222",
+        "digest": "sha256:ab24be6ceb8220333ecefb4af86623df9e36b6c89ab0952e6ec126871a46542f"
+      },
+      "history": {
+        "artifact": "sec-history-2019-34883719192",
+        "digest": "sha256:c958617c27635cb10c1593bcf3a162ff1252eb02bfdd6f22fa8c9a303538243d"
+      }
+    },
+    "2020": {
+      "candidate": {
+        "artifact": "sec-candidates-2020-34884538222",
+        "digest": "sha256:7db4a11046b32a2ad5e8339b8d21fe8c58ea01136f13bf76857152854505a0c5"
+      },
+      "history": {
+        "artifact": "sec-history-2020-34883719192",
+        "digest": "sha256:8f98d1a3d4dbb3400ed3f0165ddc03d46b4e1244ffc6d62863ccf01e63b0a196"
+      }
+    },
+    "2021": {
+      "candidate": {
+        "artifact": "sec-candidates-2021-34884538222",
+        "digest": "sha256:2e0187e07feeaec571307891cf2cb5a41157d11ed7ab5088f42e24e924d653e1"
+      },
+      "history": {
+        "artifact": "sec-history-2021-34883719192",
+        "digest": "sha256:2933bce9d807cd9fa5822ec4c367f061fb8d113e4663b14dd68f185280f86ed0"
+      }
+    },
+    "2022": {
+      "candidate": {
+        "artifact": "sec-candidates-2022-34884538222",
+        "digest": "sha256:d36f755d3410aae9322151f5b4baccb40dde24f80065c6c6b5b1db71a62aecc6"
+      },
+      "history": {
+        "artifact": "sec-history-2022-34883719192",
+        "digest": "sha256:c2309d317c4297673e885febf6a80516052772ee63e3d9d3d951dea39c6ddaf4"
+      }
+    }
+  }
+}
