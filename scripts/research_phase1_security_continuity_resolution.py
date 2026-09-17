@@ -8,8 +8,9 @@ import hashlib
 import io
 import json
 from collections import Counter
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 SEALED_YEAR = 2023
 LONG_GAP_SESSIONS = 10
@@ -158,6 +159,7 @@ def _load_contract(path: Path) -> tuple[dict[str, Any], str]:
             )
         if row.get("expectedSourceState") != "UNRESOLVED_CONTINUITY":
             raise ValueError("resolution may only target frozen unresolved rows")
+
         decision = row.get("resolutionDecision")
         if decision == "SAME_SECURITY_CONTINUITY":
             if row.get("resultState") != "PRICE_CONTINUOUS_ADJUSTED":
@@ -207,6 +209,7 @@ def _load_source_ledger(
     }
     if not required.issubset(fields):
         raise ValueError("source continuity ledger missing required continuity fields")
+
     rows = []
     for raw_row in reader:
         row = {field: str(raw_row.get(field) or "").strip() for field in fields}
