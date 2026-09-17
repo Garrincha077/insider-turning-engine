@@ -1,0 +1,236 @@
+name: Run Phase-1 B1 continuity-corrected performance
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/security-continuity-resolution]
+    paths:
+      - "scripts/research_phase1_b1_corrected_performance.py"
+      - "tests/test_research_phase1_b1_corrected_performance.py"
+      - "research/b1-security-continuity-fixtures.json"
+      - "research/b1-security-continuity-resolution-v1.json"
+      - ".github/workflows/research-phase1-b1-corrected-performance.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  BASELINE_RELEASE_TAG: research-phase1-baselines-v1
+  MARKET_RELEASE_TAG: research-market-alpaca-v1
+  SOURCE_CONTINUITY_RUN_ID: "35272112415"
+  SOURCE_CONTINUITY_ARTIFACT: phase1-security-continuity-ledger-35272112415
+  SOURCE_CONTINUITY_ARTIFACT_DIGEST: sha256:7e67aa271d60f8f3837e3db76f3a8a0e20312fdea5baf7f031e387d25349c4b8
+  RESOLVED_CONTINUITY_RUN_ID: "35275669277"
+  RESOLVED_CONTINUITY_ARTIFACT: phase1-security-continuity-resolution-35275669277
+  RESOLVED_CONTINUITY_ARTIFACT_DIGEST: sha256:f5d1dbbb2978bf495d439dfaa0981f4f0d987260e85e96f266866647b0d65f8c
+  B1_B4_RUN_ID: "35263058619"
+  B1_B4_ARTIFACT: phase1-b1-b4-development-35263058619
+  B1_B4_ARTIFACT_DIGEST: sha256:1021de09ebaa190604bf1762714fe014ebc75e3e197b47d2d684003289ed638d
+
+concurrency:
+  group: research-phase1-b1-corrected-performance-v1
+  cancel-in-progress: false
+
+jobs:
+  corrected-performance:
+    name: B1 corrected performance after frozen continuity gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+
+      - name: Ruff corrected-performance runner and tests
+        run: >-
+          uv run ruff check
+          scripts/research_phase1_b1_corrected_performance.py
+          tests/test_research_phase1_b1_corrected_performance.py
+
+      - name: Test corrected-performance valuation guardrails
+        run: >-
+          uv run pytest
+          tests/test_research_phase1_b1_corrected_performance.py
+          -q
+
+      - name: Verify frozen upstream artifact identities
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          expected = [
+              (
+                  os.environ["SOURCE_CONTINUITY_RUN_ID"],
+                  os.environ["SOURCE_CONTINUITY_ARTIFACT"],
+                  os.environ["SOURCE_CONTINUITY_ARTIFACT_DIGEST"],
+              ),
+              (
+                  os.environ["RESOLVED_CONTINUITY_RUN_ID"],
+                  os.environ["RESOLVED_CONTINUITY_ARTIFACT"],
+                  os.environ["RESOLVED_CONTINUITY_ARTIFACT_DIGEST"],
+              ),
+              (
+                  os.environ["B1_B4_RUN_ID"],
+                  os.environ["B1_B4_ARTIFACT"],
+                  os.environ["B1_B4_ARTIFACT_DIGEST"],
+              ),
+          ]
+          for run_id, name, digest in expected:
+              raw = subprocess.check_output(
+                  ["gh", "api", f"repos/{repo}/actions/runs/{run_id}/artifacts"],
+                  text=True,
+              )
+              artifacts = json.loads(raw)["artifacts"]
+              matches = [item for item in artifacts if item["name"] == name]
+              assert len(matches) == 1, (run_id, name, len(matches))
+              assert matches[0]["expired"] is False
+              assert matches[0]["digest"] == digest, (name, matches[0]["digest"], digest)
+          PY
+
+      - name: Download frozen continuity and baseline evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/source-continuity work/resolved-continuity work/b1b4 work/b0 work/b2
+          gh run download "$SOURCE_CONTINUITY_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name "$SOURCE_CONTINUITY_ARTIFACT" --dir work/source-continuity
+          gh run download "$RESOLVED_CONTINUITY_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name "$RESOLVED_CONTINUITY_ARTIFACT" --dir work/resolved-continuity
+          gh run download "$B1_B4_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name "$B1_B4_ARTIFACT" --dir work/b1b4
+
+          gh release download "$BASELINE_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'summary.json' --dir work/b0
+          gh release download "$BASELINE_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'b2-summary.json' --dir work/b2
+
+          test -s work/source-continuity/ca/corporate-actions.json
+          test -s work/resolved-continuity/work/resolved/resolved-continuity-ledger.csv
+          test -s work/resolved-continuity/work/resolved/summary.json
+          test -s work/b1b4/b1/events.csv
+          test -s work/b1b4/b1/summary.json
+          test -s work/b1b4/b4/events.csv
+          test -s work/b1b4/b4/summary.json
+          test -s work/b0/summary.json
+          test -s work/b2/b2-summary.json
+
+      - name: Download frozen 2016-2022 market evidence only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/downloads work/market
+          gh release download "$MARKET_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'alpaca-market-20*.tar.gz' --dir work/downloads
+          for year in 2016 2017 2018 2019 2020 2021 2022; do
+            mkdir -p "work/market/$year"
+            tar -xzf "work/downloads/alpaca-market-${year}.tar.gz" -C "work/market/$year"
+            test -s "work/market/$year/canonical-market-${year}.csv"
+          done
+          test ! -e work/market/2023
+          test ! -e work/downloads/alpaca-market-2023.tar.gz
+
+      - name: Assert zero-unresolved continuity gate before performance read
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          s = json.loads(Path("work/resolved-continuity/work/resolved/summary.json").read_text())
+          assert s["status"] == "PHASE1_SECURITY_CONTINUITY_RESOLUTION_COMPLETE"
+          assert s["unresolvedEventHorizonRows"] == 0
+          assert s["performanceStageBlocked"] is False
+          assert s["sourceLedgerUntouched"] is True
+          assert s["frozenScopeExpanded"] is False
+          assert s["performanceRead"] is False
+          assert s["performanceFieldsRead"] == []
+          assert s["priceFieldsRead"] == []
+          assert s["researchOnly"] is True
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["developmentCohortYears"] == [2016, 2017, 2018, 2019, 2020]
+          assert s["outcomeEnd"] == "2022-12-31"
+          assert s["sealedYear"] == 2023
+          assert s["horizons"] == [21, 63, 126, 252]
+          assert s["primaryHorizon"] == 126
+          PY
+
+      - name: Run separately gated continuity-corrected B1 performance
+        run: >-
+          uv run python scripts/research_phase1_b1_corrected_performance.py
+          --b1-events work/b1b4/b1/events.csv
+          --resolved-ledger work/resolved-continuity/work/resolved/resolved-continuity-ledger.csv
+          --continuity-summary work/resolved-continuity/work/resolved/summary.json
+          --corporate-actions work/source-continuity/ca/corporate-actions.json
+          --fixtures research/b1-security-continuity-fixtures.json
+          --resolution-contract research/b1-security-continuity-resolution-v1.json
+          --market-root work/market
+          --b0-summary work/b0/summary.json
+          --b1-summary work/b1b4/b1/summary.json
+          --b2-summary work/b2/b2-summary.json
+          --b4-summary work/b1b4/b4/summary.json
+          --b4-events work/b1b4/b4/events.csv
+          --output work/corrected
+
+      - name: Assert corrected research boundaries and comparison contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          s = json.loads(Path("work/corrected/summary.json").read_text())
+          assert s["status"] == "PHASE1_B1_CONTINUITY_CORRECTED_PERFORMANCE_COMPLETE"
+          assert s["resultClass"] == "research/descriptive"
+          assert s["formalAlphaClaimed"] is False
+          assert s["p0Status"] == "exploratory"
+          assert s["dependenceAwareRobustnessComplete"] is False
+          assert s["calendarTimeRobustnessComplete"] is False
+          assert s["hacRobustnessComplete"] is False
+          assert s["period"] == "2016-2020 XNYS evaluation-session cohort"
+          assert s["outcomeMarketBoundary"] == "2016-2022 only"
+          assert s["horizonsSessions"] == [21, 63, 126, 252]
+          assert s["primaryHorizonSessions"] == 126
+          assert s["researchOnly"] is True
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["b1DefinitionChanged"] is False
+          assert s["b2DefinitionChanged"] is False
+          assert s["b4DefinitionChanged"] is False
+          assert s["continuityGate"]["unresolvedEventHorizonRows"] == 0
+          assert s["scope"]["b1Events"] == 6094
+          assert s["scope"]["b1EventHorizonRows"] == 24376
+          assert s["b4ContinuityCoverageBoundary"]["b4ExactEntryEvents"] == 3475
+          assert s["b4ContinuityCoverageBoundary"]["coveredByFrozenB1ContinuityLedger"] == 3111
+          assert s["b4ContinuityCoverageBoundary"]["outsideFrozenB1ContinuityLedger"] == 364
+          assert s["b4ContinuityCoverageBoundary"]["correctedB4Claimed"] is False
+          assert set(s["horizons"]) == {"21", "63", "126", "252"}
+          assert s["primary126"] == s["horizons"]["126"]
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase1-b1-continuity-corrected-performance-${{ github.run_id }}
+          path: |
+            work/corrected/summary.json
+            work/corrected/b1-corrected-event-horizons.csv
+          retention-days: 90
