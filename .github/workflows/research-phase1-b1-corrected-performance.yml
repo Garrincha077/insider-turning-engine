@@ -2,6 +2,14 @@ name: Run Phase-1 B1 continuity-corrected performance
 
 on:
   workflow_dispatch:
+  push:
+    branches: [research/security-continuity-resolution]
+    paths:
+      - "scripts/research_phase1_b1_corrected_performance.py"
+      - "tests/test_research_phase1_b1_corrected_performance.py"
+      - "research/b1-security-continuity-fixtures.json"
+      - "research/b1-security-continuity-resolution-v1.json"
+      - ".github/workflows/research-phase1-b1-corrected-performance.yml"
 
 permissions:
   contents: read
