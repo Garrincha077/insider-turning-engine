@@ -1,0 +1,188 @@
+name: Run Phase-1 B3 P/S PIT 2016Q1 pilot
+
+on:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - "scripts/research_sec_hydrate_ps.py"
+      - "tests/test_research_sec_hydrate_ps.py"
+      - "docs/research-phase1-b3-ps-pit-history-gate.md"
+      - ".github/workflows/research-phase1-b3-ps-pit-pilot.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: research-phase1-b3-ps-pit-pilot-v1
+  cancel-in-progress: false
+
+env:
+  SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT }}
+  CANDIDATE_RUN_ID: "34884538222"
+  CANDIDATE_ARTIFACT: sec-candidates-2016-34884538222
+  CANDIDATE_DIGEST: sha256:0b0b8015a664a341c312db3fa0a7d870b4369b3080186582feb135f40afd3b27
+  HISTORY_RUN_ID: "34883719192"
+  HISTORY_ARTIFACT: sec-history-2016-34883719192
+  HISTORY_DIGEST: sha256:8c3950ea61535bde0fc2301b8f50e167453ae343bbe33743823769d9860b8516
+
+jobs:
+  pilot:
+    name: Frozen 2016Q1 original P/S PIT pilot
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+
+      - name: Require SEC User-Agent
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SEC_USER_AGENT:-}" || {
+            echo "SEC_USER_AGENT repository variable is required"
+            exit 1
+          }
+
+      - name: Ruff frozen P/S pilot runner and tests
+        run: >-
+          uv run ruff check
+          scripts/research_sec_hydrate_ps.py
+          tests/test_research_sec_hydrate_ps.py
+
+      - name: Test frozen P/S semantics before source download
+        run: >-
+          uv run pytest
+          tests/test_research_sec_hydrate_ps.py
+          -q
+
+      - name: Verify exact frozen source artifact identities
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          expected = [
+              (
+                  os.environ["CANDIDATE_RUN_ID"],
+                  os.environ["CANDIDATE_ARTIFACT"],
+                  os.environ["CANDIDATE_DIGEST"],
+              ),
+              (
+                  os.environ["HISTORY_RUN_ID"],
+                  os.environ["HISTORY_ARTIFACT"],
+                  os.environ["HISTORY_DIGEST"],
+              ),
+          ]
+          for run_id, name, digest in expected:
+              raw = subprocess.check_output(
+                  ["gh", "api", f"repos/{repo}/actions/runs/{run_id}/artifacts?per_page=100"],
+                  text=True,
+              )
+              matches = [
+                  item for item in json.loads(raw)["artifacts"] if item["name"] == name
+              ]
+              assert len(matches) == 1, (run_id, name, len(matches))
+              assert matches[0]["expired"] is False
+              assert matches[0]["digest"] == digest, (name, matches[0]["digest"], digest)
+          PY
+
+      - name: Download frozen 2016 P/S candidates
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.CANDIDATE_ARTIFACT }}
+          path: work/sec-candidates/2016
+          repository: ${{ github.repository }}
+          run-id: ${{ env.CANDIDATE_RUN_ID }}
+          github-token: ${{ github.token }}
+
+      - name: Download frozen verified 2016 SEC bulk history
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.HISTORY_ARTIFACT }}
+          path: work/sec-history/2016
+          repository: ${{ github.repository }}
+          run-id: ${{ env.HISTORY_RUN_ID }}
+          github-token: ${{ github.token }}
+
+      - name: Enrich frozen 2016Q1 candidates with reporting-owner CIK evidence
+        shell: bash
+        run: >-
+          uv run python scripts/research_sec_enrich_reporting_owners.py
+          --candidate-path work/sec-candidates/2016/candidates.jsonl
+          --history-root work/sec-history/2016
+          --year 2016 --quarter 1
+
+      - name: Run frozen 2016Q1 original P/S PIT pilot
+        shell: bash
+        run: >-
+          uv run python scripts/research_sec_hydrate_ps.py
+          --candidate-path work/sec-candidates/2016/candidates.jsonl
+          --output work/output/2016q1
+          --year 2016 --quarter 1
+          --candidate-run-id "$CANDIDATE_RUN_ID"
+          --shard-size 500 --workers 4
+
+      - name: Assert frozen pilot gate and no B3 progression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          s = json.loads(Path("work/output/2016q1/quarter-summary.json").read_text())
+          q = s["qualityGates"]
+          c = s["bulkCanonicalConcordance"]
+          m = s["candidateMix"]
+
+          assert s["source"] == "sec-historical-pit-original-ps-research"
+          assert s["year"] == 2016 and s["quarter"] == 1
+          assert s["researchOnly"] is True
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["canonicalReady"] is False
+          assert s["signalReady"] is False
+          assert s["b3Eligible"] is False
+          assert s["b3DefinitionFrozen"] is False
+          assert s["fullPsHistoryComplete"] is False
+          assert s["amendmentsReconciledForPsUniverse"] is False
+
+          assert q["completeAccessionCoverage"] is True
+          assert q["zeroFailures"] is True
+          assert q["uniqueTransactionIds"] is True
+          assert q["uniqueRevisionIds"] is True
+          assert q["uniqueExactSecRows"] is True
+          assert q["knowledgeEqualsAccepted"] is True
+          assert q["oosOpened"] is False
+          assert q["saleOnlyFilingsPresent"] is True
+
+          assert m["saleOnlyFilings"] > 0
+          assert c["saleCandidateAccessions"] > 0
+          assert c["qualifiedCanonicalSaleRows"] > 0
+          assert c["buyConcordanceRate"] >= 0.995
+          assert c["saleConcordanceRate"] >= 0.995
+          assert s["psHistoryScalePilotPassed"] is True
+          PY
+
+      - name: Upload P/S pilot evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase1-b3-ps-pit-pilot-${{ github.run_id }}
+          path: work/output/2016q1
+          if-no-files-found: warn
+          retention-days: 90
