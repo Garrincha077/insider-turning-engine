@@ -95,12 +95,13 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
+          import csv
           import json
           from pathlib import Path
 
           s = json.loads(Path("work/b0/summary.json").read_text())
           assert s["status"] == "PHASE1_B0_DEVELOPMENT_DESCRIPTIVE_COMPLETE"
-          assert s["period"] == "2016-2020 event cohort"
+          assert s["period"] == "2016-2020 XNYS evaluation-session cohort"
           assert s["outcomeMarketBoundary"] == "2016-2022 only"
           assert s["primaryHorizonSessions"] == 126
           assert s["dedupSessions"] == 20
@@ -111,6 +112,9 @@ jobs:
           assert s["signalReady"] is False
           assert s["selection"]["retainedAfterDedup"] > 0
           assert s["selection"]["exactEntryMatched"] > 0
+          rows = list(csv.DictReader(Path("work/b0/events.csv").open()))
+          assert rows
+          assert all("2016-01-01" <= row["evaluationSession"] <= "2020-12-31" for row in rows)
           PY
       - uses: actions/upload-artifact@v4
         with:
