@@ -24,6 +24,39 @@ SEALED_YEAR = 2023
 BATCH_SIZE = 50
 MAX_ATTEMPTS = 6
 
+# Frozen by the Phase-1 security-continuity correction gate before corrected
+# performance is recomputed. New provider types must not silently expand scope.
+FROZEN_TYPES = (
+    "reverse_split",
+    "forward_split",
+    "unit_split",
+    "cash_dividend",
+    "stock_dividend",
+    "spin_off",
+    "cash_merger",
+    "stock_merger",
+    "stock_and_cash_merger",
+    "redemption",
+    "name_change",
+    "worthless_removal",
+    "rights_distribution",
+)
+FROZEN_BUCKETS = (
+    "reverse_splits",
+    "forward_splits",
+    "unit_splits",
+    "cash_dividends",
+    "stock_dividends",
+    "spin_offs",
+    "cash_mergers",
+    "stock_mergers",
+    "stock_and_cash_mergers",
+    "redemptions",
+    "name_changes",
+    "worthless_removals",
+    "rights_distributions",
+)
+
 
 def _event_tickers(path: Path) -> list[str]:
     tickers: set[str] = set()
@@ -105,6 +138,9 @@ def _normalize(bucket: str, row: dict[str, Any]) -> dict[str, Any]:
             "old_cusip",
             "new_symbol",
             "new_cusip",
+            "source_symbol",
+            "source_cusip",
+            "source_rate",
             "acquirer_symbol",
             "acquirer_cusip",
             "acquirer_rate",
@@ -123,6 +159,20 @@ def _normalize(bucket: str, row: dict[str, Any]) -> dict[str, Any]:
         }
     }
     return {"bucket": bucket, "actionDate": action_date, **keep}
+
+
+def _page_actions(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Read Alpaca's top-level CA arrays without expanding the frozen type set."""
+    normalized: list[dict[str, Any]] = []
+    for bucket in FROZEN_BUCKETS:
+        rows = payload.get(bucket) or []
+        if not isinstance(rows, list):
+            raise ValueError(f"corporate-action bucket {bucket} is not a list")
+        for raw in rows:
+            if not isinstance(raw, dict):
+                raise ValueError(f"corporate-action bucket {bucket} contains a non-object")
+            normalized.append(_normalize(bucket, raw))
+    return normalized
 
 
 def run(*, events_path: Path, output_dir: Path) -> dict[str, Any]:
@@ -147,6 +197,7 @@ def run(*, events_path: Path, output_dir: Path) -> dict[str, Any]:
             while True:
                 params: dict[str, str | int] = {
                     "symbols": ",".join(batch),
+                    "types": ",".join(FROZEN_TYPES),
                     "start": START,
                     "end": END,
                     "limit": 1000,
@@ -156,20 +207,11 @@ def run(*, events_path: Path, output_dir: Path) -> dict[str, Any]:
                     params["page_token"] = page_token
                 payload = _request_page(client, headers, params)
                 pages += 1
-                announcements = payload.get("announcements") or {}
-                if not isinstance(announcements, dict):
-                    raise ValueError("announcements payload is not an object")
-                for bucket, rows in announcements.items():
-                    if not isinstance(rows, list):
-                        continue
-                    for raw in rows:
-                        if not isinstance(raw, dict):
-                            continue
-                        normalized = _normalize(str(bucket), raw)
-                        action_id = str(normalized.get("id") or "").strip()
-                        if not action_id:
-                            raise ValueError("corporate action missing id")
-                        by_id[action_id] = normalized
+                for normalized in _page_actions(payload):
+                    action_id = str(normalized.get("id") or "").strip()
+                    if not action_id:
+                        raise ValueError("corporate action missing id")
+                    by_id[action_id] = normalized
                 token = payload.get("next_page_token")
                 page_token = str(token) if token else None
                 if not page_token:
@@ -191,6 +233,7 @@ def run(*, events_path: Path, output_dir: Path) -> dict[str, Any]:
         "researchOnly": True,
         "oosOpened": False,
         "productionScoringChanged": False,
+        "frozenTypes": list(FROZEN_TYPES),
         "eventTickerCount": len(tickers),
         "requestPages": pages,
         "actionCount": len(actions),
