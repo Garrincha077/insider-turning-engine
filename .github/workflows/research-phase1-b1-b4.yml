@@ -6,10 +6,12 @@ on:
     branches: [main]
     paths:
       - "scripts/research_cmp_trade_history.py"
+      - "scripts/research_cmp_history_window.py"
       - "scripts/research_phase1_b1.py"
       - "scripts/research_phase1_b2.py"
       - "scripts/research_phase1_b2_fast.py"
       - "scripts/research_phase1_b4.py"
+      - "tests/test_research_cmp_history_window.py"
       - "tests/test_research_phase1_b1.py"
       - "tests/test_research_phase1_b2.py"
       - "tests/test_research_phase1_b4.py"
@@ -174,16 +176,19 @@ jobs:
         run: >-
           uv run ruff check --ignore E501,I001
           scripts/research_cmp_trade_history.py
+          scripts/research_cmp_history_window.py
           scripts/research_phase1_b1.py
           scripts/research_phase1_b2.py
           scripts/research_phase1_b2_fast.py
           scripts/research_phase1_b4.py
+          tests/test_research_cmp_history_window.py
           tests/test_research_phase1_b1.py
           tests/test_research_phase1_b2.py
           tests/test_research_phase1_b4.py
-      - name: Test B1/B2/B4 PIT semantics
+      - name: Test B1/B2/B4 PIT semantics and CMP window
         run: >-
           uv run pytest
+          tests/test_research_cmp_history_window.py
           tests/test_research_phase1_b1.py
           tests/test_research_phase1_b2.py
           tests/test_research_phase1_b4.py
@@ -223,6 +228,26 @@ jobs:
           test -s work/b0-reference/summary.json
           test -s work/b2-reference/b2-summary.json
           test ! -e work/market/2023
+      - name: Build bounded CMP classifier history view
+        run: >-
+          uv run python scripts/research_cmp_history_window.py
+          --source-root work/cmp-history
+          --output-root work/cmp-history-bounded
+      - name: Assert bounded CMP history semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          s = json.loads(Path("work/cmp-history-bounded/window-summary.json").read_text())
+          assert s["historyYears"] == [2013, 2019]
+          assert s["sealedFilingYear"] == 2023
+          assert s["researchOnly"] is True
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["totals"]["KEEP"] > 0
+          PY
       - name: Recompute authoritative P0 exact-calendar tier
         run: >-
           uv run python scripts/research_market_event_audit_v2.py
@@ -247,7 +272,7 @@ jobs:
         run: >-
           uv run python scripts/research_phase1_b1.py
           --sec work/sec/effective-end-2022.jsonl
-          --cmp-history-root work/cmp-history
+          --cmp-history-root work/cmp-history-bounded
           --market-root work/market
           --p0-summary work/p0/summary.json
           --b0-summary work/b0-reference/summary.json
@@ -279,7 +304,7 @@ jobs:
         run: >-
           uv run python scripts/research_phase1_b4.py
           --sec work/sec/effective-end-2022.jsonl
-          --cmp-history-root work/cmp-history
+          --cmp-history-root work/cmp-history-bounded
           --market-root work/market
           --p0-summary work/p0/summary.json
           --b0-summary work/b0-reference/summary.json
@@ -314,6 +339,7 @@ jobs:
         with:
           name: phase1-b1-b4-development-${{ github.run_id }}
           path: |
+            work/cmp-history-bounded/window-summary.json
             work/p0/summary.json
             work/b1/summary.json
             work/b1/events.csv
@@ -326,11 +352,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          cp work/cmp-history-bounded/window-summary.json work/cmp-history-bounded/cmp-window-summary.json
           cp work/b1/summary.json work/b1/b1-summary.json
           cp work/b1/events.csv work/b1/b1-events.csv
           cp work/b4/summary.json work/b4/b4-summary.json
           cp work/b4/events.csv work/b4/b4-events.csv
           gh release upload "$BASELINE_RELEASE_TAG" \
+            work/cmp-history-bounded/cmp-window-summary.json \
             work/b1/b1-summary.json \
             work/b1/b1-events.csv \
             work/b4/b4-summary.json \
