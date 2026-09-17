@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import Any
 
 import exchange_calendars as xcals
-
 import research_market_event_audit as v1
 
 TIER_THRESHOLDS: dict[str, dict[str, float]] = {
