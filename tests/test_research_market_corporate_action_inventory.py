@@ -65,29 +65,31 @@ def test_normalize_preserves_identity_terms() -> None:
     assert result["old_cusip"] == result["new_cusip"]
 
 
-def test_page_actions_reads_alpaca_top_level_buckets() -> None:
+def test_page_actions_reads_alpaca_wire_wrapper() -> None:
     payload = {
-        "name_changes": [
-            {
-                "id": "ai-aaic",
-                "corporate_action_type": "name_changes",
-                "old_symbol": "AI",
-                "old_cusip": "041356205",
-                "new_symbol": "AAIC",
-                "new_cusip": "041356205",
-                "process_date": "2020-10-26",
-            }
-        ],
-        "reverse_splits": [
-            {
-                "id": "hear-rs",
-                "corporate_action_type": "reverse_splits",
-                "symbol": "HEAR",
-                "new_rate": 1.0,
-                "old_rate": 4.0,
-                "process_date": "2018-04-09",
-            }
-        ],
+        "corporate_actions": {
+            "name_changes": [
+                {
+                    "id": "ai-aaic",
+                    "corporate_action_type": "name_changes",
+                    "old_symbol": "AI",
+                    "old_cusip": "041356205",
+                    "new_symbol": "AAIC",
+                    "new_cusip": "041356205",
+                    "process_date": "2020-10-26",
+                }
+            ],
+            "reverse_splits": [
+                {
+                    "id": "hear-rs",
+                    "corporate_action_type": "reverse_splits",
+                    "symbol": "HEAR",
+                    "new_rate": 1.0,
+                    "old_rate": 4.0,
+                    "process_date": "2018-04-09",
+                }
+            ],
+        },
         "next_page_token": "opaque-token",
     }
     actions = inventory._page_actions(payload)
@@ -100,17 +102,25 @@ def test_page_actions_reads_alpaca_top_level_buckets() -> None:
 
 def test_page_actions_does_not_expand_beyond_frozen_types() -> None:
     payload = {
-        "reorganizations": [
-            {
-                "id": "new-provider-type",
-                "symbol": "XYZ",
-                "process_date": "2020-01-02",
-            }
-        ]
+        "corporate_actions": {
+            "reorganizations": [
+                {
+                    "id": "new-provider-type",
+                    "symbol": "XYZ",
+                    "process_date": "2020-01-02",
+                }
+            ]
+        }
     }
     assert inventory._page_actions(payload) == []
 
 
+def test_page_actions_rejects_missing_wire_wrapper() -> None:
+    with pytest.raises(ValueError, match="missing corporate_actions object"):
+        inventory._page_actions({"name_changes": []})
+
+
 def test_page_actions_rejects_malformed_frozen_bucket() -> None:
+    payload = {"corporate_actions": {"name_changes": {"id": "bad"}}}
     with pytest.raises(ValueError, match="name_changes.*not a list"):
-        inventory._page_actions({"name_changes": {"id": "bad"}})
+        inventory._page_actions(payload)
