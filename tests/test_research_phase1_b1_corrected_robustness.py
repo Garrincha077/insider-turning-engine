@@ -12,12 +12,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 _mod = importlib.import_module("research_phase1_b1_corrected_robustness")
 
 
-def _source_summary(value: float = 0.1) -> dict:
+def _source_summary(value: float = 0.1, count: int = 1) -> dict:
     horizons = {}
     for horizon in _mod.HORIZONS:
         horizons[str(horizon)] = {
             "B1ContinuityCorrected": {
-                "maturedOutcomeCount": 1,
+                "maturedOutcomeCount": count,
                 "spyExcessMean": value,
                 "spyExcessMedian": value,
                 "spyExcessWinRate": 1.0,
@@ -56,6 +56,33 @@ def _rows(value: str = "0.1") -> list[dict[str, str]]:
                 "valuationStatus": "VALUED",
             }
         )
+    return result
+
+
+def _five_year_rows(value: str = "0.1") -> list[dict[str, str]]:
+    result: list[dict[str, str]] = []
+    for event_number, year in enumerate(range(2016, 2021), start=1):
+        next_year = year + 1
+        exits = {
+            21: f"{year}-02-03",
+            63: f"{year}-04-04",
+            126: f"{year}-07-05",
+            252: f"{next_year}-01-04",
+        }
+        for horizon in _mod.HORIZONS:
+            result.append(
+                {
+                    "eventNumber": str(event_number),
+                    "issuerCik": f"{event_number:010d}",
+                    "ticker": f"T{event_number}",
+                    "evaluationSession": f"{year}-01-04",
+                    "entrySession": f"{year}-01-05",
+                    "horizon": str(horizon),
+                    "targetExitSession": exits[horizon],
+                    "correctedExcess": value,
+                    "valuationStatus": "VALUED",
+                }
+            )
     return result
 
 
@@ -150,9 +177,9 @@ def test_warning_semantics_are_identical_to_original_frozen_gate() -> None:
 
 def test_run_never_opens_hac_or_oos(tmp_path: Path) -> None:
     rows_path = tmp_path / "rows.csv"
-    _write_rows(rows_path, _rows())
+    _write_rows(rows_path, _five_year_rows())
     summary_path = tmp_path / "summary.json"
-    summary_path.write_text(json.dumps(_source_summary()), encoding="utf-8")
+    summary_path.write_text(json.dumps(_source_summary(count=5)), encoding="utf-8")
     output = tmp_path / "out.json"
     result = _mod.run(
         event_horizons_path=rows_path,
