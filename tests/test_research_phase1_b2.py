@@ -66,6 +66,19 @@ def test_delayed_older_filing_can_trigger_later_without_backdating() -> None:
     assert events[0]["clusterAnchorTransactionDate"] == "2019-01-20"
 
 
+def test_exactly_30_calendar_days_is_inclusive() -> None:
+    rows = [
+        _row(1, "0000000101", "2019-01-01", "2019-01-03"),
+        _row(2, "0000000102", "2019-01-31", "2019-02-01"),
+    ]
+
+    events = _cluster_trigger_events(rows)
+
+    assert len(events) == 1
+    assert events[0]["clusterOwnerCount"] == 2
+    assert events[0]["clusterAnchorTransactionDate"] == "2019-01-31"
+
+
 def test_transactions_more_than_30_days_apart_do_not_cluster() -> None:
     rows = [
         _row(1, "0000000101", "2019-01-01", "2019-01-03"),
@@ -101,3 +114,22 @@ def test_optimized_matches_reference_on_mixed_disclosure_fixture() -> None:
     ]
 
     assert _cluster_trigger_events(rows) == _reference_cluster_trigger_events(rows)
+
+
+def test_optimized_preserves_reference_tie_break_for_same_disclosure_session() -> None:
+    # Two different 30-day anchors both contain two owners. The reference runner
+    # picks the first anchor in disclosure/known order. Transaction-date sorting
+    # alone would instead pick 2019-01-31, changing clusterOwnerIds metadata.
+    rows = [
+        _row(3, "0000000103", "2019-02-01", "2019-02-05"),
+        _row(2, "0000000102", "2019-01-31", "2019-02-05"),
+        _row(1, "0000000101", "2019-01-01", "2019-02-05"),
+    ]
+
+    optimized = _cluster_trigger_events(rows)
+    reference = _reference_cluster_trigger_events(rows)
+
+    assert optimized == reference
+    assert len(optimized) == 1
+    assert optimized[0]["clusterAnchorTransactionDate"] == "2019-02-01"
+    assert optimized[0]["clusterOwnerIds"] == ["0000000102", "0000000103"]
