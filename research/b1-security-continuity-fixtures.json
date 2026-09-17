@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Regression fixtures from the already frozen top-10 verification; not a detection universe",
+  "researchOnly": true,
+  "oosOpened": false,
+  "performanceRead": false,
+  "fixtures": [
+    {
+      "issuerCik": "0001486159",
+      "ticker": "OAS",
+      "entrySession": "2020-10-08",
+      "effectiveDate": "2020-11-19",
+      "correctionState": "DISCONTINUOUS_NO_COMPLETE_VALUATION",
+      "successorSymbol": "OAS",
+      "reason": "Legacy common canceled; old common holders received warrants, not successor common one-for-one"
+    },
+    {
+      "issuerCik": "0001209028",
+      "ticker": "AI",
+      "entrySession": "2020-09-25",
+      "effectiveDate": "2020-10-26",
+      "correctionState": "SYMBOL_CHANGED_SAME_SECURITY",
+      "successorSymbol": "AAIC",
+      "oldCusip": "041356205",
+      "newCusip": "041356205",
+      "reason": "Arlington AI changed to AAIC; later AI ticker belongs to C3.ai and must not be chained"
+    },
+    {
+      "issuerCik": "0001314475",
+      "ticker": "LOV",
+      "entrySession": "2017-08-29",
+      "effectiveDate": "2017-11-02",
+      "correctionState": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "successorSymbol": "LOV",
+      "successorSharesPerEntryShare": 0.1,
+      "reason": "Ten old Spark Networks, Inc. common shares converted into one Spark Networks SE ADS"
+    },
+    {
+      "issuerCik": "0001493761",
+      "ticker": "HEAR",
+      "entrySession": "2017-11-20",
+      "effectiveDate": "2018-04-09",
+      "correctionState": "PRICE_CONTINUOUS_ADJUSTED",
+      "reason": "1-for-4 reverse split already represented by Alpaca adjustment=all"
+    }
+  ]
+}

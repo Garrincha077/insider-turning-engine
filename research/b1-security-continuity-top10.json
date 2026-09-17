@@ -1,0 +1,238 @@
+{
+  "schemaVersion": 1,
+  "status": "PHASE1_B1_TOP10_SECURITY_CONTINUITY_VERIFIED",
+  "sourceTailRunId": "35268723798",
+  "sourceCanonicalB1RunId": "35263058619",
+  "researchOnly": true,
+  "oosOpened": false,
+  "productionScoringChanged": false,
+  "formalAlphaClaim": false,
+  "automaticEventDeletion": false,
+  "verificationSet": "frozen top 10 from predeclared B1 global top-1% attribution",
+  "events": [
+    {
+      "rank": 1,
+      "ticker": "OAS",
+      "issuerCik": "0001486159",
+      "evaluationSession": "2020-10-07",
+      "entrySession": "2020-10-08",
+      "exitSession": "2021-04-12",
+      "entryOpen": 0.1623,
+      "raw126": 388.89525569932226,
+      "excess126": 388.6855263788604,
+      "classification": "DISCONTINUOUS_CANCELED_OR_REUSED",
+      "canonicalRawReturnEconomicallyReproducible": false,
+      "corporateActions": [
+        "Legacy Oasis common equity was canceled on 2020-11-19 under the Chapter 11 plan.",
+        "Former common holders received warrants to acquire reorganized Oasis common, while 100% of new common was issued to allowed note claims.",
+        "The later OAS common price therefore represents reorganized successor common rather than one-for-one continuity of the entry common share."
+      ],
+      "primarySources": [
+        "https://www.sec.gov/Archives/edgar/data/1486159/000148615920000115/oas-20201119.htm",
+        "https://www.sec.gov/Archives/edgar/data/1486159/000148615920000115/oasemergencereleasefil.htm"
+      ]
+    },
+    {
+      "rank": 2,
+      "ticker": "AI",
+      "issuerCik": "0001209028",
+      "evaluationSession": "2020-09-24",
+      "entrySession": "2020-09-25",
+      "exitSession": "2021-03-29",
+      "entryOpen": 2.6,
+      "raw126": 22.85,
+      "excess126": 22.61388143776824,
+      "classification": "DISCONTINUOUS_CANCELED_OR_REUSED",
+      "canonicalRawReturnEconomicallyReproducible": false,
+      "corporateActions": [
+        "Arlington Asset Investment Corp. changed its NYSE Class A common ticker from AI to AAIC effective 2020-10-26.",
+        "By December 2020 the ticker AI represented C3.ai, Inc. Class A common stock, a different issuer/security.",
+        "An Arlington entry holder continued in AAIC and did not receive C3.ai shares; same-ticker AI entry-to-exit chaining crosses issuer identity."
+      ],
+      "primarySources": [
+        "https://www.sec.gov/Archives/edgar/data/1209028/000156459020047280/ai-ex991_6.htm",
+        "https://www.sec.gov/Archives/edgar/data/1209028/000156459020051900/ai-10q_20200930.htm",
+        "https://www.sec.gov/Archives/edgar/data/1577526/000162828020017407/c3ai-closing8xk.htm"
+      ]
+    },
+    {
+      "rank": 3,
+      "ticker": "OSTK",
+      "issuerCik": "0001130713",
+      "evaluationSession": "2020-03-19",
+      "entrySession": "2020-03-20",
+      "exitSession": "2020-09-18",
+      "entryOpen": 4.23,
+      "raw126": 16.739952718676122,
+      "excess126": 16.364660399913756,
+      "classification": "CONTINUOUS",
+      "canonicalRawReturnEconomicallyReproducible": true,
+      "corporateActions": [
+        "Overstock common remained the same listed OSTK common security through the canonical window.",
+        "A Series A-1 preferred digital dividend was distributed on 2020-05-19 to eligible common holders; it is additional holder consideration but does not replace/cancel the common security."
+      ],
+      "primarySources": [
+        "https://www.sec.gov/Archives/edgar/data/1130713/000113071320000019/a8-kdisclosureupdates20200.htm"
+      ],
+      "note": "The canonical common-price return is security-continuous but is not a total-return measure including the separately distributed preferred asset."
+    },
+    {
+      "rank": 4,
+      "ticker": "LOV",
+      "issuerCik": "0001314475",
+      "evaluationSession": "2017-08-28",
+      "entrySession": "2017-08-29",
+      "exitSession": "2018-03-01",
+      "entryOpen": 1.26,
+      "raw126": 10.904761904761905,
+      "excess126": 10.79217412965469,
+      "classification": "TRANSFORMED_WITH_CONSIDERATION",
+      "canonicalRawReturnEconomicallyReproducible": false,
+      "corporateActions": [
+        "The old Spark Networks, Inc. combination closed on 2017-11-02.",
+        "Each 10 shares of old Spark Networks, Inc. common entitled the holder to one newly issued Spark Networks SE ADS.",
+        "The successor ADS continued under LOV, so one old share cannot be naively chained one-for-one to one later LOV ADS."
+      ],
+      "primarySources": [
+        "https://www.sec.gov/Archives/edgar/data/1314475/000114420417055907/tv478498_ex99-1.htm"
+      ],
+      "holderBasisNote": "Using the frozen entry open 1.26 and the implied canonical exit price 15.00, ten entry shares cost 12.60 and converted to one ADS worth 15.00 at exit, approximately +19.05% before benchmark/other adjustments rather than +1090.48%."
+    },
+    {
+      "rank": 5,
+      "ticker": "CRDF",
+      "issuerCik": "0001213037",
+      "evaluationSession": "2020-05-14",
+      "entrySession": "2020-05-15",
+      "exitSession": "2020-11-12",
+      "entryOpen": 1.46,
+      "raw126": 10.616438356164384,
+      "excess126": 10.354540951961663,
+      "classification": "CONTINUOUS",
+      "canonicalRawReturnEconomicallyReproducible": true,
+      "corporateActions": [
+        "Trovagene changed its corporate name to Cardiff Oncology and ticker to CRDF effective 2020-05-08, before the canonical entry.",
+        "Cardiff Oncology, CIK 0001213037, remained the CRDF registrant through the exit window."
+      ],
+      "primarySources": [
+        "https://www.sec.gov/Archives/edgar/data/1213037/000162828020006555/trovpr050620.htm",
+        "https://www.sec.gov/Archives/edgar/data/1213037/000162828020015726/crdf-20200930.htm"
+      ]
+    },
+    {
+      "rank": 6,
+      "ticker": "TST",
+      "issuerCik": "0001080056",
+      "evaluationSession": "2018-12-12",
+      "entrySession": "2018-12-13",
+      "exitSession": "2019-06-17",
+      "entryOpen": 0.6041,
+      "raw126": 8.965237543453071,
+      "excess126": 8.867992468989923,
+      "classification": "CONTINUOUS",
+      "canonicalRawReturnEconomicallyReproducible": true,
+      "corporateActions": [
+        "TheStreet announced a cash acquisition by Maven on 2019-06-12, inside the return window.",
+        "The merger did not close until 2019-08-07, after the canonical 2019-06-17 exit, so the TST common security remained outstanding at exit."
+      ],
+      "primarySources": [
+        "https://www.sec.gov/Archives/edgar/data/1080056/000175392619000085/g081795_8k.htm",
+        "https://www.sec.gov/Archives/edgar/data/1080056/000175392619000156/g081834_8k.htm"
+      ]
+    },
+    {
+      "rank": 7,
+      "ticker": "CWEI",
+      "issuerCik": "0000880115",
+      "evaluationSession": "2016-04-05",
+      "entrySession": "2016-04-06",
+      "exitSession": "2016-10-04",
+      "entryOpen": 9.77,
+      "raw126": 7.92835209825998,
+      "excess126": 7.866815406288506,
+      "classification": "CONTINUOUS",
+      "canonicalRawReturnEconomicallyReproducible": true,
+      "corporateActions": [
+        "The Noble Energy acquisition agreement was entered into on 2017-01-13, after the canonical 2016-10-04 exit.",
+        "The transaction completed on 2017-04-24, also after the exit."
+      ],
+      "primarySources": [
+        "https://www.sec.gov/Archives/edgar/data/880115/000110465917002439/a17-2530_18k.htm",
+        "https://www.sec.gov/Archives/edgar/data/72207/000156761917000769/s001662x3_8k.htm"
+      ]
+    },
+    {
+      "rank": 8,
+      "ticker": "APPS",
+      "issuerCik": "0000317788",
+      "evaluationSession": "2020-03-18",
+      "entrySession": "2020-03-19",
+      "exitSession": "2020-09-17",
+      "entryOpen": 3.7,
+      "raw126": 7.743243243243244,
+      "excess126": 7.324937194726712,
+      "classification": "CONTINUOUS",
+      "canonicalRawReturnEconomicallyReproducible": true,
+      "corporateActions": [
+        "Digital Turbine common was registered and traded as APPS during the canonical window.",
+        "A 2020-09-15 Form 8-K, immediately before the exit, still identifies the same registrant/common security as APPS on Nasdaq."
+      ],
+      "primarySources": [
+        "https://www.sec.gov/Archives/edgar/data/317788/000162828020008824/fy2020form10-k.htm",
+        "https://www.sec.gov/Archives/edgar/data/317788/000162828020013794/apps-20200915.htm"
+      ]
+    },
+    {
+      "rank": 9,
+      "ticker": "PEIX",
+      "issuerCik": "0000778164",
+      "evaluationSession": "2020-07-10",
+      "entrySession": "2020-07-13",
+      "exitSession": "2021-01-11",
+      "entryOpen": 0.777,
+      "raw126": 7.133848133848135,
+      "excess126": 6.941107292599831,
+      "classification": "CONTINUOUS",
+      "canonicalRawReturnEconomicallyReproducible": true,
+      "corporateActions": [
+        "The issuer later changed its name to Alto Ingredients, but PEIX remained the common-stock ticker through 2021-01-31.",
+        "The new ticker ALTO began 2021-02-01, after the canonical 2021-01-11 exit."
+      ],
+      "primarySources": [
+        "https://www.sec.gov/Archives/edgar/data/778164/000121390021001961/ea133228-8k_altoingredients.htm"
+      ]
+    },
+    {
+      "rank": 10,
+      "ticker": "HEAR",
+      "issuerCik": "0001493761",
+      "evaluationSession": "2017-11-17",
+      "entrySession": "2017-11-20",
+      "exitSession": "2018-05-23",
+      "entryOpen": 2.32,
+      "raw126": 6.474137931034483,
+      "excess126": 6.405475415027948,
+      "classification": "CONTINUOUS",
+      "canonicalRawReturnEconomicallyReproducible": true,
+      "corporateActions": [
+        "Turtle Beach effected a 1-for-4 reverse split after the close on 2018-04-06 and began trading split-adjusted on 2018-04-09.",
+        "The research market backfill explicitly requests Alpaca adjustment=all and stores adjusted OHLC with is_adjusted=true and adjustment_basis=alpaca-adjustment-all.",
+        "The split therefore does not create a one-share continuity error in the canonical adjusted market series."
+      ],
+      "primarySources": [
+        "https://www.sec.gov/Archives/edgar/data/1493761/000149376118000016/hear201846-8k.htm"
+      ],
+      "repoEvidence": [
+        "scripts/research_market_alpaca_backfill.py"
+      ]
+    }
+  ],
+  "classificationCounts": {
+    "CONTINUOUS": 7,
+    "TRANSFORMED_WITH_CONSIDERATION": 1,
+    "DISCONTINUOUS_CANCELED_OR_REUSED": 2,
+    "UNRESOLVED": 0
+  },
+  "nextGateRequired": true,
+  "nextGateReason": "At least two frozen top events are security-discontinuous and one is transformed with a non-1:1 exchange ratio. A general cohort-wide correction rule must be frozen before any B1 recomputation."
+}
