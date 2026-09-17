@@ -1,0 +1,95 @@
+name: Run Phase-1 B1 robustness diagnostics
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/research_phase1_b1_robustness.py"
+      - "tests/test_research_phase1_b1_robustness.py"
+      - "docs/research-phase1-b1-robustness-gate.md"
+      - ".github/workflows/research-phase1-b1-robustness.yml"
+
+permissions:
+  contents: write
+
+env:
+  BASELINE_RELEASE_TAG: research-phase1-baselines-v1
+  SOURCE_B1_RUN_ID: "35263058619"
+
+concurrency:
+  group: research-phase1-b1-robustness-v1
+  cancel-in-progress: false
+
+jobs:
+  robustness:
+    name: B1 dependence and tail diagnostics
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Ruff frozen robustness runner and tests
+        run: >-
+          uv run ruff check
+          scripts/research_phase1_b1_robustness.py
+          tests/test_research_phase1_b1_robustness.py
+      - name: Test frozen robustness semantics
+        run: uv run pytest tests/test_research_phase1_b1_robustness.py -q
+      - name: Download persisted canonical B1 evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/source work/b1-robustness
+          gh release download "$BASELINE_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'b1-events.csv' --dir work/source
+          gh release download "$BASELINE_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'b1-summary.json' --dir work/source
+          test -s work/source/b1-events.csv
+          test -s work/source/b1-summary.json
+      - name: Run frozen B1 robustness diagnostics
+        run: >-
+          uv run python scripts/research_phase1_b1_robustness.py
+          --events work/source/b1-events.csv
+          --source-summary work/source/b1-summary.json
+          --output work/b1-robustness/b1-robustness-summary.json
+          --source-run-id "$SOURCE_B1_RUN_ID"
+      - name: Assert research boundaries and output contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          s = json.loads(Path("work/b1-robustness/b1-robustness-summary.json").read_text())
+          assert s["status"] == "PHASE1_B1_ROBUSTNESS_DIAGNOSTICS_COMPLETE"
+          assert s["primaryHorizonSessions"] == 126
+          assert s["researchOnly"] is True
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["formalAlphaClaim"] is False
+          assert s["oosEligible"] is False
+          assert isinstance(s["blockingWarningPresent"], bool)
+          assert s["canonicalReproduction"]["126"]["maturedOutcomeCount"] > 0
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase1-b1-robustness-${{ github.run_id }}
+          path: work/b1-robustness/b1-robustness-summary.json
+          retention-days: 90
+      - name: Persist robustness research evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release upload "$BASELINE_RELEASE_TAG" \
+            work/b1-robustness/b1-robustness-summary.json \
+            --repo "$GITHUB_REPOSITORY" --clobber
