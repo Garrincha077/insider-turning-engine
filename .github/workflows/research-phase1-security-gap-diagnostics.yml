@@ -1,0 +1,106 @@
+name: Diagnose frozen Phase-1 security continuity gaps
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/research-phase1-security-gap-diagnostics.yml"
+      - "scripts/research_phase1_security_gap_diagnostics.py"
+      - "tests/test_research_phase1_security_gap_diagnostics.py"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: research-phase1-security-gap-diagnostics-v1
+  cancel-in-progress: false
+
+env:
+  SOURCE_LEDGER_RUN_ID: "35272112415"
+  SOURCE_LEDGER_ARTIFACT: "phase1-security-continuity-ledger-35272112415"
+  MARKET_RELEASE_TAG: research-market-alpaca-v1
+
+jobs:
+  diagnose:
+    name: Performance-blind frozen long-gap diagnostics
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Ruff gap diagnostic runner and tests
+        run: >-
+          uv run ruff check
+          scripts/research_phase1_security_gap_diagnostics.py
+          tests/test_research_phase1_security_gap_diagnostics.py
+      - name: Test frozen gap diagnostic semantics
+        run: >-
+          uv run pytest
+          tests/test_research_phase1_security_gap_diagnostics.py -q
+      - name: Download frozen continuity ledger artifact and bounded market evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/source work/downloads work/market work/gaps
+          gh run download "$SOURCE_LEDGER_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name "$SOURCE_LEDGER_ARTIFACT" --dir work/source
+          test -s work/source/ledger/continuity-ledger.csv
+          test -s work/source/ledger/summary.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          s = json.loads(Path("work/source/ledger/summary.json").read_text())
+          assert s["status"] == "PHASE1_SECURITY_CONTINUITY_LEDGER_COMPLETE"
+          assert s["performanceRead"] is False
+          assert s["oosOpened"] is False
+          assert s["gapThresholdSessions"] == 10
+          assert s["unresolvedEventHorizonRows"] == 54
+          PY
+
+          gh release download "$MARKET_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'alpaca-market-20*.tar.gz' --dir work/downloads
+          for year in 2016 2017 2018 2019 2020 2021 2022; do
+            mkdir -p "work/market/$year"
+            tar -xzf "work/downloads/alpaca-market-${year}.tar.gz" -C "work/market/$year"
+            test -s "work/market/$year/canonical-market-${year}.csv"
+          done
+          test ! -e work/market/2023
+      - name: Diagnose only frozen unresolved long gaps
+        run: >-
+          uv run python scripts/research_phase1_security_gap_diagnostics.py
+          --ledger work/source/ledger/continuity-ledger.csv
+          --market-root work/market
+          --output-dir work/gaps
+      - name: Assert diagnostic boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          s = json.loads(Path("work/gaps/summary.json").read_text())
+          assert s["status"] == "PHASE1_FROZEN_LONG_GAP_DIAGNOSTICS_COMPLETE"
+          assert s["gapThresholdSessions"] == 10
+          assert s["gapEventHorizonRows"] == 34
+          assert s["gapUniqueTickers"] == 12
+          assert s["allGapsBracketedByObservedBars"] is True
+          assert s["priceFieldsRead"] == []
+          assert s["performanceRead"] is False
+          assert s["researchOnly"] is True
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase1-security-gap-diagnostics-${{ github.run_id }}
+          path: work/gaps
+          retention-days: 90
