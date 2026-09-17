@@ -14,7 +14,7 @@ permissions:
 
 concurrency:
   group: research-phase1-b2-v1
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   SEC_RELEASE_TAG: research-sec-amendments-v1
