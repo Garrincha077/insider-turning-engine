@@ -3,7 +3,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-_intersect_events = importlib.import_module("research_phase1_b4")._intersect_events
+_b4 = importlib.import_module("research_phase1_b4")
+_intersect_events = _b4._intersect_events
+_delta = _b4._delta
 
 
 def _b1(
@@ -121,3 +123,10 @@ def test_b4_duplicate_component_event_fails_closed() -> None:
         assert "duplicate B1 issuer-session event" in str(exc)
     else:
         raise AssertionError("duplicate component event must fail closed")
+
+
+def test_b4_delta_preserves_missing_outcomes_as_null() -> None:
+    assert _delta(None, 0.25) is None
+    assert _delta(0.25, None) is None
+    assert _delta(None, None) is None
+    assert _delta(0.75, 0.25) == 0.5
