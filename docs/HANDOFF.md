@@ -1,17 +1,17 @@
 # Insider Turning Engine — HANDOFF
 
-_Last updated: 2026-09-16_
+_Last updated: 2026-09-17_
 
-This is the operational continuation point for a new ChatGPT/Codex session. Read this file first, then `docs/research-log.md` and `docs/research-predeclared-spec.md` for the research evidence, R-IDs, and frozen/predeclared test definitions.
+This is the operational continuation point for a new ChatGPT/Codex session. Read this file first, then `docs/research-log.md`, `docs/research-predeclared-spec.md`, and `docs/P0_PHASE1_IMPLEMENTATION.md`.
 
 ## FIRST ACTIONS IN A NEW CHAT
 
 1. Open GitHub repository `Garrincha077/insider-turning-engine`, branch `main`.
-2. Read this file and `docs/research-log.md`.
-3. Treat **2016-2022 original-buy PIT hydration as COMPLETE**. Reference workflow run: **34974573538** (`Continue SEC PIT hydration 2016-2022`).
-4. Verify the separate warm-up workflow **`Build SEC PIT warm-up 2013-2015`**, run **35060455633**, before doing new owner-history work.
+2. Treat SEC original-buy PIT history 2016-2022, warm-up 2013-2015, and amendment reconciliation as completed research-data stages.
+3. Treat the exact-calendar P0 market audit as the authoritative market-data gate. Current tier: **C_EXPLORATORY**.
+4. Treat the first B0 development run as a descriptive/plumbing baseline only, not formal alpha evidence.
 5. Keep sealed OOS **2023+ unopened**.
-6. Do **not** change production scoring, weights, thresholds, signal states, alerts, or production methodology unless the owner explicitly asks. Research-only data/acquisition tooling is authorized.
+6. Do **not** change production scoring, weights, thresholds, signal states, alerts, or production methodology unless the owner explicitly asks.
 
 ---
 
@@ -32,7 +32,7 @@ The engine must beat transparent simple insider benchmarks on development/valida
 Authorized without another confirmation:
 
 - literature/data research;
-- `docs/research-log.md`, this handoff, and research specifications;
+- research docs/specifications;
 - research-only acquisition/hydration scripts and GitHub Actions workflows;
 - audits, hashes, manifests, PIT validation and data-quality reporting;
 - development/validation dataset preparation while OOS remains sealed.
@@ -47,171 +47,194 @@ Not authorized without explicit owner instruction:
 
 ---
 
-## CURRENT VERIFIED DATA STATUS
+## VERIFIED SEC PIT DATA STATUS
 
-### 2016-2022 development/validation original-buy PIT history — PASS
+### Original-buy PIT history 2016-2022 — COMPLETE
 
-Workflow run: **34974573538**  
-Workflow: **`Continue SEC PIT hydration 2016-2022`**  
+Workflow run: **34974573538** (`Continue SEC PIT hydration 2016-2022`)  
 Persistent release: **`research-sec-pit-v1`**
 
-Verified status:
+- 28/28 quarters PASS;
+- PIT clock remains `knowledge_at == SEC accepted_at`;
+- persistent quarter archives and full-history index exist;
+- OOS remained closed.
 
-- **28/28 quarters PASS** from 2016 Q1 through 2022 Q4;
-- every quarter packaged as a persistent `sec-pit-YYYYqQ.tar.gz` release asset;
-- final job **`Original-buy PIT history completeness gate`** passed;
-- full-history index `sec-pit-2016-2022-index.json` was produced;
-- PIT clock gate remains `knowledge_at == SEC accepted_at`;
-- `oosOpened = false`;
-- `amendmentsReconciled = false`;
-- `marketDataJoined = false`;
-- `canonicalReady = false`;
-- `signalReady = false`.
+### Warm-up 2013-2015 — COMPLETE
 
-This means the original-buy acceptance-time acquisition gate is complete. It does **not** mean Phase 0 is complete or that the engine is ready for performance claims.
+Workflow run: **35060455633** (`Build SEC PIT warm-up 2013-2015`)  
+Persistent release: **`research-sec-warmup-v1`**
 
-### Important historical fix retained
+- all 12 quarterly jobs passed;
+- completeness gate passed;
+- warm-up is history context only, not an extra tuning period.
 
-2016 Q1 exposed a quarter-end archive-discovery edge case. The final research-only solution uses verified `REPORTINGOWNER.RPTOWNERCIK` evidence to construct audited accession-archive fallback paths. The fallback is explicit in provenance and remains fail-closed. The generic 2016-2022 continuation workflow subsequently passed all quarters with that reporting-owner enrichment path.
+### Amendment reconciliation 2013-2022 — COMPLETE
 
-Do not revert to accession-prefix or issuer-CIK archive-directory guessing.
+Workflow run: **35115489296**  
+Research status: PASS.
+
+Key counts:
+
+- original canonical rows: 573,322;
+- amendment canonical rows: 102,901;
+- linked amendment rows: 9,619;
+- effective rows end-2022: 573,322;
+- research quarantine rows: 18,916;
+- resolver quarantine rows: 16.
+
+Policy remains deterministic/PIT-safe: original state remains effective until amendment acceptance; ambiguous predecessor links are quarantined rather than fuzzily matched.
 
 ---
 
-## WARM-UP HISTORY — ACTIVE NEXT GATE
+## P0 MARKET DATA — AUTHORITATIVE EXACT-CALENDAR GATE
 
-Historical-behaviour features require history before 2016.
+Authoritative workflow run: **35235518480**  
+Status: **PASS_EXPLORATORY**  
+Tier: **C_EXPLORATORY**
 
-Required period: **2013-2015**, warm-up only.
+The previous audit used a stock's own available regular-bar dates and could therefore substitute a later available stock bar for a missing exact exchange session. That logic is superseded.
 
-Reasons:
+The authoritative v2 audit uses:
 
-- `FIRST_BUY_3Y` requires earlier purchase visibility;
-- canonical Cohen-Malloy-Pomorski routine/opportunistic classification uses about three previous years;
-- canonical CMP classification is fundamentally reporting-owner/trader history across issuers, not merely same owner + issuer history.
+- XNYS/SPY as the exact session calendar;
+- evaluation from `knowledgeAt`;
+- entry on the exact next XNYS session open;
+- exact 21/63/126/252-session target dates;
+- no nearest/later-bar substitution;
+- true study-boundary censoring only when the required XNYS session lies beyond 2022;
+- terminal candidates excluded from ordinary sessions;
+- missing outcomes never imputed.
 
-Warm-up must never be silently converted into an additional tuning period.
+### Current P0 metrics
 
-### Warm-up workflow
+- qualified issuer-session purchase events: **82,048**;
+- identity eligible events: **79,643**;
+- study-boundary censored before entry: **48**;
+- assessable exact-entry events: **79,595**;
+- exact entry matched: **70,547**;
+- exact-entry coverage: **88.6325%**;
+- missing/placeholder identity: **2.8093%**;
+- identity ambiguity among usable tickered events: **0.1254%**;
+- total identity problem rate: **2.9312%**;
+- SPY session coverage: **100% (1,762/1,762)**;
+- worst single-year exact-entry coverage: **84.8934% (2016)**.
 
-Workflow: **`Build SEC PIT warm-up 2013-2015`**  
-File: `.github/workflows/research-sec-warmup-2013-2015.yml`  
-Initial run: **35060455633**  
-Commit introducing it: **37ccb7251df2491a6080b49f673e1c876012ca1b**  
-Persistent release: **`research-sec-warmup-v1`**
+Entry coverage by knowledge year:
 
-The workflow is intentionally separate from `research-sec-pit-v1` and performs:
+- 2016: 84.8934%
+- 2017: 86.2871%
+- 2018: 87.9348%
+- 2019: 88.1405%
+- 2020: 90.6932%
+- 2021: 90.0465%
+- 2022: 91.8611%
 
-1. official SEC quarterly bulk staging for 2013, 2014, 2015;
-2. bounded P/S candidate construction;
-3. reporting-owner CIK enrichment from `REPORTINGOWNER.parquet`;
-4. exact acceptance-time hydration using the audited fallback-aware quarter runner;
-5. per-quarter fail-closed PIT audits;
-6. persistent warm-up quarter archives;
-7. final 12-quarter completeness gate and warm-up index.
+### Locked tier thresholds
 
-Expected successful terminal status:
+| Metric | A — High confidence | B — Research grade | C — Exploratory |
+|---|---:|---:|---:|
+| Exact-entry coverage | >=95% | >=90% | >=80% |
+| Missing/placeholder identity | <=1% | <=3% | <=7.5% |
+| Identity ambiguity | <=0.5% | <=1% | <=2% |
+| Total identity problem | <=1.5% | <=4% | <=9% |
+| Worst-year exact-entry coverage | >=90% | >=85% | >=70% |
+| SPY/XNYS coverage | 100% | >=99.5% | >=99% |
 
-`ORIGINAL_BUY_PIT_WARMUP_2013_2015_PASS`
+Current data pass all Tier C requirements. Tier B fails on total exact-entry coverage (88.63% < 90%) and narrowly on worst-year coverage (84.89% < 85%). Do not lower thresholds based on B0 performance.
 
-At handoff time, run **35060455633** had successfully created the warm-up release and started **Build warm-up source 2013**; 2014 and 2015 were queued.
+State after P0:
+
+- `marketDataJoined = true` for exploratory research;
+- `highConfidenceMarketDataJoined = false`;
+- `canonicalReady = false`;
+- `signalReady = false`;
+- `oosOpened = false`;
+- `productionScoringChanged = false`.
+
+---
+
+## PHASE-1 B0 DEVELOPMENT BASELINE — COMPLETE
+
+Workflow run: **35235518475**  
+Persistent release: **`research-phase1-baselines-v1`**  
+Benchmark: **`B0_ANY_QUALIFIED_PURCHASE`**  
+Status: **`PHASE1_B0_DEVELOPMENT_DESCRIPTIVE_COMPLETE`**
+
+Scope:
+
+- event cohort: 2016-2020 development only;
+- market outcomes bounded to 2016-2022;
+- 2021-2022 performance was not used as B0 validation;
+- 2023+ remained sealed;
+- exact XNYS evaluation/entry/exit sessions;
+- 20-session issuer-CIK dedup;
+- primary horizon: 126 sessions.
+
+Selection:
+
+- development identity-eligible candidates: **57,142**;
+- dedup suppressed: **29,388**;
+- retained after dedup: **27,754**;
+- exact-entry matched: **24,192**;
+- entry attrition after dedup: **3,562**;
+- distinct issuers with entry: **4,729**.
+
+### B0 descriptive outcomes
+
+| Horizon | Matured | Raw mean | Raw median | SPY excess mean | SPY excess median | Excess win rate |
+|---:|---:|---:|---:|---:|---:|---:|
+| 21 | 23,902 | +2.41% | +1.40% | +0.71% | -0.46% | 47.59% |
+| 63 | 23,739 | +8.55% | +3.62% | +3.42% | -1.21% | 46.47% |
+| 126 | 23,504 | +15.05% | +6.38% | +5.20% | -2.80% | 44.72% |
+| 252 | 22,792 | +29.18% | +10.55% | +9.57% | -7.01% | 41.45% |
+
+Primary 126-session downside/MAE diagnostics:
+
+- SPY excess p05: **-51.71%**;
+- SPY excess p10: **-38.37%**;
+- MAE observed count: **21,750**;
+- MAE mean: **-20.54%**;
+- MAE median: **-13.94%**.
+
+Interpretation is intentionally limited: B0 shows a positive arithmetic mean but a negative excess-return median and sub-50% win rate at every tested horizon. That pattern is consistent with a right-skewed distribution in which a minority of large winners can lift the mean. It is **not** formal evidence of persistent alpha. Dependence-aware calendar-time/HAC and clustered robustness remain required before any formal PASS claim.
 
 ---
 
 ## PIT / QUALITY CONTRACT
 
-For both warm-up and development/validation history:
+For all research periods:
 
-- exact candidate-accession coverage;
-- zero remaining failures;
-- unique canonical transaction IDs;
-- unique revision IDs;
-- unique exact SEC row identities;
-- `knowledge_at == accepted_at` for all canonical rows;
-- actual retrieval time retained separately from historical knowledge time;
+- exact candidate/accession provenance;
+- `knowledge_at == accepted_at` for SEC-derived historical knowledge;
+- actual retrieval time retained separately;
 - explicit source/fallback provenance;
-- OOS unopened;
-- no signal readiness implied by acquisition success.
-
-Passing quarter archives contain:
-
-- `quarter-summary.json`
-- `checksums.json`
-- `raw-manifest.jsonl`
-- `canonical-research.jsonl`
-- `failures.jsonl`
-
-Durable PASS evidence belongs in release assets, not large git history.
+- historical identity cannot be inferred from current ticker/current market cap;
+- missing observations remain explicit attrition;
+- no signal readiness implied by data-acquisition success;
+- OOS stays sealed until methodology is frozen.
 
 ---
 
-## AMENDMENT POLICY — NEXT AFTER WARM-UP
+## PHASE-1 BENCHMARK FAMILY
 
-Historical `4/A` / `5/A` handling must stay deterministic and PIT-safe.
+B0 — any qualified open-market purchase: development plumbing complete.
 
-Rules:
+Next planned research baselines:
 
-- original record remains effective until an amendment becomes public;
-- corrected state becomes effective only from amendment `accepted_at`;
-- never rewrite historical state as if the later correction was known earlier;
-- predecessor linkage should rely on explicit evidence such as `dateOfOriginalSubmission`, issuer/owner identity, and exact row evidence;
-- ambiguous predecessor links go to quarantine rather than fuzzy matching.
+- **B2 independent-owner cluster:** primary definition 30 calendar days and >=2 distinct owner CIKs; >=3 owners secondary subgroup.
+- **B1 canonical opportunistic:** implement separately from the existing custom opportunistic heuristic; do not call the current heuristic canonical Cohen-Malloy-Pomorski.
+- **B4:** B1 AND B2.
+- **B3 company net buying:** BLOCKED until a complete PIT sale-history contract is verified. Do not compute company buy/sell ratios from a buy-centric historical universe.
 
-After warm-up completes, build amendment reconciliation and report linked, unlinked, and quarantined amendment rates.
+Required horizons remain 21/63/126/252 XNYS sessions, with 126 primary.
 
----
-
-## MARKET DATA GATE
-
-Formal benchmark claims still require a historical market dataset with:
-
-- adjusted daily OHLCV;
-- delisted securities;
-- historical ticker/security identity;
-- split/dividend basis;
-- missing/stale bar accounting;
-- SPY benchmark;
-- delayed-entry and MAE capability;
-- trailing dollar ADV;
-- PIT market-cap support or explicit market-cap-missing policy.
-
-Do not use current market cap historically and do not silently drop firms that later delisted.
-
-Architecture direction remains vendor-neutral:
-
-`historical market provider -> canonical market CSV -> existing backtester`
-
----
-
-## PREDECLARED PHASE-1 SIMPLE BENCHMARK
-
-Do not optimize the full Turning Engine first.
-
-Primary event unit: **issuer-session**, not transaction row.
-
-Core eligibility:
-
-- public ownership filing;
-- non-derivative open-market purchase (`P`);
-- information available only from SEC `accepted_at` onward;
-- baseline entry at next eligible session open.
-
-Horizons:
-
-- 21 sessions
-- 63 sessions
-- 126 sessions
-- 252 sessions
-
-Diagnostics include raw return, SPY excess, mean/median, win rate, downside tail, MAE, event count, attrition, missing outcomes, and delisting-aware outcomes.
-
-Simple benchmark family includes any qualified purchase, predefined dollar buckets, unique buyer count, independent-owner clusters, company-level aggregated buying, and canonical opportunistic buying once warm-up history is ready.
+Formal inference must not rely only on IID event bootstrap. Add calendar-time equal-weight active-signal portfolio inference with HAC/Newey-West and clustered robustness before promoting a benchmark to formal evidence.
 
 ---
 
 ## DEVELOPMENT / VALIDATION / OOS BOUNDARY
 
-- warm-up: **2013-2015** history only
+- warm-up: **2013-2015** history/context only
 - development: **2016-2020**
 - validation: **2021-2022**
 - sealed OOS: **2023+**
@@ -222,23 +245,24 @@ Do not open OOS until transaction eligibility, transforms, benchmark family, fea
 
 ## NEXT EXECUTION SEQUENCE
 
-1. Monitor run **35060455633** and require all 2013-2015 source-build jobs to pass.
-2. Require all **12 warm-up quarter** hydration jobs to pass and persist release assets under `research-sec-warmup-v1`.
-3. Verify the warm-up completeness gate and `sec-pit-warmup-2013-2015-index.json` with `oosOpened = false`.
-4. Add deterministic **PIT amendment reconciliation** and quantify quarantine/unlinked rates.
-5. Finalize historical security identity and adjusted/delisted market-data join.
-6. Build the predeclared simple insider benchmarks on development 2016-2020 and confirm them on validation 2021-2022.
-7. Only after simple baselines are credible, run the insider-information feature tournament.
-8. Then test one-at-a-time turning/technical overlays and dependence-aware statistical robustness.
-9. Freeze methodology before any request to inspect 2023+ OOS.
+1. Add synthetic regression tests for exact-session entry/horizon handling and tier selection; GitHub issue **#1** tracks this work.
+2. Freeze the B0 event/dedup/execution/reporting contract after tests.
+3. Build **B2 independent-owner cluster** on development 2016-2020 using the same exact-calendar outcome layer.
+4. Implement the **canonical CMP** research classifier as B1, using 2013-2015 warm-up history where required; keep the existing heuristic separate.
+5. Build B4 = B1 AND B2.
+6. Verify/build a complete PIT sale-history universe before unblocking B3.
+7. Add calendar-time/HAC and clustered robustness to Phase-1 baselines.
+8. Freeze Phase-1 definitions before opening validation 2021-2022 performance.
+9. Only after validation and methodology freeze may the owner consider authorizing sealed 2023+ OOS.
 
 ---
 
 ## DO NOT DO
 
-- Do not inspect 2023+ filings, outcomes, or performance without explicit owner authorization.
+- Do not inspect 2023+ filings, market outcomes, or performance without explicit owner authorization.
 - Do not tune production `config/scoring.v1.yaml` or `config/scoring.v1.lock.json` from exploratory results.
-- Do not treat hydration PASS as evidence of alpha.
+- Do not treat data-gate PASS or a positive B0 mean as evidence of alpha.
 - Do not classify missing historical 10b5-1 structured data as confirmed non-plan trading.
 - Do not use current ticker or market-cap mappings as historical truth.
-- Do not skip failed quarters to keep a workflow green; acquisition remains fail-closed.
+- Do not silently substitute a later bar when an exact XNYS session is missing.
+- Do not silently drop missing or delisted outcomes.
