@@ -284,6 +284,15 @@ jobs:
           --year "$YEAR" --quarter "$QUARTER"
           --candidate-run-id "b3-ps-${GITHUB_RUN_ID}-${YEAR}"
           --shard-size 500 --workers 4
+      - name: Preserve failed shard diagnostics
+        if: failure() && steps.persisted.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: b3-ps-failed-shards-${{ matrix.year }}q${{ matrix.quarter }}-${{ github.run_id }}
+          path: work/output/.${{ matrix.year }}q${{ matrix.quarter }}-shards
+          if-no-files-found: warn
+          retention-days: 90
+
       - name: Assert quarter contract
         if: steps.persisted.outputs.skip != 'true'
         shell: bash
