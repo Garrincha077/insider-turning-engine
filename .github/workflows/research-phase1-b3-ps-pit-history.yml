@@ -1,12 +1,18 @@
 name: Build Phase-1 B3 P/S PIT history 2013-2022
 
-# Dormant until the frozen 2016Q1 pilot passes.
+# Frozen 2016Q1 pilot passed in run 35282934646. A push to this workflow on
+# the research branch starts the resumable scale phase with that exact evidence.
 on:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-b3-ps-pit-history.yml"
   workflow_dispatch:
     inputs:
       pilot_run_id:
         description: Successful frozen 2016Q1 P/S pilot run
-        required: true
+        required: false
+        default: "35282934646"
         type: string
 
 permissions:
@@ -19,7 +25,9 @@ concurrency:
 
 env:
   SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT }}
-  PILOT_RUN_ID: ${{ inputs.pilot_run_id }}
+  PILOT_RUN_ID: ${{ inputs.pilot_run_id || '35282934646' }}
+  PILOT_ARTIFACT: phase1-b3-ps-pit-pilot-35282934646
+  PILOT_ARTIFACT_DIGEST: sha256:0ddaff2b57329c29537146fe3ec7fb5c4c19127b543dd08f85965c5653b33aa1
   RELEASE_TAG: research-sec-ps-pit-v1
   WARMUP_SOURCE_RUN_ID: "35060455633"
   CANDIDATE_RUN_ID: "34884538222"
@@ -38,9 +46,27 @@ jobs:
         run: |
           set -euo pipefail
           test -n "${PILOT_RUN_ID:-}"
+          test "$PILOT_RUN_ID" = "35282934646"
+
+          raw=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$PILOT_RUN_ID/artifacts?per_page=100")
+          export PILOT_ARTIFACT_JSON="$raw"
+          python - <<'PY'
+          import json
+          import os
+
+          values = json.loads(os.environ["PILOT_ARTIFACT_JSON"])["artifacts"]
+          matches = [x for x in values if x["name"] == os.environ["PILOT_ARTIFACT"]]
+          assert len(matches) == 1, len(matches)
+          artifact = matches[0]
+          assert artifact["expired"] is False
+          assert artifact["digest"] == os.environ["PILOT_ARTIFACT_DIGEST"], (
+              artifact["digest"], os.environ["PILOT_ARTIFACT_DIGEST"]
+          )
+          PY
+
           mkdir -p work/pilot
           gh run download "$PILOT_RUN_ID" --repo "$GITHUB_REPOSITORY" \
-            --pattern 'phase1-b3-ps-pit-pilot-*' --dir work/pilot
+            --name "$PILOT_ARTIFACT" --dir work/pilot
           python - <<'PY'
           import json
           from pathlib import Path
