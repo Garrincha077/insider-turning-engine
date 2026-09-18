@@ -82,7 +82,7 @@ class _Source:
         self.calls: list[str] = []
 
     def fetch_entry(self, entry: object, *, index_hash: str) -> object:
-        filer_cik = getattr(entry, "filer_cik")
+        filer_cik = entry.filer_cik
         self.calls.append(filer_cik)
         outcome = self.outcomes[filer_cik]
         if isinstance(outcome, Exception):
