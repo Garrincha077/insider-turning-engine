@@ -28,6 +28,8 @@ This definition is identical to the original-P/S history gate and may not be bro
 
 ## Required chain scope
 
+Both **transaction-bearing amendments** and **zero-transaction amendments** are part of the scope analysis. A zero-transaction 4/A or 5/A must never be silently treated as a no-op when its predecessor belongs to the P/S universe; it may amend header/remarks only, but it can also carry evidence relevant to whether a previously reported transaction remains valid. That determination must be explicit and performance-blind.
+
 An amendment chain is in scope if **either**:
 
 1. its original predecessor filing belongs to the completed original-P/S PIT universe; or
@@ -84,13 +86,29 @@ For an in-scope qualified P/S amendment whose deterministic predecessor is outsi
 
 If a unique predecessor cannot be established, the amendment remains quarantined.
 
+## Zero-transaction amendment rule
+
+For every zero-transaction 4/A or 5/A whose deterministic root predecessor belongs to the original P/S universe:
+
+1. recover exact SEC acceptance-time evidence for the amendment;
+2. retain the amendment filing and its remarks/footnote evidence as audit material;
+3. classify the amendment as either:
+   - `NON_TRANSACTIONAL_NO_CHANGE_TO_PS_ECONOMICS`,
+   - `PS_LIFECYCLE_CHANGE_SUPPORTED`, or
+   - `QUARANTINE_AMBIGUOUS_ZERO_TRANSACTION_AMENDMENT`;
+4. never infer deletion/cancellation of a P/S transaction merely from an empty transaction table;
+5. never treat the amendment as irrelevant merely because the transaction table is empty.
+
+Any economic lifecycle change requires deterministic filing evidence. Ambiguity is quarantined.
+
 ## Completion requirements
 
 The P/S amendment gate passes only if:
 
 - all 40 quarters of original P/S PIT history already passed;
 - all frozen amendment acquisition evidence is present;
-- every in-scope amendment is classified as linked, explicitly outside economic scope, or quarantined with a deterministic reason;
+- every in-scope transaction-bearing amendment is classified as linked, explicitly outside economic scope, or quarantined with a deterministic reason;
+- every zero-transaction amendment on a P/S root is explicitly classified under the frozen zero-transaction rule;
 - required supporting predecessor accessions are completely hydrated or explicitly quarantined;
 - transaction/revision IDs remain unique;
 - lifecycle intervals are deterministic;
@@ -105,6 +123,7 @@ The summary must report separately:
 - supporting predecessor filings hydrated;
 - linked amendment rows;
 - unresolved/ambiguous chains;
+- zero-transaction amendments on P/S roots and their explicit classifications;
 - qualified buy rows added/removed/corrected by amendment;
 - qualified sale rows added/removed/corrected by amendment.
 
