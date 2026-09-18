@@ -54,7 +54,11 @@ def _load_ps_candidates(path: Path, year: int, quarter_number: int) -> list[dict
     return rows
 
 
-def _validate_shard(summary: dict[str, Any], expected_total: int) -> None:
+def _validate_shard(
+    summary: dict[str, Any],
+    expected_total: int,
+    shard_output: Path | None = None,
+) -> None:
     selected = int(summary["selectedOriginalBuyFilings"])
     discovered = int(summary.get("discoveredFilings", summary["matchedInDailyIndex"]))
     if selected <= 0:
@@ -62,7 +66,27 @@ def _validate_shard(summary: dict[str, Any], expected_total: int) -> None:
     if int(summary["eligibleOriginalBuyFilingsInQuarter"]) != expected_total:
         raise ValueError("P/S shard candidate count disagrees with frozen universe")
     if discovered != selected:
-        raise ValueError("P/S accession discovery is incomplete")
+        failures: list[dict[str, Any]] = []
+        if shard_output is not None:
+            failure_path = shard_output / "failures.jsonl"
+            if failure_path.exists():
+                failures = _read_jsonl(failure_path)
+        preview = [
+            {
+                "accession": row.get("accession"),
+                "stage": row.get("stage"),
+                "reason": row.get("reason"),
+                "message": row.get("message"),
+            }
+            for row in failures[:10]
+        ]
+        raise ValueError(
+            "P/S accession discovery is incomplete; "
+            f"selected={selected} discovered={discovered} "
+            f"hydrated={summary.get('hydratedAndParsedFilings')} "
+            f"failureCount={summary.get('failureCount')} "
+            f"failurePreview={preview}"
+        )
     if int(summary["hydratedAndParsedFilings"]) != selected:
         raise ValueError("P/S hydration/parser coverage is incomplete")
     if int(summary["failureCount"]) != 0:
@@ -256,7 +280,7 @@ def run(
                 user_agent=user_agent,
                 candidate_run_id=candidate_run_id,
             )
-            _validate_shard(summary, len(candidates))
+            _validate_shard(summary, len(candidates), shard_output)
             shard_dirs.append(shard_output)
 
         summary = quarter._finalize(
