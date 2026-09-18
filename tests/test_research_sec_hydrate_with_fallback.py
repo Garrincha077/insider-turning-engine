@@ -74,3 +74,46 @@ def test_invalid_issuer_cik_is_rejected(issuer: str) -> None:
 def test_invalid_reporting_owner_cik_is_rejected() -> None:
     with pytest.raises(ValueError, match="reporting-owner CIK"):
         mod._direct_entries(_candidate(owners=["OWNER"]))
+
+
+class _Source:
+    def __init__(self, outcomes: dict[str, object]) -> None:
+        self.outcomes = outcomes
+        self.calls: list[str] = []
+
+    def fetch_entry(self, entry: object, *, index_hash: str) -> object:
+        filer_cik = getattr(entry, "filer_cik")
+        self.calls.append(filer_cik)
+        outcome = self.outcomes[filer_cik]
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+
+def test_fetch_verified_archive_stops_on_issuer_success() -> None:
+    raw = object()
+    source = _Source({"0000105319": raw, "0001053905": object()})
+    result, entry = mod._fetch_verified_archive(
+        candidate=_candidate(),
+        source=source,
+    )
+    assert result is raw
+    assert entry.filer_cik == "0000105319"
+    assert source.calls == ["0000105319"]
+
+
+def test_fetch_verified_archive_uses_owner_only_after_issuer_404() -> None:
+    raw = object()
+    source = _Source(
+        {
+            "0000105319": RuntimeError("404 Not Found"),
+            "0001053905": raw,
+        }
+    )
+    result, entry = mod._fetch_verified_archive(
+        candidate=_candidate(),
+        source=source,
+    )
+    assert result is raw
+    assert entry.filer_cik == "0001053905"
+    assert source.calls == ["0000105319", "0001053905"]
