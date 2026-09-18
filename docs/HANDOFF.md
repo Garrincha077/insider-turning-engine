@@ -1,6 +1,6 @@
 # Insider Turning Engine — HANDOFF
 
-_Last updated: 2026-09-17_
+_Last updated: 2026-09-18_
 
 This is the operational continuation point for a new ChatGPT/Codex session. Read this file first, then `docs/research-log.md`, `docs/research-predeclared-spec.md`, and `docs/P0_PHASE1_IMPLEMENTATION.md`.
 
@@ -83,6 +83,115 @@ Key counts:
 - resolver quarantine rows: 16.
 
 Policy remains deterministic/PIT-safe: original state remains effective until amendment acceptance; ambiguous predecessor links are quarantined rather than fuzzily matched.
+
+---
+
+## 2026-09-18 B3 P/S SALE-HISTORY STATUS
+
+B3 remains blocked on complete PIT buy/sale history. No B3 signal formula or performance has been opened.
+
+### Frozen P/S universe and pilot
+
+A separate original P/S PIT contract is frozen in
+`docs/research-phase1-b3-ps-pit-history-gate.md`.
+
+Universe:
+
+- original Form 4/5 only;
+- 2013-2022 only;
+- priced positive-share non-derivative `P/A` buys or `S/D` sales;
+- SEC `accepted_at` remains the historical knowledge clock;
+- 2023+ remains sealed.
+
+Frozen 2016 Q1 pilot:
+
+- workflow run: **35282934646**;
+- artifact: `phase1-b3-ps-pit-pilot-35282934646`;
+- artifact digest:
+  `sha256:0ddaff2b57329c29537146fe3ec7fb5c4c19127b543dd08f85965c5653b33aa1`;
+- 13,088 / 13,088 original P/S filings hydrated;
+- zero failures;
+- buy accession concordance: 5,482 / 5,482 = **100%**;
+- sale accession concordance: 7,664 / 7,664 = **100%**;
+- predeclared threshold was >=99.5% separately for both sides;
+- `oosOpened=false`;
+- `productionScoringChanged=false`.
+
+The pilot is frozen and its workflow is manual-rerun only.
+
+### Full original P/S history
+
+Persistent research release: **`research-sec-ps-pit-v1`**.
+
+Source universe:
+
+- 2013-2022 original P/S filings: **570,291**;
+- buy-only: 168,334;
+- sale-only: 400,230;
+- mixed buy/sale: 1,727;
+- sale-only filings are about 70.18% of the P/S filing universe.
+
+This confirms the earlier buy-centric history cannot serve as a complete B3 denominator.
+
+Persistent quarters at the latest checkpoint:
+
+- 2013 Q1-Q4: PASS;
+- 2014 Q1-Q2: PASS;
+- 2016 Q1 frozen pilot quarter: PASS;
+- persistent total: **7 / 40**.
+
+The hydration matrix is resumable with `fail-fast: false`; a failed quarter no longer discards later independent work.
+
+### 2014 Q3 discovery incident
+
+2014 Q3 repeatedly failed the unchanged 100% coverage gate:
+
+`P/S accession discovery is incomplete`
+
+This is a filing-discovery/data-quality issue, not a signal/performance result.
+
+Do not lower the 100% coverage requirement.
+
+Recovery rule is documented in
+`docs/progress-2026-09-18-b3-ps-2014q3-discovery-incident.md`.
+
+The verified archive fallback now uses:
+
+1. frozen quarterly-bulk **issuer CIK** as the primary archive directory;
+2. distinct verified **reporting-owner CIKs** as secondary archive paths;
+3. no fuzzy matching, ticker mapping, future information or market outcomes.
+
+All recovered filings must still pass exact accession/header, issuer-CIK,
+ownership-XML, SEC acceptance datetime and `knowledgeAt == acceptedAt` checks.
+
+Recovery implementation and synthetic attempt-order tests are CI green.
+
+Latest recovery/backfill run queued after the active resumable run:
+**35363456434**, commit
+`27e29d3a03a89ff480eb54ed4c0648e4bac10594`.
+
+### Broader P/S amendment gate
+
+Predeclared in
+`docs/research-phase1-b3-ps-amendment-gate.md`.
+
+The gate explicitly covers:
+
+- amendments whose root is already in the P/S universe;
+- qualified P/S amendments that require a supporting predecessor outside the
+  original P/S universe;
+- zero-transaction Form 4/A and 5/A on P/S roots;
+- ambiguous chains via quarantine, never fuzzy matching.
+
+The deterministic amendment-scope builder and tests are CI green.
+
+Do **not** run B3 development performance until:
+
+1. all 40 original P/S quarters pass;
+2. broader P/S amendment reconciliation passes;
+3. the actual B3 company-net-buying definition is separately frozen before
+   observing B3 development outcomes.
+
 
 ---
 
