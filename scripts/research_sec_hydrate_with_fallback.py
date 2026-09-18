@@ -102,7 +102,7 @@ def _fetch_verified_archive(
         for entry in entries:
             try:
                 raw = source.fetch_entry(
-                    entry, index_hash="research-reporting-owner-archive-fallback"
+                    entry, index_hash="research-verified-cik-archive-fallback"
                 )
                 return raw, entry
             except RuntimeError as exc:
