@@ -138,7 +138,10 @@ def test_root_in_ps_universe_is_in_scope(tmp_path: Path) -> None:
         amendments=[_amendment(amend_acc)],
         predecessors=[_pred(root_acc)],
     )
-    amendments = _canon_root(tmp_path, [_canonical(amend_acc, code="F", ad="D", economic="TAX_WITHHOLDING")])
+    amendments = _canon_root(
+        tmp_path,
+        [_canonical(amend_acc, code="F", ad="D", economic="TAX_WITHHOLDING")],
+    )
     out = tmp_path / "out"
     summary = mod.build(
         ps_candidate_root=ps,
