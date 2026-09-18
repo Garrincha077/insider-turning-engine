@@ -1,0 +1,91 @@
+name: Persist frozen B3 P/S 2016Q1 pilot quarter
+
+on:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-b3-ps-pit-promote-2016q1.yml"
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: research-phase1-b3-ps-pit-promote-2016q1
+  cancel-in-progress: false
+
+env:
+  PILOT_RUN_ID: "35282934646"
+  PILOT_ARTIFACT: phase1-b3-ps-pit-pilot-35282934646
+  PILOT_DIGEST: sha256:0ddaff2b57329c29537146fe3ec7fb5c4c19127b543dd08f85965c5653b33aa1
+  RELEASE_TAG: research-sec-ps-pit-v1
+  ASSET_NAME: sec-ps-pit-2016q1.tar.gz
+
+jobs:
+  promote:
+    name: Persist exact 2016Q1 pilot as full-history quarter
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify exact frozen pilot artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          raw=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$PILOT_RUN_ID/artifacts?per_page=100")
+          export RAW="$raw"
+          python - <<'PY'
+          import json, os
+          xs=[x for x in json.loads(os.environ["RAW"])["artifacts"] if x["name"]==os.environ["PILOT_ARTIFACT"]]
+          assert len(xs)==1, len(xs)
+          assert xs[0]["expired"] is False
+          assert xs[0]["digest"] == os.environ["PILOT_DIGEST"], (xs[0]["digest"], os.environ["PILOT_DIGEST"])
+          PY
+      - name: Download exact pilot evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.PILOT_ARTIFACT }}
+          path: work/pilot
+          repository: ${{ github.repository }}
+          run-id: ${{ env.PILOT_RUN_ID }}
+          github-token: ${{ github.token }}
+      - name: Assert pilot is the frozen complete 2016Q1 P/S quarter
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          s=json.loads(Path("work/pilot/quarter-summary.json").read_text())
+          assert s["year"] == 2016 and s["quarter"] == 1
+          assert s["eligibleOriginalPsFilings"] == 13088
+          assert s["hydratedOriginalPsFilings"] == 13088
+          assert s["psHistoryScalePilotPassed"] is True
+          assert s["bulkCanonicalConcordance"]["buyConcordanceRate"] == 1.0
+          assert s["bulkCanonicalConcordance"]["saleConcordanceRate"] == 1.0
+          assert s["qualityGates"]["zeroFailures"] is True
+          assert s["qualityGates"]["knowledgeEqualsAccepted"] is True
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["b3Eligible"] is False
+          PY
+      - name: Package deterministic quarter asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C work/pilot -czf "work/$ASSET_NAME"             quarter-summary.json checksums.json raw-manifest.jsonl canonical-research.jsonl failures.jsonl
+          sha256sum "work/$ASSET_NAME"
+      - name: Ensure P/S research release exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY"               --title "Research SEC original P/S PIT history v1"               --notes "Research-only original Form 4/5 P/A and S/D PIT history, 2013-2022. OOS 2023+ sealed."               --prerelease
+          fi
+      - name: Persist exact pilot quarter
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$RELEASE_TAG" "work/$ASSET_NAME" --repo "$GITHUB_REPOSITORY" --clobber
