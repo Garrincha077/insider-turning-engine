@@ -1,13 +1,6 @@
 name: Run Phase-1 B3 P/S PIT 2016Q1 pilot
 
 on:
-  push:
-    branches: [research/b3-ps-pit-history]
-    paths:
-      - "scripts/research_sec_hydrate_ps.py"
-      - "tests/test_research_sec_hydrate_ps.py"
-      - "docs/research-phase1-b3-ps-pit-history-gate.md"
-      - ".github/workflows/research-phase1-b3-ps-pit-pilot.yml"
   workflow_dispatch:
 
 permissions:
