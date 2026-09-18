@@ -1,0 +1,277 @@
+{
+  "schemaVersion": "1.0.0",
+  "researchOnly": true,
+  "period": "2013-2022",
+  "oosOpened": false,
+  "sourceRunId": "35081263705",
+  "sourceArtifacts": {
+    "2013": {
+      "name": "sec-amendment-source-2013-35081263705",
+      "digest": "sha256:f1cdf2e6ded92bacb7d97c69a88ec49e6bbd30614dd1bde22930cac6f7ab2903",
+      "id": 10450332046,
+      "expired": false
+    },
+    "2014": {
+      "name": "sec-amendment-source-2014-35081263705",
+      "digest": "sha256:6e3444cf5a473debeb29402112385dc3566f3be60e4d34282650f303bcf16307",
+      "id": 10450371955,
+      "expired": false
+    },
+    "2015": {
+      "name": "sec-amendment-source-2015-35081263705",
+      "digest": "sha256:5fb3d8d8ba2c656fc846d4419f5a29e6cf40f35b0fb633d6c20ee49994378aec",
+      "id": 10450357091,
+      "expired": false
+    },
+    "2016": {
+      "name": "sec-amendment-source-2016-35081263705",
+      "digest": "sha256:6975586e596a42841fed40571a0456797c1dfbf964f1863653dbea182b1f1a9a",
+      "id": 10450745667,
+      "expired": false
+    },
+    "2017": {
+      "name": "sec-amendment-source-2017-35081263705",
+      "digest": "sha256:bc6e099b85dd22e442c9038449b35f3f7a5ec4f025d7254f0b4dfdbdb77af720",
+      "id": 10450094298,
+      "expired": false
+    },
+    "2018": {
+      "name": "sec-amendment-source-2018-35081263705",
+      "digest": "sha256:5a68845ecfb2c5964abba94e9ba4873cf79d81c78363a7b994131794e6954d36",
+      "id": 10450347404,
+      "expired": false
+    },
+    "2019": {
+      "name": "sec-amendment-source-2019-35081263705",
+      "digest": "sha256:5245b0fa1a089e32fa11bab69dab729fc09dd9a3040884c82fc1a81491f2710d",
+      "id": 10450701463,
+      "expired": false
+    },
+    "2020": {
+      "name": "sec-amendment-source-2020-35081263705",
+      "digest": "sha256:6ae5eaf65babe813279f6ea4e6eb809a09c8557c44191b530e79ac353fc70fec",
+      "id": 10450542446,
+      "expired": false
+    },
+    "2021": {
+      "name": "sec-amendment-source-2021-35081263705",
+      "digest": "sha256:f1375456553d88c8ec127dc52539be51718b3f6d628d2fd96d1a0b4b193f2c67",
+      "id": 10451035506,
+      "expired": false
+    },
+    "2022": {
+      "name": "sec-amendment-source-2022-35081263705",
+      "digest": "sha256:36cf7e6b39b938881c68ceb66aae6bd42b4c43fabdd941d196ccf22d2e6bfb0e",
+      "id": 10451075495,
+      "expired": false
+    }
+  },
+  "amendmentRelease": {
+    "tag": "research-sec-amendments-v1",
+    "acquisitionIndex": "sha256:aa24a92f26cbe15eaacaa4affe3d4166cba6f42afe6cf340ed13f10cc38cc731",
+    "existingBuyUniverseReconciliation": "sha256:74935001c86c4e4852f06f715dadf0a85ffc61e77a2daa1855e643bb2bb6e363",
+    "quarterAssets": {
+      "2013q1": {
+        "name": "sec-amendments-2013q1.tar.gz",
+        "digest": "sha256:425b1740f18ee437a721b3a78acbf3075164b396cf6cfb22ceb01098e19b6f99",
+        "size": 1090002
+      },
+      "2013q2": {
+        "name": "sec-amendments-2013q2.tar.gz",
+        "digest": "sha256:5f2d057344a9ef8400c638b098a009ec0e9dad990acbee46fa55eef8401cd8f4",
+        "size": 818734
+      },
+      "2013q3": {
+        "name": "sec-amendments-2013q3.tar.gz",
+        "digest": "sha256:6a501d358b705aa6397ee0325c84789988379bf56b10c3b9e21a418f949af252",
+        "size": 657374
+      },
+      "2013q4": {
+        "name": "sec-amendments-2013q4.tar.gz",
+        "digest": "sha256:57dcf0fe0e3f05fe68e1378cf49ff724fd8197580a729df5aa3e2507f504c17f",
+        "size": 599799
+      },
+      "2014q1": {
+        "name": "sec-amendments-2014q1.tar.gz",
+        "digest": "sha256:33fae916790d6901cb859955a1c605729c6a98d89b70d6463b822f494fbe2ca2",
+        "size": 1002847
+      },
+      "2014q2": {
+        "name": "sec-amendments-2014q2.tar.gz",
+        "digest": "sha256:b81776000e0b51105b16e13b15dd3a2af7a80616aa7e0367bc3553876d9c75da",
+        "size": 726795
+      },
+      "2014q3": {
+        "name": "sec-amendments-2014q3.tar.gz",
+        "digest": "sha256:5c49f23f9f0f55f023ffb770f366990b3be150ad6e041719f4438d77dd5d5867",
+        "size": 571531
+      },
+      "2014q4": {
+        "name": "sec-amendments-2014q4.tar.gz",
+        "digest": "sha256:3fa1e95fb1d9d542a81449690af5f4414fa1e2d094c950963edff00bf029ff3a",
+        "size": 780124
+      },
+      "2015q1": {
+        "name": "sec-amendments-2015q1.tar.gz",
+        "digest": "sha256:39cea66b6c98a0cc8d08dde6d70ff51171425bc1f15dffccc7cdb7d0ed8cf808",
+        "size": 1209994
+      },
+      "2015q2": {
+        "name": "sec-amendments-2015q2.tar.gz",
+        "digest": "sha256:b506821cccb326d664936be1d9542a0228a45fceffba69a9172fcabbe198ea29",
+        "size": 851685
+      },
+      "2015q3": {
+        "name": "sec-amendments-2015q3.tar.gz",
+        "digest": "sha256:a5339506cc3c05e10624f3b798b201c17402b710a25b7a5f159965d797c2e9c5",
+        "size": 653605
+      },
+      "2015q4": {
+        "name": "sec-amendments-2015q4.tar.gz",
+        "digest": "sha256:dcf618dffe46f3f4def6c0b5ac59f5ad380e810b1f73f7b605145b0ec8c26071",
+        "size": 623735
+      },
+      "2016q1": {
+        "name": "sec-amendments-2016q1.tar.gz",
+        "digest": "sha256:b2c64b3afd994ccad181fe117d6c0e7cd636177aa046c6cec5f01a81f2e84ebc",
+        "size": 1061425
+      },
+      "2016q2": {
+        "name": "sec-amendments-2016q2.tar.gz",
+        "digest": "sha256:ab5029b99084f1c4912eac15c9df4ec1ae0454ebcb2f7ffc37d2963beb5e7c78",
+        "size": 708748
+      },
+      "2016q3": {
+        "name": "sec-amendments-2016q3.tar.gz",
+        "digest": "sha256:451cf73e199d38a3c74351de8e897848e22e97e36ae5ce18c3fa38a65d14c145",
+        "size": 555613
+      },
+      "2016q4": {
+        "name": "sec-amendments-2016q4.tar.gz",
+        "digest": "sha256:50c56fe931f87e60427784e9ea077817da76a92cd0f10fe748449e9b080a057d",
+        "size": 589148
+      },
+      "2017q1": {
+        "name": "sec-amendments-2017q1.tar.gz",
+        "digest": "sha256:9ed796de1c58ddc61b2ba90cf2594b5823e9da6d126f5d8f007163bb7cb9cb40",
+        "size": 911664
+      },
+      "2017q2": {
+        "name": "sec-amendments-2017q2.tar.gz",
+        "digest": "sha256:33d5f98d60663fc1c91ec8bd263ea7f15dc2e1b4a0da09258d9435c78cc3b892",
+        "size": 625965
+      },
+      "2017q3": {
+        "name": "sec-amendments-2017q3.tar.gz",
+        "digest": "sha256:bd59c7e5b7c76cc91e344f0dac3743b29c4ec80493184a5156d3471cdf212002",
+        "size": 437835
+      },
+      "2017q4": {
+        "name": "sec-amendments-2017q4.tar.gz",
+        "digest": "sha256:9abe39849acb03a76d4255fa18495765e406c9a2d2c6e8289ca40731a5e92e85",
+        "size": 488260
+      },
+      "2018q1": {
+        "name": "sec-amendments-2018q1.tar.gz",
+        "digest": "sha256:3ab696497a58142dc8035dd613015e47cdeb6ae84cb3587da29cc308e6963f4d",
+        "size": 901578
+      },
+      "2018q2": {
+        "name": "sec-amendments-2018q2.tar.gz",
+        "digest": "sha256:31d135b9798ef993d874af7f3fc4a3ea871eb9b01c733f68d2f243de48391303",
+        "size": 664097
+      },
+      "2018q3": {
+        "name": "sec-amendments-2018q3.tar.gz",
+        "digest": "sha256:49febe82c64ddab31c06a73a80f6b6f9bc8a791ccc6bede55c936bc30b94e894",
+        "size": 486752
+      },
+      "2018q4": {
+        "name": "sec-amendments-2018q4.tar.gz",
+        "digest": "sha256:38fe3e05b26942cde2e16db9a463c0b4c4974512d2f6dd0cd989051745703a41",
+        "size": 453204
+      },
+      "2019q1": {
+        "name": "sec-amendments-2019q1.tar.gz",
+        "digest": "sha256:cc053b017118a58274b06b7fd963caa7473f9e87f733c20c9029abb4463416d6",
+        "size": 993458
+      },
+      "2019q2": {
+        "name": "sec-amendments-2019q2.tar.gz",
+        "digest": "sha256:804a6bd18d42a50babc4b63086b6e68b8bf8cc204d2467d1af1ec4c683464df9",
+        "size": 668043
+      },
+      "2019q3": {
+        "name": "sec-amendments-2019q3.tar.gz",
+        "digest": "sha256:091203488ff5ffb56b99ac20afe32d4ec299f68f0dcf118d66bb12ec4272eeb0",
+        "size": 435915
+      },
+      "2019q4": {
+        "name": "sec-amendments-2019q4.tar.gz",
+        "digest": "sha256:6ce3cef10057dce312f5cedc72885d3306e785faf4059d453321b166cadddcb1",
+        "size": 386567
+      },
+      "2020q1": {
+        "name": "sec-amendments-2020q1.tar.gz",
+        "digest": "sha256:ee0e9092a8cfed951adb70045859378b521f0e0d25b5282ea074affa0fa77fe5",
+        "size": 820858
+      },
+      "2020q2": {
+        "name": "sec-amendments-2020q2.tar.gz",
+        "digest": "sha256:ec371574764344586f6b19bb606dae73ba2d76e3522ae2f619e499dba4aed7d6",
+        "size": 615447
+      },
+      "2020q3": {
+        "name": "sec-amendments-2020q3.tar.gz",
+        "digest": "sha256:569669862d1520ca7765b9d35d49576286d2d33f60ced98db37d7204438102bb",
+        "size": 433825
+      },
+      "2020q4": {
+        "name": "sec-amendments-2020q4.tar.gz",
+        "digest": "sha256:783ce7fa9130b9f5a829df810e114498f2f76a13fa108ba4317cf621b9dbbd6d",
+        "size": 605955
+      },
+      "2021q1": {
+        "name": "sec-amendments-2021q1.tar.gz",
+        "digest": "sha256:cc8ba6ef66d1fa12331338ee1c6caffad359d088e5fa82ca781ad1c7dedc69f2",
+        "size": 837150
+      },
+      "2021q2": {
+        "name": "sec-amendments-2021q2.tar.gz",
+        "digest": "sha256:cbdf1799ab8af9f28c241f569d722baa057d42ecc957c5851eeb9de40e23d57b",
+        "size": 638945
+      },
+      "2021q3": {
+        "name": "sec-amendments-2021q3.tar.gz",
+        "digest": "sha256:0aa820dac7e986fc3b3b278c6786c6728f13bf4d4ab578f4590e489d4530d322",
+        "size": 479615
+      },
+      "2021q4": {
+        "name": "sec-amendments-2021q4.tar.gz",
+        "digest": "sha256:3a42759f9de4afa4af7a04a631aff87dbf65ad724dfe608fa2dee9b9f8c40454",
+        "size": 571753
+      },
+      "2022q1": {
+        "name": "sec-amendments-2022q1.tar.gz",
+        "digest": "sha256:e6681d5022462dfd486f7da5122b709f4ff3fb4f125af067eac1b2945d9d4cdc",
+        "size": 833273
+      },
+      "2022q2": {
+        "name": "sec-amendments-2022q2.tar.gz",
+        "digest": "sha256:f4828355645bcc6e36133307c709bf0f2629a04eff20e8a65f2cb0eb9c95b46b",
+        "size": 563978
+      },
+      "2022q3": {
+        "name": "sec-amendments-2022q3.tar.gz",
+        "digest": "sha256:77d829b60fef00dce7c35b111cd01e11160311911d4efa95bcf398d8846db890",
+        "size": 428802
+      },
+      "2022q4": {
+        "name": "sec-amendments-2022q4.tar.gz",
+        "digest": "sha256:959f2e8bb02629e7fc2919e7660ac032f4e95518f1a6e684036a8e4b096b565f",
+        "size": 372435
+      }
+    }
+  },
+  "note": "Frozen evidence identities for the broader B3 P/S amendment gate. Existing reconciliation is scope evidence only and is not relabeled as P/S-complete."
+}
