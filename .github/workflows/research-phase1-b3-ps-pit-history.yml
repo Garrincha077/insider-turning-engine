@@ -2,6 +2,7 @@ name: Build Phase-1 B3 P/S PIT history 2013-2022
 
 # Frozen 2016Q1 pilot passed in run 35282934646. A push to this workflow on
 # the research branch starts the resumable scale phase with that exact evidence.
+# 2014Q3 recovery uses issuer-CIK-first verified archive fallback; all gates stay frozen.
 on:
   push:
     branches: [research/b3-ps-pit-history]
