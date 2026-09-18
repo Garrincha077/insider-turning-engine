@@ -3,8 +3,9 @@
 The primary path remains the official EDGAR daily index. If and only if that
 path cannot find a verified quarterly-bulk accession within the bounded search
 window, this adapter derives candidate EDGAR complete-submission paths from
-verified SEC quarterly-bulk reporting-owner CIKs and the accession number. The
-fallback still must pass accession-header, issuer-CIK, ownership-XML, exact
+the verified quarterly-bulk issuer CIK first, followed by verified reporting-
+owner CIKs as secondary paths. The fallback still must pass accession-header,
+issuer-CIK, ownership-XML, exact
 accepted_at and PIT-clock validation. Its provenance is explicitly marked as a
 fallback and is never represented as daily-index discovery.
 """
@@ -52,36 +53,45 @@ def _direct_entries(candidate: dict[str, Any]) -> tuple[DailyIndexEntry, ...]:
     if not isinstance(filed, date):
         raise ValueError("candidate filing date is not normalized")
 
-    owner_values = candidate.get("reportingOwnerCiks")
-    if not isinstance(owner_values, list) or not owner_values:
-        raise ValueError("verified reporting-owner CIK evidence is required for archive fallback")
+    issuer_value = str(candidate.get("issuerCik") or "").strip()
+    if not issuer_value.isdigit() or len(issuer_value) > 10:
+        raise ValueError("verified issuer CIK evidence is required for archive fallback")
 
-    owner_ciks: list[str] = []
-    for value in owner_values:
+    archive_ciks: list[tuple[str, str]] = [(issuer_value.zfill(10), "ISSUER_CIK")]
+
+    owner_values = candidate.get("reportingOwnerCiks")
+    if owner_values is not None and not isinstance(owner_values, list):
+        raise ValueError("reporting-owner CIK evidence must be a list")
+    for value in owner_values or []:
         cik = str(value).strip()
         if not cik.isdigit() or len(cik) > 10:
             raise ValueError("candidate reporting-owner CIK is invalid")
         normalized = cik.zfill(10)
-        if normalized not in owner_ciks:
-            owner_ciks.append(normalized)
+        if normalized not in {item[0] for item in archive_ciks}:
+            archive_ciks.append((normalized, "REPORTING_OWNER_CIK"))
 
     return tuple(
         DailyIndexEntry(
             filer_cik=cik,
-            company_name="RESEARCH_REPORTING_OWNER_ARCHIVE_FALLBACK",
+            company_name=f"RESEARCH_ARCHIVE_FALLBACK_{basis}",
             form_type=form_type,
             filing_date=filed,
-            submission_path=(
-                f"edgar/data/{int(cik)}/{compact}/{accession}.txt"
-            ),
+            submission_path=f"edgar/data/{int(cik)}/{compact}/{accession}.txt",
             accession_number=accession,
             index_date=None,
         )
-        for cik in owner_ciks
+        for cik, basis in archive_ciks
     )
 
 
-def _fetch_reporting_owner_archive(
+def _archive_cik_basis(entry: DailyIndexEntry, candidate: dict[str, Any]) -> str:
+    issuer = str(candidate["issuerCik"]).zfill(10)
+    if entry.filer_cik == issuer:
+        return "ISSUER_CIK"
+    return "REPORTING_OWNER_CIK"
+
+
+def _fetch_verified_archive(
     *, candidate: dict[str, Any], source: SECDailyIndexSource
 ) -> tuple[Any, DailyIndexEntry]:
     entries = _direct_entries(candidate)
@@ -105,14 +115,14 @@ def _fetch_reporting_owner_archive(
                 last_error = exc
                 break
         if not_found == len(entries):
-            raise ValueError("no verified reporting-owner SEC archive path exists") from last_error
+            raise ValueError("no verified issuer/reporting-owner SEC archive path exists") from last_error
         if retryable_error is None:
             break
         if attempt + 1 < RESEARCH_SEC_MAX_ATTEMPTS:
             time.sleep(min(16.0, float(2**attempt)))
     if last_error is not None:
         raise last_error
-    raise RuntimeError("reporting-owner SEC archive fallback failed without an error")
+    raise RuntimeError("verified SEC archive fallback failed without an error")
 
 
 def _fallback_one(
@@ -123,7 +133,7 @@ def _fallback_one(
 ) -> dict[str, Any]:
     accession = str(candidate["accession"])
     try:
-        raw, entry = _fetch_reporting_owner_archive(candidate=candidate, source=source)
+        raw, entry = _fetch_verified_archive(candidate=candidate, source=source)
         if raw.payload is None:
             raise ValueError("complete submission did not yield ownership XML")
         if raw.issuer_cik != str(candidate["issuerCik"]):
@@ -136,10 +146,11 @@ def _fallback_one(
         }
         clean_provenance.update(
             {
-                "discovery": "reporting_owner_accession_archive_fallback",
+                "discovery": "verified_accession_archive_fallback",
                 "fallback_reason": "not_found_in_daily_index_within_10_days",
-                "archive_reporting_owner_cik": entry.filer_cik,
-                "submission_path_derived_from_reporting_owner_cik": True,
+                "archive_cik": entry.filer_cik,
+                "archive_cik_basis": _archive_cik_basis(entry, candidate),
+                "submission_path_derived_from_verified_cik": True,
                 "candidate_filing_date": candidate["_filed"].isoformat(),
             }
         )
@@ -199,8 +210,9 @@ def _fallback_one(
                     if legacy_date_transforms
                     else "none"
                 ),
-                "discoveryMethod": "REPORTING_OWNER_ACCESSION_ARCHIVE_FALLBACK",
-                "archiveReportingOwnerCik": entry.filer_cik,
+                "discoveryMethod": "VERIFIED_ACCESSION_ARCHIVE_FALLBACK",
+                "archiveCik": entry.filer_cik,
+                "archiveCikBasis": _archive_cik_basis(entry, candidate),
                 "canonicalReady": False,
             }
             dumped.append(item)
@@ -213,7 +225,8 @@ def _fallback_one(
             "manifest": {
                 "accession": accession,
                 "issuerCik": raw.issuer_cik,
-                "archiveReportingOwnerCik": entry.filer_cik,
+                "archiveCik": entry.filer_cik,
+                "archiveCikBasis": _archive_cik_basis(entry, candidate),
                 "formType": raw.form_type,
                 "acceptedAt": raw.accepted_at.astimezone(UTC).isoformat(),
                 "actualRetrievedAt": raw.retrieved_at.astimezone(UTC).isoformat(),
@@ -271,7 +284,7 @@ def hydrate(
     summary["fallbackArchiveFilings"] = 0
     summary["discoveredFilings"] = int(summary["hydratedAndParsedFilings"])
     summary["discoveryPolicy"] = (
-        "daily index primary; verified reporting-owner accession archive fallback"
+        "daily index primary; verified issuer-CIK archive fallback; reporting-owner CIK secondary"
     )
     if not original_failures:
         (output / "summary.json").write_text(
