@@ -70,7 +70,7 @@ jobs:
           print("Frozen releases verified: 40/40 P/S and 40/40 amendments.")
           PY
 
-          python - <<'PY' > work-verify-artifacts.py
+          python - <<'PY'
           import json, os, subprocess
           from pathlib import Path
           m=json.loads(Path(os.environ["INPUT_MANIFEST"]).read_text())
@@ -89,9 +89,6 @@ jobs:
                   assert a["digest"] == item["digest"], (section,year,a["digest"],item["digest"])
           print("Exact source artifact identities and digests verified.")
           PY
-          mkdir -p work
-          mv work-verify-artifacts.py work/verify-artifacts.py
-          python work/verify-artifacts.py
 
       - name: Download frozen P/S source artifacts
         uses: actions/download-artifact@v4
