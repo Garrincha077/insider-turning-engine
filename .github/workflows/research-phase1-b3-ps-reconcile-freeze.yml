@@ -1,0 +1,314 @@
+name: Reconcile and freeze Phase-1 B3 P/S
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-b3-ps-reconcile-freeze.yml"
+      - "scripts/research_phase1_b3_ps_lifecycle.py"
+      - "scripts/research_phase1_b3_ps_lifecycle_merge.py"
+      - "scripts/research_phase1_b3_signal_build.py"
+      - "research/b3-company-net-buying-v1.json"
+      - "tests/test_research_phase1_b3_ps_lifecycle.py"
+      - "tests/test_research_phase1_b3_signal_build.py"
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: research-phase1-b3-ps-reconcile-freeze-v1
+  cancel-in-progress: false
+
+env:
+  SCOPE_RUN_ID: "35471756336"
+  SCOPE_ARTIFACT: phase1-b3-ps-amendment-scope-35471756336
+  SCOPE_ARTIFACT_DIGEST: sha256:8ed756ea1ddb2dfd2dcdf8ec478b82a2a8c4d4715c6d5223f1772e18b81fbb8d
+  PS_RELEASE: research-sec-ps-pit-v1
+  AMENDMENT_RELEASE: research-sec-amendments-v1
+  EVIDENCE_RELEASE: research-phase1-b3-ps-amendment-evidence-v1
+  RECON_RELEASE: research-phase1-b3-ps-reconciliation-v1
+  DEFINITION_RELEASE: research-phase1-b3-definition-v1
+  SIGNAL_RELEASE: research-phase1-b3-signal-input-v1
+  SHARD_COUNT: "8"
+
+jobs:
+  preflight:
+    name: Verify all frozen B3 P/S data gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify persistent releases and exact scope artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for tag in "$PS_RELEASE" "$AMENDMENT_RELEASE" "$EVIDENCE_RELEASE"; do
+            gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets > "$tag.json"
+          done
+          python - <<'PY'
+          import json
+          ps={x["name"] for x in json.load(open("research-sec-ps-pit-v1.json"))["assets"]}
+          am={x["name"] for x in json.load(open("research-sec-amendments-v1.json"))["assets"]}
+          ev={x["name"] for x in json.load(open("research-phase1-b3-ps-amendment-evidence-v1.json"))["assets"]}
+          assert len({x for x in ps if x.startswith("sec-ps-pit-") and x.endswith(".tar.gz")}) == 40
+          assert "sec-ps-pit-2013-2022-index.json" in ps
+          assert len({x for x in am if x.startswith("sec-amendments-") and x.endswith(".tar.gz")}) == 40
+          assert "sec-amendments-2013-2022-index.json" in am
+          assert len({x for x in ev if x.startswith("b3-ps-amendment-evidence-") and x.endswith(".tar.gz")}) == 10
+          assert "b3-ps-amendment-evidence-2013-2022-index.json" in ev
+          PY
+          raw=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SCOPE_RUN_ID/artifacts?per_page=100")
+          export RAW="$raw"
+          python - <<'PY'
+          import json, os
+          xs=json.loads(os.environ["RAW"])["artifacts"]
+          m=[x for x in xs if x["name"]==os.environ["SCOPE_ARTIFACT"]]
+          assert len(m)==1
+          assert m[0]["expired"] is False
+          assert m[0]["digest"]==os.environ["SCOPE_ARTIFACT_DIGEST"]
+          PY
+          if ! gh release view "$RECON_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RECON_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 B3 P/S reconciliation v1"               --notes "Research-only deterministic 2013-2022 P/S amendment lifecycle reconciliation. 2023+ sealed."               --prerelease
+          fi
+
+  reconcile:
+    name: Reconcile B3 P/S issuer shard ${{ matrix.shard }} of 8
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
+    env:
+      SHARD_INDEX: ${{ matrix.shard }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Download frozen scope
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.SCOPE_ARTIFACT }}
+          path: work/scope
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.SCOPE_RUN_ID }}
+      - name: Download and extract persistent research inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/ps-assets work/am-assets work/ev-assets work/original work/amendments work/evidence
+          gh release download "$PS_RELEASE" --repo "$GITHUB_REPOSITORY" --pattern 'sec-ps-pit-*.tar.gz' --dir work/ps-assets
+          gh release download "$AMENDMENT_RELEASE" --repo "$GITHUB_REPOSITORY" --pattern 'sec-amendments-*.tar.gz' --dir work/am-assets
+          gh release download "$EVIDENCE_RELEASE" --repo "$GITHUB_REPOSITORY" --pattern 'b3-ps-amendment-evidence-20??.tar.gz' --dir work/ev-assets
+          for file in work/ps-assets/*.tar.gz; do
+            d="work/original/$(basename "$file" .tar.gz)"; mkdir -p "$d"; tar -xzf "$file" -C "$d"
+          done
+          for file in work/am-assets/*.tar.gz; do
+            d="work/amendments/$(basename "$file" .tar.gz)"; mkdir -p "$d"; tar -xzf "$file" -C "$d"
+          done
+          for file in work/ev-assets/*.tar.gz; do
+            d="work/evidence/$(basename "$file" .tar.gz)"; mkdir -p "$d"; tar -xzf "$file" -C "$d"
+          done
+      - name: Reconcile one issuer-safe shard
+        shell: bash
+        run: >-
+          uv run python scripts/research_phase1_b3_ps_lifecycle.py
+          --original-root work/original
+          --amendment-root work/amendments
+          --evidence-root work/evidence
+          --scope-root work/scope
+          --output work/reconciliation-shard
+          --shard-index "$SHARD_INDEX"
+          --shard-count "$SHARD_COUNT"
+      - name: Assert shard boundary
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os
+          s=json.load(open("work/reconciliation-shard/summary.json"))
+          assert s["issuerShard"]["index"]==int(os.environ["SHARD_INDEX"])
+          assert s["amendmentsReconciledForPsUniverse"] is True
+          assert s["zeroTransactionSemanticReviewComplete"] is True
+          assert s["fullPsHistoryComplete"] is True
+          assert s["b3DefinitionFrozen"] is False
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["marketDataJoined"] is False
+          assert s["signalReady"] is False
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3-ps-reconciliation-shard-${{ matrix.shard }}-${{ github.run_id }}
+          path: work/reconciliation-shard
+          retention-days: 90
+
+  merge:
+    name: Merge B3 P/S lifecycle reconciliation
+    needs: reconcile
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: b3-ps-reconciliation-shard-*-${{ github.run_id }}
+          path: work/shards
+      - name: Deterministic merge
+        run: >-
+          uv run python scripts/research_phase1_b3_ps_lifecycle_merge.py
+          --shard-root work/shards
+          --output work/reconciliation
+          --shard-count "$SHARD_COUNT"
+      - name: Assert final P/S data gate
+        run: |
+          python - <<'PY'
+          import json
+          s=json.load(open("work/reconciliation/summary.json"))
+          assert s["status"]=="B3_PS_AMENDMENT_RECONCILIATION_PASS"
+          assert s["amendmentsReconciledForPsUniverse"] is True
+          assert s["zeroTransactionSemanticReviewComplete"] is True
+          assert sum(s["zeroTransactionClassificationCounts"].values())==596
+          assert s["b3DefinitionFrozen"] is False
+          assert s["oosOpened"] is False
+          PY
+      - name: Persist reconciliation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C work/reconciliation -czf work/b3-ps-reconciliation-2013-2022.tar.gz             summary.json reconciled-ps-revisions.jsonl effective-ps-end-2022.jsonl             amendment-linkage.jsonl zero-transaction-classification.jsonl quarantines.jsonl
+          gh release upload "$RECON_RELEASE" work/b3-ps-reconciliation-2013-2022.tar.gz             work/reconciliation/summary.json --repo "$GITHUB_REPOSITORY" --clobber
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3-ps-reconciliation-merged-${{ github.run_id }}
+          path: work/reconciliation
+          retention-days: 90
+
+  freeze_definition:
+    name: Freeze B3 company-net-buying definition
+    needs: merge
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: b3-ps-reconciliation-merged-${{ github.run_id }}
+          path: work/reconciliation
+      - name: Freeze predeclared definition after data gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          recon=json.load(open("work/reconciliation/summary.json"))
+          assert recon["amendmentsReconciledForPsUniverse"] is True
+          candidate=json.load(open("research/b3-company-net-buying-v1.json"))
+          assert candidate["status"]=="PREDECLARED_PENDING_PS_RECONCILIATION_GATE"
+          assert candidate["b3DefinitionFrozen"] is False
+          assert candidate["developmentPerformanceComputed"] is False
+          assert candidate["oosOpened"] is False
+          raw=Path("research/b3-company-net-buying-v1.json").read_bytes()
+          frozen={
+              **candidate,
+              "status":"FROZEN_BEFORE_DEVELOPMENT_PERFORMANCE",
+              "b3DefinitionFrozen":True,
+              "candidateDefinitionSha256":"sha256:"+hashlib.sha256(raw).hexdigest(),
+              "frozenAgainstReconciliationRunId":os.environ["GITHUB_RUN_ID"],
+              "developmentPerformanceComputed":False,
+              "oosOpened":False,
+              "productionScoringChanged":False,
+          }
+          Path("b3-company-net-buying-v1-frozen.json").write_text(
+              json.dumps(frozen,indent=2,sort_keys=True)+"\n"
+          )
+          PY
+      - name: Persist frozen definition
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if ! gh release view "$DEFINITION_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$DEFINITION_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 B3 company-net-buying definition v1"               --notes "Frozen after P/S data reconciliation and before development performance. 2023+ sealed."               --prerelease
+          fi
+          gh release upload "$DEFINITION_RELEASE" b3-company-net-buying-v1-frozen.json             --repo "$GITHUB_REPOSITORY" --clobber
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3-definition-frozen-${{ github.run_id }}
+          path: b3-company-net-buying-v1-frozen.json
+          retention-days: 90
+
+  build_signal_inputs:
+    name: Build B3 development signal inputs without outcomes
+    needs: [merge, freeze_definition]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --all-groups --frozen
+      - uses: actions/download-artifact@v4
+        with:
+          name: b3-ps-reconciliation-merged-${{ github.run_id }}
+          path: work/reconciliation
+      - uses: actions/download-artifact@v4
+        with:
+          name: b3-definition-frozen-${{ github.run_id }}
+          path: work/definition
+      - name: Build performance-blind raw B3 candidates
+        run: >-
+          uv run python scripts/research_phase1_b3_signal_build.py
+          --revisions work/reconciliation/reconciled-ps-revisions.jsonl
+          --definition work/definition/b3-company-net-buying-v1-frozen.json
+          --output work/signals
+      - name: Assert performance remains unopened
+        run: |
+          python - <<'PY'
+          import json
+          s=json.load(open("work/signals/summary.json"))
+          assert s["developmentPeriod"]=="2016-2020"
+          assert s["marketDataJoined"] is False
+          assert s["returnsRead"] is False
+          assert s["developmentPerformanceComputed"] is False
+          assert s["validationPerformanceComputed"] is False
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          PY
+      - name: Persist raw signal inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if ! gh release view "$SIGNAL_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$SIGNAL_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 B3 raw development signal inputs v1"               --notes "Performance-blind B3 raw candidates for 2016-2020. No market outcomes or 2023+ data read."               --prerelease
+          fi
+          tar -C work/signals -czf work/b3-raw-signal-inputs-2016-2020.tar.gz             summary.json b3-raw-signal-candidates.jsonl
+          gh release upload "$SIGNAL_RELEASE" work/b3-raw-signal-inputs-2016-2020.tar.gz             work/signals/summary.json --repo "$GITHUB_REPOSITORY" --clobber
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3-raw-signal-inputs-${{ github.run_id }}
+          path: work/signals
+          retention-days: 90

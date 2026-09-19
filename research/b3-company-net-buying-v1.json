@@ -1,0 +1,63 @@
+{
+  "schemaVersion": "1.0.0",
+  "definitionId": "B3_COMPANY_NET_BUYING_V1",
+  "status": "PREDECLARED_PENDING_PS_RECONCILIATION_GATE",
+  "researchOnly": true,
+  "description": "Company-level net open-market buying benchmark built from point-in-time effective qualified P/S economic rows.",
+  "qualifiedRows": {
+    "tableType": "NON_DERIVATIVE",
+    "buy": {
+      "code": "P",
+      "acquiredDisposed": "A",
+      "economicClassification": "OPEN_MARKET_PURCHASE"
+    },
+    "sale": {
+      "code": "S",
+      "acquiredDisposed": "D",
+      "economicClassification": "OPEN_MARKET_SALE"
+    },
+    "requirePositiveFiniteShares": true,
+    "requirePositiveFinitePrice": true
+  },
+  "companyEconomicDedupKey": [
+    "issuerCik",
+    "rootAccession",
+    "tableType",
+    "rootRowSequence"
+  ],
+  "primaryWindowCalendarDays": 30,
+  "secondaryWindowsCalendarDays": [
+    7,
+    90
+  ],
+  "aggregation": {
+    "buyDollars": "sum(shares * pricePerShare) for active qualified BUY economic rows",
+    "saleDollars": "sum(shares * pricePerShare) for active qualified SALE economic rows",
+    "netDollars": "buyDollars - saleDollars",
+    "grossDollars": "buyDollars + saleDollars",
+    "netBuyingIntensity": "netDollars / grossDollars when grossDollars > 0"
+  },
+  "rawSignalRule": "buyDollars > 0 AND netDollars > 0 at a state-changing boundary",
+  "amendmentClock": "A revision changes historical state only from SEC accepted_at onward.",
+  "economicEventClock": "Keep the root accepted_at while a previously qualified row is corrected; if a previously non-qualified row first becomes qualified, use that amendment accepted_at.",
+  "reportingOwnerWeights": "none",
+  "officerRoleWeights": "none",
+  "directIndirectWeights": "none",
+  "rule10b51SaleTreatment": "include qualified sales; report plan status only as later stratification",
+  "downstreamExecutionRule": "public knowledge_at -> first eligible daily evaluation close -> next XNYS session open",
+  "downstreamIssuerDedupSessions": 20,
+  "primaryOutcomeSessions": 126,
+  "secondaryOutcomeSessions": [
+    21,
+    63,
+    252
+  ],
+  "developmentPeriod": "2016-2020",
+  "outcomeDataLatestAllowed": "2022-12-31",
+  "validationPeriod": "2021-2022",
+  "sealedOosStart": "2023-01-01",
+  "b3DefinitionFrozen": false,
+  "developmentPerformanceComputed": false,
+  "oosOpened": false,
+  "productionScoringChanged": false
+}
