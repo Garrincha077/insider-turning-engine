@@ -37,9 +37,26 @@ jobs:
   preflight:
     name: Verify all frozen B3 P/S data gates
     runs-on: ubuntu-latest
+    outputs:
+      already_complete: ${{ steps.complete.outputs.value }}
     steps:
+      - name: Check whether full overnight chain is already complete
+        id: complete
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$SIGNAL_RELEASE" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' 2>/dev/null | grep -Fxq 'b3-raw-signal-inputs-2016-2020.tar.gz'; then
+            echo "value=true" >> "$GITHUB_OUTPUT"
+            echo "Full B3 overnight chain already persisted; this run will short-circuit."
+          else
+            echo "value=false" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/checkout@v4
+        if: steps.complete.outputs.value != 'true'
       - name: Verify persistent releases and exact scope artifact
+        if: steps.complete.outputs.value != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -77,6 +94,7 @@ jobs:
   reconcile:
     name: Reconcile B3 P/S issuer shard ${{ matrix.shard }} of 8
     needs: preflight
+    if: needs.preflight.outputs.already_complete != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     strategy:
