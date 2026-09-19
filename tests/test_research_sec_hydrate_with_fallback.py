@@ -117,3 +117,45 @@ def test_fetch_verified_archive_uses_owner_only_after_issuer_404() -> None:
     assert result is raw
     assert entry.filer_cik == "0001053905"
     assert source.calls == ["0000105319", "0001053905"]
+
+def test_fallback_reason_accepts_only_frozen_recovery_cases() -> None:
+    assert (
+        mod._fallback_reason_for_failure(
+            {
+                "stage": "DISCOVERY",
+                "reason": "ACCESSION_NOT_FOUND_WITHIN_10_DAYS",
+            }
+        )
+        == "not_found_in_daily_index_within_10_days"
+    )
+    assert (
+        mod._fallback_reason_for_failure(
+            {
+                "stage": "HYDRATE_PARSE_VALIDATE",
+                "reason": "RuntimeError",
+                "message": mod.OVERSIZED_SEC_RESPONSE_MESSAGE,
+            }
+        )
+        == "daily_index_fetch_response_exceeds_configured_size_limit"
+    )
+    assert (
+        mod._fallback_reason_for_failure(
+            {
+                "stage": "HYDRATE_PARSE_VALIDATE",
+                "reason": "RuntimeError",
+                "message": "SEC daily-index request failed: unrelated error",
+            }
+        )
+        is None
+    )
+    assert (
+        mod._fallback_reason_for_failure(
+            {
+                "stage": "HYDRATE_PARSE_VALIDATE",
+                "reason": "ValueError",
+                "message": mod.OVERSIZED_SEC_RESPONSE_MESSAGE,
+            }
+        )
+        is None
+    )
+

@@ -130,6 +130,7 @@ def _fallback_one(
     candidate: dict[str, Any],
     source: SECDailyIndexSource,
     candidate_run_id: str,
+    fallback_reason: str,
 ) -> dict[str, Any]:
     accession = str(candidate["accession"])
     try:
@@ -147,7 +148,7 @@ def _fallback_one(
         clean_provenance.update(
             {
                 "discovery": "verified_accession_archive_fallback",
-                "fallback_reason": "not_found_in_daily_index_within_10_days",
+                "fallback_reason": fallback_reason,
                 "archive_cik": entry.filer_cik,
                 "archive_cik_basis": _archive_cik_basis(entry, candidate),
                 "submission_path_derived_from_verified_cik": True,
@@ -256,6 +257,27 @@ def _fallback_one(
         }
 
 
+OVERSIZED_SEC_RESPONSE_MESSAGE = (
+    "SEC daily-index request failed: "
+    "SEC response exceeds configured size limit"
+)
+
+
+def _fallback_reason_for_failure(failure: dict[str, Any]) -> str | None:
+    if (
+        failure.get("stage") == "DISCOVERY"
+        and failure.get("reason") == "ACCESSION_NOT_FOUND_WITHIN_10_DAYS"
+    ):
+        return "not_found_in_daily_index_within_10_days"
+    if (
+        failure.get("stage") == "HYDRATE_PARSE_VALIDATE"
+        and failure.get("reason") == "RuntimeError"
+        and failure.get("message") == OVERSIZED_SEC_RESPONSE_MESSAGE
+    ):
+        return "daily_index_fetch_response_exceeds_configured_size_limit"
+    return None
+
+
 def hydrate(
     *,
     candidate_path: Path,
@@ -293,20 +315,20 @@ def hydrate(
         return summary
 
     eligible_for_fallback = [
-        row
+        (row, reason)
         for row in original_failures
-        if row.get("stage") == "DISCOVERY"
-        and row.get("reason") == "ACCESSION_NOT_FOUND_WITHIN_10_DAYS"
+        if (reason := _fallback_reason_for_failure(row)) is not None
     ]
-    untouched_failures = [row for row in original_failures if row not in eligible_for_fallback]
+    eligible_failures = [row for row, _reason in eligible_for_fallback]
+    untouched_failures = [row for row in original_failures if row not in eligible_failures]
     if not eligible_for_fallback:
         return summary
 
     all_candidates = _load_candidates(candidate_path, year, quarter)
     selected = all_candidates[offset : offset + limit]
     by_accession = {str(row["accession"]): row for row in selected}
-    targets = []
-    for failure in eligible_for_fallback:
+    targets: list[tuple[dict[str, Any], str]] = []
+    for failure, fallback_reason in eligible_for_fallback:
         candidate = by_accession.get(str(failure["accession"]))
         if candidate is None:
             untouched_failures.append(
@@ -318,7 +340,7 @@ def hydrate(
                 }
             )
         else:
-            targets.append(candidate)
+            targets.append((candidate, fallback_reason))
 
     source = SECDailyIndexSource(
         user_agent, cache_dir=output / "sec-cache-fallback", max_attempts=1
@@ -332,8 +354,9 @@ def hydrate(
                     candidate=row,
                     source=source,
                     candidate_run_id=candidate_run_id,
+                    fallback_reason=fallback_reason,
                 )
-                for row in targets
+                for row, fallback_reason in targets
             ]
             for future in as_completed(futures):
                 fallback_results.append(future.result())
