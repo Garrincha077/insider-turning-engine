@@ -10,7 +10,8 @@ mod = importlib.import_module("research_phase1_b3_ps_lifecycle")
 
 def test_zero_classifier_requires_explicit_evidence() -> None:
     assert mod._classify_zero_text(
-        "The reporting person filed a Form 4 reporting a sale of 2,500 shares that did not in fact occur."
+        "The reporting person filed a Form 4 reporting a sale of 2,500 shares "
+        "that did not in fact occur."
     )[0] == "PS_LIFECYCLE_CHANGE_SUPPORTED"
     assert mod._classify_zero_text(
         "This Form 4/A does not disclose any transactions. It only discloses derivative holdings."
