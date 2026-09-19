@@ -160,3 +160,6 @@ def test_fallback_reason_accepts_only_frozen_recovery_cases() -> None:
         is None
     )
 
+def test_verified_archive_cap_is_bounded_by_daily_index_source_contract() -> None:
+    assert mod.MAX_CONFIGURABLE_SUBMISSION_BYTES == 100 * 1024 * 1024
+

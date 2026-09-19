@@ -24,7 +24,11 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
-from insider_turning_engine.ingestion.sec.daily_index import DailyIndexEntry, SECDailyIndexSource
+from insider_turning_engine.ingestion.sec.daily_index import (
+    MAX_CONFIGURABLE_SUBMISSION_BYTES,
+    DailyIndexEntry,
+    SECDailyIndexSource,
+)
 from insider_turning_engine.ingestion.sec.parser import parse_sec_filing
 
 from research_sec_hydrate import (
@@ -152,6 +156,7 @@ def _fallback_one(
                 "archive_cik": entry.filer_cik,
                 "archive_cik_basis": _archive_cik_basis(entry, candidate),
                 "submission_path_derived_from_verified_cik": True,
+                "submission_maximum_bytes": MAX_CONFIGURABLE_SUBMISSION_BYTES,
                 "candidate_filing_date": candidate["_filed"].isoformat(),
             }
         )
@@ -214,6 +219,7 @@ def _fallback_one(
                 "discoveryMethod": "VERIFIED_ACCESSION_ARCHIVE_FALLBACK",
                 "archiveCik": entry.filer_cik,
                 "archiveCikBasis": _archive_cik_basis(entry, candidate),
+                "archiveSubmissionMaximumBytes": MAX_CONFIGURABLE_SUBMISSION_BYTES,
                 "canonicalReady": False,
             }
             dumped.append(item)
@@ -343,7 +349,10 @@ def hydrate(
             targets.append((candidate, fallback_reason))
 
     source = SECDailyIndexSource(
-        user_agent, cache_dir=output / "sec-cache-fallback", max_attempts=1
+        user_agent,
+        cache_dir=output / "sec-cache-fallback",
+        max_attempts=1,
+        submission_maximum_bytes=MAX_CONFIGURABLE_SUBMISSION_BYTES,
     )
     fallback_results: list[dict[str, Any]] = []
     try:

@@ -3,6 +3,8 @@ from datetime import UTC, date, datetime
 import httpx
 
 from insider_turning_engine.ingestion.sec.daily_index import (
+    DEFAULT_SUBMISSION_MAXIMUM_BYTES,
+    MAX_CONFIGURABLE_SUBMISSION_BYTES,
     SECDailyIndexSource,
     daily_index_url,
     parse_complete_submission,
@@ -196,3 +198,71 @@ def test_daily_index_cache_is_content_addressed_and_replayable(tmp_path) -> None
     manifest.write_text("{}", encoding="utf-8")
     source.fetch_day(date(2026, 8, 31))
     assert len(requests) > count
+
+def test_submission_size_limit_defaults_to_25mb_and_can_be_boundedly_overridden() -> None:
+    default_source = SECDailyIndexSource("InsiderTurningEngine admin@example.com")
+    try:
+        assert default_source.submission_maximum_bytes == DEFAULT_SUBMISSION_MAXIMUM_BYTES
+    finally:
+        default_source.close()
+
+    override_source = SECDailyIndexSource(
+        "InsiderTurningEngine admin@example.com",
+        submission_maximum_bytes=MAX_CONFIGURABLE_SUBMISSION_BYTES,
+    )
+    try:
+        assert override_source.submission_maximum_bytes == MAX_CONFIGURABLE_SUBMISSION_BYTES
+    finally:
+        override_source.close()
+
+
+def test_submission_size_limit_rejects_values_above_hard_safety_bound() -> None:
+    try:
+        SECDailyIndexSource(
+            "InsiderTurningEngine admin@example.com",
+            submission_maximum_bytes=MAX_CONFIGURABLE_SUBMISSION_BYTES + 1,
+        )
+    except ValueError as exc:
+        assert str(exc) == "SEC submission size limit is outside configured safety bounds"
+    else:
+        raise AssertionError("submission cap above the hard safety bound must be rejected")
+
+
+def test_fetch_entry_uses_configured_submission_limit() -> None:
+    entry = parse_daily_master_index(INDEX)[0]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=SUBMISSION, request=request)
+
+    too_small = SECDailyIndexSource(
+        "InsiderTurningEngine admin@example.com",
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+        max_attempts=1,
+        submission_maximum_bytes=len(SUBMISSION) - 1,
+        sleeper=lambda _delay: None,
+        clock=lambda: datetime(2026, 9, 1, tzinfo=UTC),
+    )
+    try:
+        try:
+            too_small.fetch_entry(entry, index_hash="sha256:" + "1" * 64)
+        except RuntimeError as exc:
+            assert "SEC response exceeds configured size limit" in str(exc)
+        else:
+            raise AssertionError("configured submission cap must be enforced")
+    finally:
+        too_small.close()
+
+    large_enough = SECDailyIndexSource(
+        "InsiderTurningEngine admin@example.com",
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+        max_attempts=1,
+        submission_maximum_bytes=len(SUBMISSION),
+        sleeper=lambda _delay: None,
+        clock=lambda: datetime(2026, 9, 1, tzinfo=UTC),
+    )
+    try:
+        record = large_enough.fetch_entry(entry, index_hash="sha256:" + "1" * 64)
+        assert record.accession_number == entry.accession_number
+    finally:
+        large_enough.close()
+

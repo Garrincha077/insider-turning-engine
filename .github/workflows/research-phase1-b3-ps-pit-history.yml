@@ -4,7 +4,8 @@ name: Build Phase-1 B3 P/S PIT history 2013-2022
 # the research branch starts the resumable scale phase with that exact evidence.
 # 2014Q3 recovery uses issuer-CIK-first verified archive fallback. The exact
 # configured-size-limit daily-index fetch failure may also use that verified
-# archive path; all coverage and research gates stay frozen.
+# archive path with a bounded 100 MiB submission cap; all coverage and research
+# gates stay frozen.
 on:
   push:
     branches: [research/b3-ps-pit-history]

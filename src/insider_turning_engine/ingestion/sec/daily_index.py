@@ -36,6 +36,8 @@ from .incremental import OWNERSHIP_FORMS
 
 DAILY_INDEX_ROOT = "https://www.sec.gov/Archives/edgar/daily-index"
 ARCHIVES_ROOT = "https://www.sec.gov/Archives"
+DEFAULT_SUBMISSION_MAXIMUM_BYTES = 25 * 1024 * 1024
+MAX_CONFIGURABLE_SUBMISSION_BYTES = 100 * 1024 * 1024
 _ACCESSION_RE = re.compile(r"\d{10}-\d{2}-\d{6}")
 _ACCESSION_HEADER_RE = re.compile(
     r"(?:<ACCESSION-NUMBER>\s*|^ACCESSION NUMBER:\s*)(\d{10}-\d{2}-\d{6})",
@@ -253,14 +255,18 @@ class SECDailyIndexSource:
         cache_dir: str | Path | None = None,
         pacer: RequestPacer | None = None,
         max_attempts: int = 4,
+        submission_maximum_bytes: int = DEFAULT_SUBMISSION_MAXIMUM_BYTES,
         sleeper: Callable[[float], None] = time.sleep,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
+        if not 1 <= submission_maximum_bytes <= MAX_CONFIGURABLE_SUBMISSION_BYTES:
+            raise ValueError("SEC submission size limit is outside configured safety bounds")
         self.user_agent = validate_sec_user_agent(user_agent)
         self.client = client or httpx.Client(timeout=60.0, follow_redirects=False)
         self.cache_dir = Path(cache_dir) if cache_dir is not None else None
         self.pacer = pacer or _SEC_PACER
         self.max_attempts = max(1, max_attempts)
+        self.submission_maximum_bytes = submission_maximum_bytes
         self.sleeper = sleeper
         self.clock = clock
 
@@ -396,9 +402,13 @@ class SECDailyIndexSource:
 
     def fetch_entry(self, entry: DailyIndexEntry, *, index_hash: str) -> SecRawRecord:
         submission_name = f"{entry.accession_number}.txt"
-        cached = self._cached(submission_name, maximum_bytes=25 * 1024 * 1024)
+        cached = self._cached(
+            submission_name, maximum_bytes=self.submission_maximum_bytes
+        )
         if cached is None:
-            submission = self._get(entry.submission_url, maximum_bytes=25 * 1024 * 1024)
+            submission = self._get(
+                entry.submission_url, maximum_bytes=self.submission_maximum_bytes
+            )
             retrieved_at = self.clock()
             self._cache(submission_name, submission, retrieved_at=retrieved_at)
         else:
@@ -444,6 +454,8 @@ class SECDailyIndexSource:
 
 __all__ = [
     "DAILY_INDEX_ROOT",
+    "DEFAULT_SUBMISSION_MAXIMUM_BYTES",
+    "MAX_CONFIGURABLE_SUBMISSION_BYTES",
     "DailyIndexEntry",
     "SECDailyIndexSource",
     "daily_index_url",
