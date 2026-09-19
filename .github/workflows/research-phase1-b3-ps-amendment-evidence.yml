@@ -1,0 +1,248 @@
+name: Hydrate Phase-1 B3 P/S amendment evidence
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-b3-ps-amendment-evidence.yml"
+      - "scripts/research_phase1_b3_ps_evidence_hydration.py"
+      - "tests/test_research_phase1_b3_ps_evidence_hydration.py"
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: research-phase1-b3-ps-amendment-evidence-v1
+  cancel-in-progress: false
+
+env:
+  SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT }}
+  SCOPE_RUN_ID: "35471756336"
+  SCOPE_ARTIFACT: phase1-b3-ps-amendment-scope-35471756336
+  SCOPE_ARTIFACT_DIGEST: sha256:8ed756ea1ddb2dfd2dcdf8ec478b82a2a8c4d4715c6d5223f1772e18b81fbb8d
+  CATALOG_RUN_ID: "35081263705"
+  RELEASE_TAG: research-phase1-b3-ps-amendment-evidence-v1
+
+jobs:
+  preflight:
+    name: Verify frozen B3 P/S amendment scope
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify exact scope artifact and create evidence release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          raw=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SCOPE_RUN_ID/artifacts?per_page=100")
+          export RAW_ARTIFACTS="$raw"
+          python - <<'PY'
+          import json, os
+          xs=json.loads(os.environ["RAW_ARTIFACTS"])["artifacts"]
+          matches=[x for x in xs if x["name"]==os.environ["SCOPE_ARTIFACT"]]
+          assert len(matches)==1, len(matches)
+          a=matches[0]
+          assert a["expired"] is False
+          assert a["digest"]==os.environ["SCOPE_ARTIFACT_DIGEST"], (
+              a["digest"], os.environ["SCOPE_ARTIFACT_DIGEST"]
+          )
+          PY
+          if ! gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 B3 P/S amendment evidence v1"               --notes "Research-only 2013-2022 supporting-predecessor and zero-transaction SEC evidence. 2023+ sealed; no B3 performance."               --prerelease
+          fi
+
+  hydrate:
+    name: Hydrate B3 P/S amendment evidence ${{ matrix.year }}
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        year: [2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022]
+    env:
+      YEAR: ${{ matrix.year }}
+      ASSET_NAME: b3-ps-amendment-evidence-${{ matrix.year }}.tar.gz
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check persistent year archive
+        id: persisted
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq "$ASSET_NAME"; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-python@v5
+        if: steps.persisted.outputs.skip != 'true'
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        if: steps.persisted.outputs.skip != 'true'
+        with:
+          enable-cache: true
+      - if: steps.persisted.outputs.skip != 'true'
+        run: uv sync --all-groups --frozen
+      - name: Require SEC User-Agent
+        if: steps.persisted.outputs.skip != 'true'
+        run: test -n "${SEC_USER_AGENT:-}"
+
+      - name: Download frozen scope inventory
+        if: steps.persisted.outputs.skip != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.SCOPE_ARTIFACT }}
+          path: work/scope
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.SCOPE_RUN_ID }}
+
+      - name: Download exact-year frozen predecessor catalog
+        if: steps.persisted.outputs.skip != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: sec-amendment-source-${{ matrix.year }}-35081263705
+          path: work/catalog
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.CATALOG_RUN_ID }}
+
+      - name: Hydrate exact frozen evidence targets
+        if: steps.persisted.outputs.skip != 'true'
+        shell: bash
+        run: >-
+          uv run python scripts/research_phase1_b3_ps_evidence_hydration.py
+          --scope-root work/scope
+          --catalog-root work/catalog
+          --output "work/evidence/$YEAR"
+          --year "$YEAR"
+          --workers 4
+
+      - name: Assert yearly evidence contract
+        if: steps.persisted.outputs.skip != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=Path("work/evidence")/os.environ["YEAR"]
+          s=json.loads((p/"summary.json").read_text())
+          assert int(s["year"])==int(os.environ["YEAR"])
+          assert s["researchOnly"] is True
+          assert s["failureCount"]==0
+          assert s["allSupportingKnowledgeEqualAccepted"] is True
+          assert s["allAcceptedBefore2023"] is True
+          assert s["supportingPredecessorHydrationComplete"] is True
+          assert s["zeroTransactionHydrationComplete"] is True
+          assert s["zeroTransactionSemanticReviewComplete"] is False
+          assert s["amendmentsReconciledForPsUniverse"] is False
+          assert s["b3Eligible"] is False
+          assert s["b3DefinitionFrozen"] is False
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["canonicalReady"] is False
+          assert s["signalReady"] is False
+          assert s["zeroTransactionXmlFiles"]==s["zeroTransactionAmendmentsHydrated"]
+          PY
+
+      - name: Persist yearly evidence
+        if: steps.persisted.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C "work/evidence/$YEAR" -czf "work/$ASSET_NAME"             summary.json supporting-predecessor-manifest.jsonl             supporting-predecessor-canonical.jsonl zero-transaction-manifest.jsonl             failures.jsonl zero-transaction-xml
+          sha256sum "work/$ASSET_NAME"
+          gh release upload "$RELEASE_TAG" "work/$ASSET_NAME"             --repo "$GITHUB_REPOSITORY" --clobber
+      - uses: actions/upload-artifact@v4
+        if: steps.persisted.outputs.skip != 'true'
+        with:
+          name: b3-ps-amendment-evidence-${{ matrix.year }}-${{ github.run_id }}
+          path: work/evidence/${{ matrix.year }}
+          retention-days: 90
+
+  completeness:
+    name: B3 P/S amendment evidence completeness gate
+    needs: hydrate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify all ten yearly archives and aggregate frozen counts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/assets work/extracted
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY"             --pattern 'b3-ps-amendment-evidence-20??.tar.gz' --dir work/assets
+          count=$(find work/assets -type f -name 'b3-ps-amendment-evidence-20??.tar.gz' | wc -l)
+          test "$count" -eq 10
+          for file in work/assets/*.tar.gz; do
+            year=$(basename "$file" .tar.gz | sed 's/.*-//')
+            mkdir -p "work/extracted/$year"
+            tar -xzf "$file" -C "work/extracted/$year"
+          done
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          summaries=[
+              json.loads(p.read_text())
+              for p in sorted(Path("work/extracted").glob("*/summary.json"))
+          ]
+          assert len(summaries)==10
+          assert {int(s["year"]) for s in summaries}==set(range(2013,2023))
+          support_targets=sum(int(s["supportingPredecessorTargets"]) for s in summaries)
+          support_done=sum(int(s["supportingPredecessorsHydrated"]) for s in summaries)
+          zero_targets=sum(int(s["zeroTransactionAmendmentTargets"]) for s in summaries)
+          zero_done=sum(int(s["zeroTransactionAmendmentsHydrated"]) for s in summaries)
+          failures=sum(int(s["failureCount"]) for s in summaries)
+          assert support_targets==1551, support_targets
+          assert support_done==1551, support_done
+          assert zero_targets==596, zero_targets
+          assert zero_done==596, zero_done
+          assert failures==0, failures
+          assert all(s["allSupportingKnowledgeEqualAccepted"] is True for s in summaries)
+          assert all(s["allAcceptedBefore2023"] is True for s in summaries)
+          index={
+              "schemaVersion":"1.0.0",
+              "dataset":"B3 P/S amendment supporting evidence hydration",
+              "period":"2013-2022",
+              "supportingPredecessorTargets":support_targets,
+              "supportingPredecessorsHydrated":support_done,
+              "zeroTransactionAmendmentTargets":zero_targets,
+              "zeroTransactionAmendmentsHydrated":zero_done,
+              "failureCount":failures,
+              "supportingPredecessorHydrationComplete":True,
+              "zeroTransactionHydrationComplete":True,
+              "zeroTransactionSemanticReviewComplete":False,
+              "amendmentsReconciledForPsUniverse":False,
+              "b3Eligible":False,
+              "b3DefinitionFrozen":False,
+              "oosOpened":False,
+              "productionScoringChanged":False,
+              "canonicalReady":False,
+              "signalReady":False,
+              "status":"B3_PS_AMENDMENT_EVIDENCE_HYDRATION_PASS",
+              "nextGate":"zero-transaction semantic classification and deterministic P/S lifecycle reconciliation",
+          }
+          Path("b3-ps-amendment-evidence-2013-2022-index.json").write_text(
+              json.dumps(index,indent=2,sort_keys=True)+"\n"
+          )
+          print(json.dumps(index,indent=2,sort_keys=True))
+          PY
+      - name: Persist full evidence index
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release upload "$RELEASE_TAG"
+          b3-ps-amendment-evidence-2013-2022-index.json
+          --repo "$GITHUB_REPOSITORY" --clobber
