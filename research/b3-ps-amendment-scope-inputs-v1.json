@@ -1,0 +1,100 @@
+{
+  "schemaVersion": "1.0.0",
+  "purpose": "Frozen inputs for Phase-1 B3 P/S amendment scope inventory",
+  "period": "2013-2022",
+  "researchOnly": true,
+  "oosOpened": false,
+  "psHistory": {
+    "releaseTag": "research-sec-ps-pit-v1",
+    "sourceRunId": 35469045909,
+    "sourceArtifacts": {
+      "2013": {
+        "name": "b3-ps-source-2013-35469045909",
+        "digest": "sha256:f0025cddc7f2c2175bed4593712482603445438c2610f247e510145618f91ade"
+      },
+      "2014": {
+        "name": "b3-ps-source-2014-35469045909",
+        "digest": "sha256:068d6c5a58fd182aeb8ddcb7e5b99db06efde40c8b944b5266401a2caf27947f"
+      },
+      "2015": {
+        "name": "b3-ps-source-2015-35469045909",
+        "digest": "sha256:7e9bd7b58d5f4b5b0e94d83dc99e473102fc07580533611f934a3a7c239b2a7e"
+      },
+      "2016": {
+        "name": "b3-ps-source-2016-35469045909",
+        "digest": "sha256:5da8c6bb6f38e15cf9a41a8f47d4c9a80ec856252080e862b7251d5655f2aa7d"
+      },
+      "2017": {
+        "name": "b3-ps-source-2017-35469045909",
+        "digest": "sha256:72000714c26d0e927479a4a20ae7b837e90db0c6d5bdeaf23464c53e1e397367"
+      },
+      "2018": {
+        "name": "b3-ps-source-2018-35469045909",
+        "digest": "sha256:3411ab8babb732adb5aa002b0f0be9aa84efd3a3fc62ed1d19aba2cd8eeb0b4c"
+      },
+      "2019": {
+        "name": "b3-ps-source-2019-35469045909",
+        "digest": "sha256:07bb383f8556c04cb821f0438872d54cd4dfd1d640171a08c81775816d86a6dc"
+      },
+      "2020": {
+        "name": "b3-ps-source-2020-35469045909",
+        "digest": "sha256:8837aa2d54f036b9a146052cbc0c44c8546e0da786a42de3dae1370b5d00c2cb"
+      },
+      "2021": {
+        "name": "b3-ps-source-2021-35469045909",
+        "digest": "sha256:6ef47e5a62b76601858d9be5f99eedc176363a8820c52e3b91a2b4e3755211a2"
+      },
+      "2022": {
+        "name": "b3-ps-source-2022-35469045909",
+        "digest": "sha256:924fa3b0a22acfe79731a9cd7fa578977275bda014ac1a99671b6df220c6c24c"
+      }
+    }
+  },
+  "amendments": {
+    "releaseTag": "research-sec-amendments-v1",
+    "sourceRunId": 35081263705,
+    "sourceArtifacts": {
+      "2013": {
+        "name": "sec-amendment-source-2013-35081263705",
+        "digest": "sha256:f1cdf2e6ded92bacb7d97c69a88ec49e6bbd30614dd1bde22930cac6f7ab2903"
+      },
+      "2014": {
+        "name": "sec-amendment-source-2014-35081263705",
+        "digest": "sha256:6e3444cf5a473debeb29402112385dc3566f3be60e4d34282650f303bcf16307"
+      },
+      "2015": {
+        "name": "sec-amendment-source-2015-35081263705",
+        "digest": "sha256:5fb3d8d8ba2c656fc846d4419f5a29e6cf40f35b0fb633d6c20ee49994378aec"
+      },
+      "2016": {
+        "name": "sec-amendment-source-2016-35081263705",
+        "digest": "sha256:6975586e596a42841fed40571a0456797c1dfbf964f1863653dbea182b1f1a9a"
+      },
+      "2017": {
+        "name": "sec-amendment-source-2017-35081263705",
+        "digest": "sha256:bc6e099b85dd22e442c9038449b35f3f7a5ec4f025d7254f0b4dfdbdb77af720"
+      },
+      "2018": {
+        "name": "sec-amendment-source-2018-35081263705",
+        "digest": "sha256:5a68845ecfb2c5964abba94e9ba4873cf79d81c78363a7b994131794e6954d36"
+      },
+      "2019": {
+        "name": "sec-amendment-source-2019-35081263705",
+        "digest": "sha256:5245b0fa1a089e32fa11bab69dab729fc09dd9a3040884c82fc1a81491f2710d"
+      },
+      "2020": {
+        "name": "sec-amendment-source-2020-35081263705",
+        "digest": "sha256:6ae5eaf65babe813279f6ea4e6eb809a09c8557c44191b530e79ac353fc70fec"
+      },
+      "2021": {
+        "name": "sec-amendment-source-2021-35081263705",
+        "digest": "sha256:f1375456553d88c8ec127dc52539be51718b3f6d628d2fd96d1a0b4b193f2c67"
+      },
+      "2022": {
+        "name": "sec-amendment-source-2022-35081263705",
+        "digest": "sha256:36cf7e6b39b938881c68ceb66aae6bd42b4c43fabdd941d196ccf22d2e6bfb0e"
+      }
+    }
+  },
+  "outputReleaseTag": "research-phase1-b3-ps-amendment-scope-v1"
+}

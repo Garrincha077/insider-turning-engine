@@ -1,0 +1,185 @@
+name: Build Phase-1 B3 P/S amendment scope
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-b3-ps-amendment-scope.yml"
+      - "research/b3-ps-amendment-scope-inputs-v1.json"
+      - "scripts/research_phase1_b3_ps_amendment_scope.py"
+      - "tests/test_research_phase1_b3_ps_amendment_scope.py"
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: research-phase1-b3-ps-amendment-scope-v1
+  cancel-in-progress: false
+
+env:
+  INPUT_MANIFEST: research/b3-ps-amendment-scope-inputs-v1.json
+
+jobs:
+  scope:
+    name: Frozen B3 P/S amendment scope inventory
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+
+      - name: Verify frozen releases and exact source artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path("research/b3-ps-amendment-scope-inputs-v1.json").read_text())
+          assert m["period"]=="2013-2022"
+          assert m["researchOnly"] is True
+          assert m["oosOpened"] is False
+          assert set(m["psHistory"]["sourceArtifacts"])=={str(y) for y in range(2013,2023)}
+          assert set(m["amendments"]["sourceArtifacts"])=={str(y) for y in range(2013,2023)}
+          PY
+
+          for tag in research-sec-ps-pit-v1 research-sec-amendments-v1; do
+            gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets > "$tag-assets.json"
+          done
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          ps=json.loads(Path("research-sec-ps-pit-v1-assets.json").read_text())["assets"]
+          am=json.loads(Path("research-sec-amendments-v1-assets.json").read_text())["assets"]
+          psn={x["name"] for x in ps}; amn={x["name"] for x in am}
+          psexp={f"sec-ps-pit-{y}q{q}.tar.gz" for y in range(2013,2023) for q in range(1,5)}
+          amexp={f"sec-amendments-{y}q{q}.tar.gz" for y in range(2013,2023) for q in range(1,5)}
+          assert psexp <= psn and "sec-ps-pit-2013-2022-index.json" in psn
+          assert amexp <= amn and "sec-amendments-2013-2022-index.json" in amn
+          print("Frozen releases verified: 40/40 P/S and 40/40 amendments.")
+          PY
+
+          python - <<'PY' > work-verify-artifacts.py
+          import json, os, subprocess
+          from pathlib import Path
+          m=json.loads(Path(os.environ["INPUT_MANIFEST"]).read_text())
+          repo=os.environ["GITHUB_REPOSITORY"]
+          for section in ("psHistory","amendments"):
+              run=str(m[section]["sourceRunId"])
+              raw=subprocess.check_output(
+                  ["gh","api",f"repos/{repo}/actions/runs/{run}/artifacts?per_page=100"],
+                  text=True,
+              )
+              arts={x["name"]:x for x in json.loads(raw)["artifacts"]}
+              for year,item in sorted(m[section]["sourceArtifacts"].items()):
+                  a=arts.get(item["name"])
+                  assert a is not None, (section,year,item["name"])
+                  assert a["expired"] is False, (section,year,"expired")
+                  assert a["digest"] == item["digest"], (section,year,a["digest"],item["digest"])
+          print("Exact source artifact identities and digests verified.")
+          PY
+          mkdir -p work
+          mv work-verify-artifacts.py work/verify-artifacts.py
+          python work/verify-artifacts.py
+
+      - name: Download frozen P/S source artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: b3-ps-source-*-35469045909
+          path: work/ps-sources
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 35469045909
+
+      - name: Download frozen amendment predecessor catalogs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: sec-amendment-source-*-35081263705
+          path: work/catalogs
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 35081263705
+
+      - name: Download persistent transaction-bearing amendment PIT archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/amendment-assets work/amendments
+          gh release download research-sec-amendments-v1 --repo "$GITHUB_REPOSITORY"             --pattern 'sec-amendments-*.tar.gz' --dir work/amendment-assets
+          count=$(find work/amendment-assets -type f -name 'sec-amendments-*.tar.gz' | wc -l)
+          test "$count" -eq 40
+          for file in work/amendment-assets/sec-amendments-*.tar.gz; do
+            name=$(basename "$file" .tar.gz)
+            mkdir -p "work/amendments/$name"
+            tar -xzf "$file" -C "work/amendments/$name"
+          done
+
+      - name: Build frozen P/S amendment scope inventory
+        shell: bash
+        run: >-
+          uv run python scripts/research_phase1_b3_ps_amendment_scope.py
+          --ps-candidate-root work/ps-sources
+          --amendment-root work/amendments
+          --catalog-root work/catalogs
+          --output work/b3-ps-amendment-scope
+
+      - name: Assert research boundary and inventory contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path("work/b3-ps-amendment-scope")
+          s=json.loads((p/"summary.json").read_text())
+          assert s["period"]=="2013-2022"
+          assert s["researchOnly"] is True
+          assert s["scopeInventoryComplete"] is True
+          assert s["originalPsRootAccessions"] > 0
+          assert s["transactionBearingAmendmentFilings"] > 0
+          assert s["supportingPredecessorHydrationComplete"] is False
+          assert s["zeroTransactionSemanticReviewComplete"] is False
+          assert s["amendmentsReconciledForPsUniverse"] is False
+          assert s["b3Eligible"] is False
+          assert s["b3DefinitionFrozen"] is False
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["canonicalReady"] is False
+          assert s["signalReady"] is False
+          for name in ("amendment-ps-scope.jsonl","supporting-predecessors.jsonl","scope-quarantines.jsonl"):
+              assert (p/name).exists(), name
+          print(json.dumps(s,indent=2,sort_keys=True))
+          PY
+
+      - name: Persist scope evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag=$(python -c 'import json; print(json.load(open("research/b3-ps-amendment-scope-inputs-v1.json"))["outputReleaseTag"])')
+          if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 B3 P/S amendment scope v1"               --notes "Research-only deterministic 2013-2022 P/S amendment scope inventory. No B3 performance, 2023+ OOS sealed."               --prerelease
+          fi
+          tar -C work/b3-ps-amendment-scope -czf work/b3-ps-amendment-scope-2013-2022.tar.gz             summary.json amendment-ps-scope.jsonl supporting-predecessors.jsonl scope-quarantines.jsonl
+          sha256sum work/b3-ps-amendment-scope-2013-2022.tar.gz
+          gh release upload "$tag"             work/b3-ps-amendment-scope-2013-2022.tar.gz             work/b3-ps-amendment-scope/summary.json             "$INPUT_MANIFEST"             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase1-b3-ps-amendment-scope-${{ github.run_id }}
+          path: work/b3-ps-amendment-scope
+          retention-days: 90
