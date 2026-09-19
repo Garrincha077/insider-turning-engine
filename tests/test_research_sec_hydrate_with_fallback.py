@@ -118,6 +118,7 @@ def test_fetch_verified_archive_uses_owner_only_after_issuer_404() -> None:
     assert entry.filer_cik == "0001053905"
     assert source.calls == ["0000105319", "0001053905"]
 
+
 def test_fallback_reason_accepts_only_frozen_recovery_cases() -> None:
     assert (
         mod._fallback_reason_for_failure(
