@@ -771,3 +771,45 @@ definition instead of recomputing upstream gates.
 
 No B3 development return, validation return, or 2023+ OOS result has been opened
 as part of this work.
+
+
+---
+
+## 2026-09-20 — B3 raw development signal universe complete
+
+**Status:** PERFORMANCE-BLIND SIGNAL CONSTRUCTION PASS
+
+Recovery workflow run 35500436177 completed successfully after the raw-signal
+builder was rewritten to stream issuer-contiguous revisions.
+
+Output:
+
+- raw candidates: **147,164**;
+- distinct issuers: **5,606**;
+- 2016: 30,038;
+- 2017: 24,053;
+- 2018: 31,166;
+- 2019: 30,553;
+- 2020: 31,354;
+- definition: B3_COMPANY_NET_BUYING_V1;
+- primary window: 30 calendar days.
+
+The artifact explicitly asserts:
+
+- marketDataJoined=false;
+- returnsRead=false;
+- developmentPerformanceComputed=false;
+- validationPerformanceComputed=false;
+- oosOpened=false;
+- productionScoringChanged=false.
+
+Persistent release: research-phase1-b3-signal-input-v1.
+
+Asset:
+b3-raw-signal-inputs-2016-2020.tar.gz
+
+SHA-256:
+c39c704bd59e861397be42f8b9a40fa5a6674d68e1cf088372f2f2fdf983ec87.
+
+The next gate is exact XNYS evaluation/entry mapping and the frozen 20-session
+issuer dedup before any B3 development outcome is read.

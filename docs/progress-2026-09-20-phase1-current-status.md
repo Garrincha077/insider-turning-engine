@@ -11,7 +11,7 @@ as audit history.
 | B0 | any qualified open-market purchase | development descriptive complete |
 | B1 | canonical CMP opportunistic purchase | development + corrected continuity/robustness/tail/year/temporal-clustering work complete |
 | B2 | independent-owner cluster | development complete |
-| B3 | company net buying | data gate PASS, definition frozen, raw signal build in recovery |
+| B3 | company net buying | data gate PASS, definition frozen, raw signal universe complete; exact XNYS mapping/dedup next |
 | B4 | B1 AND B2 exact-session intersection | development complete |
 
 ## B3 data state
@@ -41,3 +41,22 @@ as audit history.
 7. Test turning overlays only after the insider-only component is defensible.
 8. Freeze full methodology before 2021-2022 validation.
 9. Open 2023+ only with explicit authorization after freeze/validation.
+
+
+## B3 raw signal universe
+
+Recovery run 35500436177 completed successfully.
+
+- raw candidates: **147,164**;
+- distinct issuers: **5,606**;
+- by year: 2016 = 30,038; 2017 = 24,053; 2018 = 31,166; 2019 = 30,553; 2020 = 31,354;
+- market data joined: no;
+- returns read: no;
+- development performance computed: no;
+- validation performance computed: no;
+- OOS opened: no;
+- production scoring changed: no;
+- persistent release: research-phase1-b3-signal-input-v1;
+- asset digest: sha256:c39c704bd59e861397be42f8b9a40fa5a6674d68e1cf088372f2f2fdf983ec87.
+
+Next gate: exact XNYS evaluation/entry mapping plus frozen 20-session issuer dedup before outcomes.

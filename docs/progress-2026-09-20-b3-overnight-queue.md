@@ -36,3 +36,22 @@ The primary B3 definition is fixed before performance:
 - recovery implementation now streams by issuer and consumes the persisted reconciliation + frozen definition directly;
 - recovery workflow: Recover Phase-1 B3 raw signal inputs;
 - 2023+ remains sealed and no B3 development outcomes have been read.
+
+
+## Final raw-signal result
+
+The isolated recovery workflow run 35500436177 completed **SUCCESS**.
+
+- raw candidates: 147,164;
+- distinct issuers: 5,606;
+- candidate years: 2016-2020 only;
+- returnsRead=false;
+- marketDataJoined=false;
+- developmentPerformanceComputed=false;
+- validationPerformanceComputed=false;
+- oosOpened=false;
+- productionScoringChanged=false.
+
+The overnight B3 data/definition/raw-signal sequence is therefore complete.
+The next research gate is exact XNYS execution mapping plus 20-session issuer
+dedup before development outcomes.

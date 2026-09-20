@@ -188,16 +188,34 @@ Frozen primary definition:
 
 No B3 development performance has been opened yet.
 
-### Current active step
+### Raw B3 development signal universe — COMPLETE
 
-The first raw-signal build hit GitHub runner-memory limits after reconciliation
-had already passed. The recovery implementation streams by issuer and reuses
-the persisted reconciliation and frozen definition rather than recomputing the
-eight shards.
+Recovery workflow run: 35500436177 — **SUCCESS**.
 
-Current recovery workflow: Recover Phase-1 B3 raw signal inputs.
-The next gate after a PASS is exact XNYS evaluation/entry mapping plus the
-frozen 20-session issuer dedup, still without reading development outcomes.
+Persisted release: research-phase1-b3-signal-input-v1.
+
+- raw performance-blind candidates: **147,164**;
+- distinct issuers: **5,606**;
+- 2016: 30,038 candidates;
+- 2017: 24,053;
+- 2018: 31,166;
+- 2019: 30,553;
+- 2020: 31,354;
+- primary window: 30 calendar days;
+- marketDataJoined=false;
+- returnsRead=false;
+- developmentPerformanceComputed=false;
+- validationPerformanceComputed=false;
+- oosOpened=false;
+- productionScoringChanged=false.
+
+Persistent asset:
+b3-raw-signal-inputs-2016-2020.tar.gz
+SHA-256:
+c39c704bd59e861397be42f8b9a40fa5a6674d68e1cf088372f2f2fdf983ec87.
+
+The current gate is now exact XNYS evaluation/entry mapping plus the already
+frozen 20-session issuer dedup, still before reading B3 development outcomes.
 
 ---
 
@@ -339,7 +357,7 @@ The current frozen/research benchmark family is:
 | **B0** | any qualified open-market purchase | development descriptive run complete |
 | **B1** | canonical CMP-style opportunistic purchase | development run + continuity-corrected robustness/tail/year/temporal-clustering work complete; formal OOS still blocked |
 | **B2** | independent-owner cluster, primary 30 days and >=2 owner CIKs | development run complete |
-| **B3** | company net buying using complete PIT buy/sale history | data gate PASS, definition frozen, raw development signal construction in progress |
+| **B3** | company net buying using complete PIT buy/sale history | data gate PASS, definition frozen, raw 2016-2020 signal universe complete; exact XNYS mapping/dedup next |
 | **B4** | exact same-issuer + same-XNYS-session intersection of B1 and B2 | development run complete |
 
 Primary horizons remain 21/63/126/252 XNYS sessions, with 126 primary.
