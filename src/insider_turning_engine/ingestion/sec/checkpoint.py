@@ -99,7 +99,7 @@ def _validate_repair(payload: dict[str, Any]) -> None:
     receipt = payload["repair"]
     fields = {"previousFilingHash", "previousCheckpointHash", "previousParserVersion",
               "replayedAt", "previousRecordCount", "resolvedRowKeys"}
-    if (payload["parserVersion"] != PARSER_VERSION or not isinstance(receipt, dict)
+    if (payload["parserVersion"] == LEGACY_PARSER_VERSION or not isinstance(receipt, dict)
             or set(receipt) != fields or receipt["previousParserVersion"]
             not in SUPPORTED_PARSER_VERSIONS):
         raise ValueError("invalid derivative repair receipt")
