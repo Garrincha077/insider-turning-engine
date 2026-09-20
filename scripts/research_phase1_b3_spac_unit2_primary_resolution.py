@@ -10,7 +10,7 @@ from typing import Any
 
 import research_phase1_security_continuity_resolution as base
 
-SOURCE_SCOPE_KEY_SHA256 = "sha256:ed13976872da6522da2973a450a1f1c39e22cc19e2ffcc8367b9cc1a1b016b50"
+SOURCE_SCOPE_KEY_SHA256 = (\n    "sha256:ed13976872da6522da2973a450a1f1c39e22cc19e2ffcc8367b9cc1a1b016b50"\n)
 EXPECTED_RESOLUTION_KEY_SHA256 = "sha256:fae1020ef5d77cd93b885da6bc4e5c8b4a83ec1ded373f9ccc2148bf90add999"
 EXPECTED_COUNTS = {
     ("0001719893", "MTECU"): 4,
