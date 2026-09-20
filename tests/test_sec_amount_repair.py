@@ -23,6 +23,7 @@ from insider_turning_engine.ingestion.sec.checkpoint import (
 from insider_turning_engine.ingestion.sec.daily_history import (
     LEGACY_PARSER_VERSION,
     PARSER_VERSION,
+    PREVIOUS_PARSER_VERSION,
     _load_filing,
 )
 from insider_turning_engine.ingestion.sec.daily_index import (
@@ -177,6 +178,51 @@ def test_already_repaired_checkpoint_is_idempotent_without_source_requests() -> 
         source.close()
     assert repeated == repaired and repeated is not repaired
     assert encode_checkpoint(repeated) == encode_checkpoint(repaired) and not calls
+
+
+def test_mixed_checkpoint_retains_supported_v2_repair_receipts() -> None:
+    source = provider([])
+    try:
+        repaired = repair_checkpoint(legacy_checkpoint(), source, repaired_at=REPAIRED)
+    finally:
+        source.close()
+
+    def filing(accession: str, parser_version: str, *, keep_repair: bool) -> dict[str, Any]:
+        value = copy.deepcopy(repaired["filings"][0])
+        value["accession"] = accession
+        value["parserVersion"] = parser_version
+        if not keep_repair:
+            value.pop("repair")
+        for row in value["records"]:
+            row["source"]["accessionNumber"] = accession
+        return value
+
+    previous_plain = filing("0001234567-26-000002", PREVIOUS_PARSER_VERSION,
+                            keep_repair=False)
+    previous_repaired = filing(ACCESSION, PREVIOUS_PARSER_VERSION, keep_repair=True)
+    current_plain = filing("0001234567-26-000003", PARSER_VERSION, keep_repair=False)
+    mixed = validate_checkpoint({
+        "schemaVersion": "1.0.0", "day": DAY.isoformat(),
+        "parserVersion": PARSER_VERSION, "indexHash": repaired["indexHash"],
+        "discoveredAccessions": sorted([
+            previous_plain["accession"], previous_repaired["accession"],
+            current_plain["accession"],
+        ]),
+        "filings": [previous_repaired, previous_plain, current_plain],
+        "failures": [], "signalReady": False,
+    }, day=DAY)
+
+    encoded = encode_checkpoint(mixed)
+    assert decode_checkpoint(*encoded, day=DAY) == mixed
+    store = FakeReleases()
+    receipt = store.persist(mixed)
+    assert receipt["tag"].startswith(f"sec-day-v2-{DAY.isoformat()}-")
+    assert store.latest(DAY) == mixed
+
+    invalid = copy.deepcopy(mixed)
+    invalid["filings"][0]["parserVersion"] = LEGACY_PARSER_VERSION
+    with pytest.raises(ValueError, match="legacy parser|repair receipt"):
+        validate_checkpoint(invalid, day=DAY)
 
 
 @pytest.mark.parametrize("kind", ["index", "submission", "acceptance"])
