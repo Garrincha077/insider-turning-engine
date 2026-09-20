@@ -13022,8 +13022,6 @@
       "MISSING_CLUSTER",
       "MISSING_CONVICTION",
       "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_MANSFIELD_MARKET",
-      "MISSING_MANSFIELD_SECTOR",
       "MISSING_NET_BUYING_ABSENCE_SALES",
       "MISSING_OPPORTUNISTIC",
       "STALE_DATA_HOLD"
@@ -18452,19 +18450,21 @@
     "last_evaluated_session": "2026-09-18",
     "previous_state": "FALLING",
     "reason_codes": [
-      "STATE_HELD"
+      "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
   },
   "0002040127": {
+    "changed_at": "2026-09-20T20:59:26.789416+00:00",
+    "established": true,
+    "failed_evaluations": 0,
     "issuer_cik": "0002040127",
+    "last_evaluated_session": "2026-09-18",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_MANSFIELD_MARKET",
-      "MISSING_MANSFIELD_SECTOR",
-      "STALE_DATA_HOLD"
+      "PROMOTED_TO_INSIDER_ACCUMULATION"
     ],
-    "state": "FALLING"
+    "state": "INSIDER_ACCUMULATION"
   },
   "0002041385": {
     "issuer_cik": "0002041385",
