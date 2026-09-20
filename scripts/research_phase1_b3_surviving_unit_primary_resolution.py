@@ -124,7 +124,7 @@ def _resolution(row: dict[str, Any], fact: dict[str, Any]) -> dict[str, Any]:
         "expectedSourceResolutionSource": "long_internal_gap",
         "effectiveDate": resolution_effective,
         "resolutionDecision": decision,
-        "transformationKind": "SAME_SECURITY_SYMBOL_CHANGE" if decision.startswith("SYMBOL") else "",
+        "transformationKind": (\n            "SAME_SECURITY_SYMBOL_CHANGE" if decision.startswith("SYMBOL") else ""\n        ),
         "resultState": state,
         "successorSymbol": successor,
         "successorSharesPerEntryShare": 1.0,
