@@ -96,28 +96,30 @@ Subsequent performance-blind continuity gates:
 
 Current frozen state:
 
-- SPAC-unit primary resolution: run **35507997799**, 4 rows resolved;
+- SPAC-unit primary resolution wave 1: run **35507997799**, 4 rows resolved;
 - one-sided primary resolution: run **35508257853**, 20 rows resolved;
-- residual-63 scope freeze: run **35508340176**;
-- deterministic continuity candidates/resolutions: **201 / 264**
-- residual unresolved rows: **63**
-- residual issuer/tickers: **27**
-- residual-63 key digest:
-  `sha256:ed13976872da6522da2973a450a1f1c39e22cc19e2ffcc8367b9cc1a1b016b50`
-- release: `research-phase1-b3-residual63-scope-v1`
+- second SPAC-unit resolution: run **35508586692**, 8 rows resolved;
+- multi-class/reorganization resolution: run **35508859857**, 12 rows resolved;
+- residual-43 scope freeze: run **35508922204**;
+- deterministic continuity candidates/resolutions: **221 / 264**
+- residual unresolved rows: **43**
+- residual issuer/tickers: **19**
+- residual-43 key digest:
+  `sha256:be82164c63ed8c8528017ff3201d5172e818655e5c7a8fa48bd7576c7cb02cd6`
+- release: `research-phase1-b3-residual43-scope-v1`
 - corrected performance remains **closed**
 - final resolution contract remains **not created**
 - 2023+ remains **sealed**
 
-See `docs/progress-2026-09-20-b3-residual63.md`.
+See `docs/progress-2026-09-20-b3-residual43.md`.
 
 ## Immediate sequence
 
-1. Preserve the exact 63-row residual continuity scope.
-2. Resolve ticker-change/title-change identities only from pinned primary
-   evidence, without reading returns.
-3. Continue through overlapping/changed security-title and remaining one-sided
-   buckets with fail-closed rules.
+1. Preserve the exact 43-row residual continuity scope.
+2. Split remaining work into target-specific SPAC/unit life-cycle cases and
+   ordinary-share title-normalization/gap cases.
+3. Resolve each identity only from pinned primary evidence, without reading
+   returns.
 4. Create the final B3 continuity contract only when every frozen row is
    deterministically classified.
 5. Recompute corrected B3 development performance only after a zero-unresolved
