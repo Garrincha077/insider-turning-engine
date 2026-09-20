@@ -12,12 +12,47 @@ from pathlib import Path
 from typing import Any
 
 
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    return [
-        json.loads(line)
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
+def _iter_issuer_groups(
+    path: Path,
+) -> Any:
+    """Stream issuer-contiguous reconciliation rows without loading the file."""
+
+    seen: set[str] = set()
+    current_issuer: str | None = None
+    current_rows: list[dict[str, Any]] = []
+
+    with path.open("r", encoding="utf-8") as stream:
+        for line in stream:
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            issuer = str(row["issuer"]["cik"])
+            if current_issuer is None:
+                current_issuer = issuer
+                seen.add(issuer)
+            elif issuer != current_issuer:
+                if issuer in seen:
+                    raise ValueError(
+                        "reconciliation input is not issuer-contiguous"
+                    )
+                if current_rows:
+                    yield current_issuer, current_rows
+                current_issuer = issuer
+                current_rows = []
+                seen.add(issuer)
+
+            rr = row.get("researchReconciliation") or {}
+            if rr.get("b3QualifiedSide") not in {"BUY", "SALE"}:
+                continue
+            event_at = rr.get("economicEventAt")
+            if event_at is None:
+                continue
+            if int(event_at[:4]) >= 2023:
+                raise ValueError("sealed OOS boundary violated")
+            current_rows.append(row)
+
+    if current_issuer is not None and current_rows:
+        yield current_issuer, current_rows
 
 
 def _dt(value: str) -> datetime:
@@ -36,25 +71,18 @@ def build(*, revisions_path: Path, definition_path: Path, output: Path) -> dict[
     if definition.get("developmentPerformanceComputed") is not False:
         raise ValueError("definition artifact unexpectedly contains performance")
 
-    rows = _read_jsonl(revisions_path)
-    by_issuer: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for row in rows:
-        rr = row.get("researchReconciliation") or {}
-        if rr.get("b3QualifiedSide") not in {"BUY", "SALE"}:
-            continue
-        event_at = rr.get("economicEventAt")
-        if event_at is None:
-            continue
-        if int(event_at[:4]) >= 2023:
-            raise ValueError("sealed OOS boundary violated")
-        by_issuer[str(row["issuer"]["cik"])].append(row)
-
     window = int(definition["primaryWindowCalendarDays"])
     start = datetime(2016, 1, 1, tzinfo=UTC)
     end = datetime(2021, 1, 1, tzinfo=UTC)
-    candidates: list[dict[str, Any]] = []
 
-    for issuer, issuer_rows in sorted(by_issuer.items()):
+    output.mkdir(parents=True, exist_ok=True)
+    candidate_count = 0
+    by_year: dict[str, int] = defaultdict(int)
+    candidate_issuers: set[str] = set()
+    candidate_path = output / "b3-raw-signal-candidates.jsonl"
+
+    with candidate_path.open("w", encoding="utf-8") as stream:
+      for issuer, issuer_rows in _iter_issuer_groups(revisions_path):
         boundaries: set[datetime] = set()
         for row in issuer_rows:
             valid_from = _dt(row["lifecycle"]["validFrom"])
@@ -114,38 +142,32 @@ def build(*, revisions_path: Path, definition_path: Path, output: Path) -> dict[
             if buy <= 0 or net <= 0:
                 continue
             material = f"{issuer}|{moment.isoformat()}|{buy}|{sale}|{window}"
-            candidates.append(
-                {
-                    "signalId": "b3_" + hashlib.sha256(material.encode()).hexdigest()[:24],
-                    "issuerCik": issuer,
-                    "knowledgeBoundaryAt": moment.isoformat(),
-                    "primaryWindowCalendarDays": window,
-                    "buyDollars": format(buy, "f"),
-                    "saleDollars": format(sale, "f"),
-                    "netDollars": format(net, "f"),
-                    "grossDollars": format(gross, "f"),
-                    "netBuyingIntensity": format(intensity, "f"),
-                    "activeEconomicRows": len(active_by_key),
-                    "definitionId": definition["definitionId"],
-                    "requiresDownstreamXnys20SessionIssuerDedup": True,
-                }
-            )
+              candidate = {
+                  "signalId": "b3_"
+                  + hashlib.sha256(material.encode()).hexdigest()[:24],
+                  "issuerCik": issuer,
+                  "knowledgeBoundaryAt": moment.isoformat(),
+                  "primaryWindowCalendarDays": window,
+                  "buyDollars": format(buy, "f"),
+                  "saleDollars": format(sale, "f"),
+                  "netDollars": format(net, "f"),
+                  "grossDollars": format(gross, "f"),
+                  "netBuyingIntensity": format(intensity, "f"),
+                  "activeEconomicRows": len(active_by_key),
+                  "definitionId": definition["definitionId"],
+                  "requiresDownstreamXnys20SessionIssuerDedup": True,
+              }
+              stream.write(json.dumps(candidate, sort_keys=True) + "\n")
+              candidate_count += 1
+              by_year[candidate["knowledgeBoundaryAt"][:4]] += 1
+              candidate_issuers.add(issuer)
 
-    output.mkdir(parents=True, exist_ok=True)
-    with (output / "b3-raw-signal-candidates.jsonl").open("w", encoding="utf-8") as stream:
-        for row in candidates:
-            stream.write(json.dumps(row, sort_keys=True) + "\n")
-    by_year: dict[str, int] = defaultdict(int)
-    issuers: set[str] = set()
-    for row in candidates:
-        by_year[row["knowledgeBoundaryAt"][:4]] += 1
-        issuers.add(row["issuerCik"])
     summary = {
         "schemaVersion": "1.0.0",
         "dataset": "B3 company-net-buying raw development signal candidates",
         "developmentPeriod": "2016-2020",
-        "rawCandidateCount": len(candidates),
-        "distinctIssuers": len(issuers),
+        "rawCandidateCount": candidate_count,
+        "distinctIssuers": len(candidate_issuers),
         "candidateCountByYear": dict(sorted(by_year.items())),
         "definitionId": definition["definitionId"],
         "primaryWindowCalendarDays": window,
