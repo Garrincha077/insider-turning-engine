@@ -1,0 +1,87 @@
+name: Export ChatGPT Project bundle
+
+on:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - "CHATGPT_PROJECT_INSTRUCTIONS.md"
+      - "CHATGPT_PROJECT_FILE_INDEX.md"
+      - ".github/workflows/export-chatgpt-project-bundle.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build full repository snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p export/full
+          rsync -a             --exclude '.git/'             --exclude 'export/'             ./ export/full/
+          (
+            cd export/full
+            zip -qr ../insider-turning-engine-full-snapshot.zip .
+          )
+
+      - name: Build curated ChatGPT Project context
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p export/context
+          cp CHATGPT_PROJECT_INSTRUCTIONS.md export/context/
+          cp CHATGPT_PROJECT_FILE_INDEX.md export/context/
+          cp README.md export/context/
+          cp pyproject.toml export/context/ 2>/dev/null || true
+          cp -R docs export/context/
+          cp -R research export/context/
+          mkdir -p export/context/scripts
+          cp scripts/research_phase1_b0.py export/context/scripts/ 2>/dev/null || true
+          cp scripts/research_phase1_b1*.py export/context/scripts/ 2>/dev/null || true
+          cp scripts/research_phase1_b2*.py export/context/scripts/ 2>/dev/null || true
+          cp scripts/research_phase1_b3*.py export/context/scripts/ 2>/dev/null || true
+          cp scripts/research_phase1_b4.py export/context/scripts/ 2>/dev/null || true
+          cp scripts/research_phase1_security_*.py export/context/scripts/ 2>/dev/null || true
+          cp scripts/research_sec_hydrate*.py export/context/scripts/ 2>/dev/null || true
+          cp scripts/research_sec_reconcile_amendments*.py export/context/scripts/ 2>/dev/null || true
+          cp scripts/research_sec_merge_amendment_shards.py export/context/scripts/ 2>/dev/null || true
+          mkdir -p export/context/tests
+          cp tests/test_research_phase1_*.py export/context/tests/ 2>/dev/null || true
+          cp tests/test_amendments.py export/context/tests/ 2>/dev/null || true
+          cp tests/test_backtest_*.py export/context/tests/ 2>/dev/null || true
+          cp tests/test_session_calendar.py export/context/tests/ 2>/dev/null || true
+          mkdir -p export/context/.github/workflows
+          cp .github/workflows/research-phase1-*.yml export/context/.github/workflows/ 2>/dev/null || true
+          cp .github/workflows/research-sec-*.yml export/context/.github/workflows/ 2>/dev/null || true
+          (
+            cd export/context
+            zip -qr ../insider-turning-engine-chatgpt-project-context.zip .
+          )
+
+      - name: Write manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "repository=Garrincha077/insider-turning-engine"
+            echo "branch=research/b3-ps-pit-history"
+            echo "commit=$GITHUB_SHA"
+            echo "created_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            sha256sum export/*.zip
+          } > export/CHATGPT_PROJECT_BUNDLE_MANIFEST.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chatgpt-project-bundle-${{ github.run_id }}
+          path: |
+            export/insider-turning-engine-full-snapshot.zip
+            export/insider-turning-engine-chatgpt-project-context.zip
+            export/CHATGPT_PROJECT_BUNDLE_MANIFEST.txt
+            CHATGPT_PROJECT_INSTRUCTIONS.md
+            CHATGPT_PROJECT_FILE_INDEX.md
+          retention-days: 90
