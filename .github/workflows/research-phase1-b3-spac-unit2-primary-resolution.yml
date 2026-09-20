@@ -1,0 +1,98 @@
+name: Resolve B3 second SPAC-unit subset
+
+on:
+  push:
+    branches:
+      - research/b3-ps-pit-history
+    paths:
+      - "research/b3-spac-unit2-primary-evidence-v1.json"
+      - "scripts/research_phase1_b3_spac_unit2_primary_resolution.py"
+      - "tests/test_research_phase1_b3_spac_unit2_primary_resolution.py"
+      - "docs/research-phase1-b3-spac-unit2-continuity-gate.md"
+      - ".github/workflows/research-phase1-b3-spac-unit2-primary-resolution.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  resolve:
+    runs-on: ubuntu-24.04
+    env:
+      SCOPE_RELEASE: research-phase1-b3-residual63-scope-v1
+      SCOPE_ASSET: b3-residual63-scope.json
+      SCOPE_ASSET_DIGEST: sha256:c217df79265aeb16bd9cf2abe78b9e4573311b52dfd377b5b706e63417f21f39
+      RESOLUTION_KEY_DIGEST: sha256:fae1020ef5d77cd93b885da6bc4e5c8b4a83ec1ded373f9ccc2148bf90add999
+      RESULT_RELEASE: research-phase1-b3-spac-unit2-primary-resolution-v1
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Sync frozen environment
+        run: uv sync --all-groups --frozen
+      - name: Lint resolver
+        run: >-
+          uv run ruff check
+          scripts/research_phase1_b3_spac_unit2_primary_resolution.py
+          tests/test_research_phase1_b3_spac_unit2_primary_resolution.py
+      - name: Test semantics
+        run: uv run pytest -q tests/test_research_phase1_b3_spac_unit2_primary_resolution.py
+      - name: Download frozen residual-63 scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/scope work/output
+          gh release download "$SCOPE_RELEASE" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$SCOPE_ASSET" --dir work/scope
+          d="sha256:$(sha256sum "work/scope/$SCOPE_ASSET" | cut -d' ' -f1)"
+          test "$d" = "$SCOPE_ASSET_DIGEST"
+      - name: Resolve exact second SPAC-unit subset
+        run: >-
+          uv run python scripts/research_phase1_b3_spac_unit2_primary_resolution.py
+          --scope "work/scope/$SCOPE_ASSET"
+          --evidence research/b3-spac-unit2-primary-evidence-v1.json
+          --output work/output/b3-spac-unit2-primary-resolution.json
+      - name: Assert frozen result
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=json.loads(Path("work/output/b3-spac-unit2-primary-resolution.json").read_text())
+          assert p["status"]=="B3_SPAC_UNIT2_PRIMARY_RESOLUTION_COMPLETE"
+          assert p["resolvedRows"]==8
+          assert p["remainingResidualRowsBeforeOtherRules"]==55
+          assert p["resolutionKeySha256"]==os.environ["RESOLUTION_KEY_DIGEST"]
+          assert {r["ticker"] for r in p["resolutionRows"]}=={"MTECU","GRCYU","SBE.U","FSRVU"}
+          assert all(r["successorSymbol"]==r["ticker"] for r in p["resolutionRows"])
+          assert p["performanceRead"] is False
+          assert p["priceFieldsRead"]==[]
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          assert p["correctedPerformanceOpened"] is False
+          print(json.dumps({"resolvedRows":8,"remaining":55,"digest":p["resolutionKeySha256"]},indent=2))
+          PY
+      - name: Publish immutable release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" \
+              --title "Phase-1 B3 second SPAC-unit primary resolution v1" \
+              --notes "Performance-blind primary SEC resolution of eight frozen SPAC-unit rows. Corrected performance and 2023+ OOS remain closed." --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE" work/output/b3-spac-unit2-primary-resolution.json --repo "$GITHUB_REPOSITORY" --clobber
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3-spac-unit2-primary-resolution-${{ github.run_id }}
+          path: work/output/b3-spac-unit2-primary-resolution.json
+          retention-days: 90
