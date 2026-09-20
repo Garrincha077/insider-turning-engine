@@ -1,0 +1,130 @@
+name: Synthesize B3 residual multi-source continuity
+
+on:
+  push:
+    branches:
+      - research/b3-ps-pit-history
+    paths:
+      - "scripts/research_phase1_b3_residual_multisource_synthesis.py"
+      - "tests/test_research_phase1_b3_residual_multisource_synthesis.py"
+      - "docs/research-phase1-b3-residual-multisource-synthesis-gate.md"
+      - ".github/workflows/research-phase1-b3-residual-multisource-synthesis.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  synthesize:
+    runs-on: ubuntu-24.04
+    env:
+      CANDIDATE_RELEASE: research-phase1-b3-continuity-candidates-v1
+      CANDIDATE_ASSET: b3-continuity-resolution-candidates.json
+      CANDIDATE_DIGEST: sha256:806f49b3cc557f7989268f1214914efb6b587c783f270095a1d9546374a574f6
+      EVIDENCE_RELEASE: research-phase1-b3-residual-form345-v1
+      EVIDENCE_ASSET: b3-residual-form345-corroboration.json
+      EVIDENCE_DIGEST: sha256:7965a2462be581388c26b94c14f48ecb5538c7b0e1324fab2a78245dec9326b4
+      RESULT_RELEASE: research-phase1-b3-residual-multisource-v1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync frozen environment
+        run: uv sync --all-groups --frozen
+
+      - name: Lint synthesis implementation
+        run: >-
+          uv run ruff check
+          scripts/research_phase1_b3_residual_multisource_synthesis.py
+          tests/test_research_phase1_b3_residual_multisource_synthesis.py
+
+      - name: Test synthesis semantics
+        run: >-
+          uv run pytest -q
+          tests/test_research_phase1_b3_residual_multisource_synthesis.py
+
+      - name: Download pinned performance-blind evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/candidates work/evidence work/output
+          gh release download "$CANDIDATE_RELEASE" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$CANDIDATE_ASSET" --dir work/candidates
+          gh release download "$EVIDENCE_RELEASE" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$EVIDENCE_ASSET" --dir work/evidence
+
+          candidate_digest="sha256:$(sha256sum "work/candidates/$CANDIDATE_ASSET" | cut -d' ' -f1)"
+          evidence_digest="sha256:$(sha256sum "work/evidence/$EVIDENCE_ASSET" | cut -d' ' -f1)"
+          test "$candidate_digest" = "$CANDIDATE_DIGEST"
+          test "$evidence_digest" = "$EVIDENCE_DIGEST"
+
+      - name: Run strict residual synthesis
+        run: >-
+          uv run python scripts/research_phase1_b3_residual_multisource_synthesis.py
+          --candidates "work/candidates/$CANDIDATE_ASSET"
+          --evidence "work/evidence/$EVIDENCE_ASSET"
+          --output work/output/b3-residual-multisource-synthesis.json
+
+      - name: Assert sealed performance-blind boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          p = json.loads(
+              Path("work/output/b3-residual-multisource-synthesis.json").read_text()
+          )
+          assert p["status"] == "B3_RESIDUAL_MULTISOURCE_SYNTHESIS_COMPLETE"
+          assert p["sourceUnresolvedRows"] == 264
+          assert p["priorCandidateRows"] == 102
+          assert p["sourceResidualRows"] == 162
+          assert p["newCandidateRows"] > 0
+          assert p["combinedCandidateRows"] + p["residualUnresolvedRows"] == 264
+          assert p["performanceRead"] is False
+          assert p["priceFieldsRead"] == []
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          assert p["finalResolutionContractCreated"] is False
+          assert p["correctedPerformanceOpened"] is False
+          print(json.dumps({
+              "newCandidateRows": p["newCandidateRows"],
+              "combinedCandidateRows": p["combinedCandidateRows"],
+              "residualUnresolvedRows": p["residualUnresolvedRows"],
+              "newCandidateKeySha256": p["newCandidateKeySha256"],
+              "residualKeySha256": p["residualKeySha256"],
+          }, indent=2, sort_keys=True))
+          PY
+
+      - name: Publish immutable research release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" \
+              --title "Phase-1 B3 residual multi-source synthesis v1" \
+              --notes "Strict performance-blind multi-source continuity synthesis. Corrected performance, validation and 2023+ OOS remain closed." \
+              --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE" \
+            work/output/b3-residual-multisource-synthesis.json \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3-residual-multisource-${{ github.run_id }}
+          path: work/output/b3-residual-multisource-synthesis.json
+          retention-days: 90
