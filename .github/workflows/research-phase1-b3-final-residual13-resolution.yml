@@ -1,0 +1,86 @@
+name: Resolve B3 final residual-13 continuity
+
+on:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - "research/b3-final-residual13-primary-evidence-v1.json"
+      - "scripts/research_phase1_b3_final_residual13_resolution.py"
+      - "tests/test_research_phase1_b3_final_residual13_resolution.py"
+      - "docs/research-phase1-b3-final-residual13-resolution-gate.md"
+      - ".github/workflows/research-phase1-b3-final-residual13-resolution.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  resolve:
+    runs-on: ubuntu-24.04
+    env:
+      SCOPE_RELEASE: research-phase1-b3-residual13-scope-v1
+      SCOPE_ASSET: b3-residual13-scope.json
+      SCOPE_ASSET_DIGEST: sha256:de68c61504c7ec185742a68ac6478807efeda314dbe6f31cba4a28da239286cc
+      KEY_DIGEST: sha256:0183d2bb7d158cfa642cb02106eb1937d7e0a327db9e23efb4423188b13c5a18
+      RESULT_RELEASE: research-phase1-b3-final-residual13-resolution-v1
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - uses: astral-sh/setup-uv@v5
+        with: {enable-cache: true}
+      - run: uv sync --all-groups --frozen
+      - name: Lint
+        run: uv run ruff check scripts/research_phase1_b3_final_residual13_resolution.py tests/test_research_phase1_b3_final_residual13_resolution.py
+      - name: Test
+        run: uv run pytest -q tests/test_research_phase1_b3_final_residual13_resolution.py
+      - name: Download frozen scope
+        env: {GH_TOKEN: ${{ github.token }}}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/scope work/output
+          gh release download "$SCOPE_RELEASE" --repo "$GITHUB_REPOSITORY" --pattern "$SCOPE_ASSET" --dir work/scope
+          test "sha256:$(sha256sum "work/scope/$SCOPE_ASSET" | cut -d' ' -f1)" = "$SCOPE_ASSET_DIGEST"
+      - name: Resolve final 13
+        run: uv run python scripts/research_phase1_b3_final_residual13_resolution.py --scope "work/scope/$SCOPE_ASSET" --evidence research/b3-final-residual13-primary-evidence-v1.json --output work/output/b3-final-residual13-resolution.json
+      - name: Assert zero unresolved
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=json.loads(Path("work/output/b3-final-residual13-resolution.json").read_text())
+          assert p["status"]=="B3_FINAL_RESIDUAL13_PRIMARY_RESOLUTION_COMPLETE"
+          assert p["resolvedRows"]==13
+          assert p["unresolvedRowsAfterThisGate"]==0
+          assert p["resolutionKeySha256"]==os.environ["KEY_DIGEST"]
+          assert p["resolutionDecisionCounts"]=={
+            "SAME_SECURITY_CONTINUITY":8,
+            "SYMBOL_CHANGED_SAME_SECURITY":1,
+            "TRANSFORMED_HOLDER_CONSIDERATION":3,
+            "TRANSFORMED_MULTI_COMPONENT_CONSIDERATION":1,
+          }
+          assert p["performanceRead"] is False
+          assert p["priceFieldsRead"]==[]
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          assert p["finalResolutionContractCreated"] is False
+          assert p["correctedPerformanceOpened"] is False
+          PY
+      - name: Publish release
+        env: {GH_TOKEN: ${{ github.token }}}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" --title "Phase-1 B3 final residual-13 resolution v1" --notes "Performance-blind primary-source classification of all remaining B3 continuity rows. Corrected performance remains closed." --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE" work/output/b3-final-residual13-resolution.json --repo "$GITHUB_REPOSITORY" --clobber
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3-final-residual13-resolution-${{ github.run_id }}
+          path: work/output/b3-final-residual13-resolution.json
+          retention-days: 90
