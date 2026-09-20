@@ -46,7 +46,7 @@ def _contract() -> dict[str, object]:
                 "mode":"UNIT_TO_MULTI_COMPONENT_BASKET","effectiveDate":"2021-08-13",
                 "basket":[
                     {"symbol":"MIMO","securityClass":"COMMON_STOCK","quantityPerEntryUnit":1.0},
-                    {"symbol":"MIMO WS","securityClass":"PUBLIC_WARRANT","quantityPerEntryUnit":1.0},
+                    {\n                        "symbol": "MIMO WS",\n                        "securityClass": "PUBLIC_WARRANT",\n                        "quantityPerEntryUnit": 1.0,\n                    },
                 ],
                 "cashPerEntryShare":0.0,
                 "primaryEvidence":[{"accession":"fixture","evidenceDate":"2021-08-13","fact":"fixture"}],
