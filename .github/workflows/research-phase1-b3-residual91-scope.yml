@@ -1,0 +1,134 @@
+name: Freeze B3 residual-91 continuity scope
+
+on:
+  push:
+    branches:
+      - research/b3-ps-pit-history
+    paths:
+      - "scripts/research_phase1_b3_residual91_scope.py"
+      - "tests/test_research_phase1_b3_residual91_scope.py"
+      - "docs/research-phase1-b3-residual91-scope-gate.md"
+      - ".github/workflows/research-phase1-b3-residual91-scope.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  freeze:
+    runs-on: ubuntu-24.04
+    env:
+      SOURCE_RELEASE: research-phase1-b3-residual-multisource-v1
+      SOURCE_ASSET: b3-residual-multisource-synthesis.json
+      SOURCE_DIGEST: sha256:b88512259b21b31b1defa63328cba4f2e56ba32f6fbf071452ff32251777f56a
+      RESULT_RELEASE: research-phase1-b3-residual91-scope-v1
+      EXPECTED_RESIDUAL_DIGEST: sha256:46eeaa05a83960c1ef9537dd88972351b8c984c996ccddffa23f7da8d294ab58
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync frozen environment
+        run: uv sync --all-groups --frozen
+
+      - name: Lint residual scope implementation
+        run: >-
+          uv run ruff check
+          scripts/research_phase1_b3_residual91_scope.py
+          tests/test_research_phase1_b3_residual91_scope.py
+
+      - name: Test residual scope semantics
+        run: >-
+          uv run pytest -q
+          tests/test_research_phase1_b3_residual91_scope.py
+
+      - name: Download pinned synthesis source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/source work/output
+          gh release download "$SOURCE_RELEASE" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$SOURCE_ASSET" --dir work/source
+          digest="sha256:$(sha256sum "work/source/$SOURCE_ASSET" | cut -d' ' -f1)"
+          test "$digest" = "$SOURCE_DIGEST"
+
+      - name: Freeze exact residual-91 scope
+        run: >-
+          uv run python scripts/research_phase1_b3_residual91_scope.py
+          --source "work/source/$SOURCE_ASSET"
+          --output work/output/b3-residual91-scope.json
+
+      - name: Assert immutable scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          p = json.loads(Path("work/output/b3-residual91-scope.json").read_text())
+          assert p["status"] == "B3_RESIDUAL91_SCOPE_FROZEN"
+          assert p["sourceResidualRows"] == 91
+          assert p["uniqueIssuerTickerPairs"] == 35
+          assert p["residualKeySha256"] == os.environ["EXPECTED_RESIDUAL_DIGEST"]
+          assert p["resolutionSourceCounts"] == {
+              "long_internal_gap": 87,
+              "provider": 4,
+          }
+          assert p["residualReasonCounts"] == {
+              "NO_MATCHING_PRIOR_B1_EVIDENCE": 87,
+              "PROVIDER_AMBIGUOUS_REQUIRES_PRIMARY_EVIDENCE": 4,
+          }
+          assert p["developmentCohortYears"] == [2016, 2017, 2018, 2019, 2020]
+          assert p["outcomeEnd"] == "2022-12-31"
+          assert p["sealedYear"] == 2023
+          assert p["horizons"] == [21, 63, 126, 252]
+          assert p["primaryHorizon"] == 126
+          assert p["performanceRead"] is False
+          assert p["priceFieldsRead"] == []
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          assert p["autoExpansionAllowed"] is False
+          assert p["finalResolutionContractCreated"] is False
+          assert p["correctedPerformanceOpened"] is False
+          print(json.dumps({
+              "sourceResidualRows": p["sourceResidualRows"],
+              "uniqueIssuerTickerPairs": p["uniqueIssuerTickerPairs"],
+              "resolutionSourceCounts": p["resolutionSourceCounts"],
+              "residualReasonCounts": p["residualReasonCounts"],
+              "residualKeySha256": p["residualKeySha256"],
+              "evidenceBucketCounts": p["evidenceBucketCounts"],
+          }, indent=2, sort_keys=True))
+          PY
+
+      - name: Publish immutable residual scope release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" \
+              --title "Phase-1 B3 residual-91 continuity scope v1" \
+              --notes "Frozen exact 91-row performance-blind residual continuity scope. Corrected performance, validation and 2023+ OOS remain closed." \
+              --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE" \
+            work/output/b3-residual91-scope.json \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3-residual91-scope-${{ github.run_id }}
+          path: work/output/b3-residual91-scope.json
+          retention-days: 90
