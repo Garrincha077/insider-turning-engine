@@ -99,6 +99,29 @@ def _read_all(root: Path, filename: str) -> list[dict[str, Any]]:
     return rows
 
 
+def _read_selected_jsonl(
+    root: Path,
+    filename: str,
+    *,
+    shard_index: int,
+    shard_count: int,
+    issuer_getter: Any,
+) -> list[dict[str, Any]]:
+    """Stream JSONL files and retain only the issuer-safe shard in memory."""
+
+    rows: list[dict[str, Any]] = []
+    for path in sorted(root.rglob(filename)):
+        with path.open("r", encoding="utf-8") as stream:
+            for line in stream:
+                if not line.strip():
+                    continue
+                row = json.loads(line)
+                issuer_cik = str(issuer_getter(row))
+                if _selected(issuer_cik, shard_index, shard_count):
+                    rows.append(row)
+    return rows
+
+
 def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
     with path.open("w", encoding="utf-8") as stream:
         for row in rows:
@@ -280,26 +303,34 @@ def reconcile_shard(
     if shard_count <= 1 or not 0 <= shard_index < shard_count:
         raise ValueError("invalid issuer shard")
 
-    original_rows = [
-        row
-        for row in _read_all(original_root, "canonical-research.jsonl")
-        if _selected(_canonical_issuer(row), shard_index, shard_count)
-    ]
-    support_rows = [
-        row
-        for row in _read_all(evidence_root, "supporting-predecessor-canonical.jsonl")
-        if _selected(_canonical_issuer(row), shard_index, shard_count)
-    ]
-    amendment_rows = [
-        row
-        for row in _read_all(amendment_root, "canonical-research.jsonl")
-        if _selected(_canonical_issuer(row), shard_index, shard_count)
-    ]
-    scope_rows = [
-        row
-        for row in _read_all(scope_root, "amendment-ps-scope.jsonl")
-        if _selected(str(row["issuerCik"]), shard_index, shard_count)
-    ]
+    original_rows = _read_selected_jsonl(
+        original_root,
+        "canonical-research.jsonl",
+        shard_index=shard_index,
+        shard_count=shard_count,
+        issuer_getter=_canonical_issuer,
+    )
+    support_rows = _read_selected_jsonl(
+        evidence_root,
+        "supporting-predecessor-canonical.jsonl",
+        shard_index=shard_index,
+        shard_count=shard_count,
+        issuer_getter=_canonical_issuer,
+    )
+    amendment_rows = _read_selected_jsonl(
+        amendment_root,
+        "canonical-research.jsonl",
+        shard_index=shard_index,
+        shard_count=shard_count,
+        issuer_getter=_canonical_issuer,
+    )
+    scope_rows = _read_selected_jsonl(
+        scope_root,
+        "amendment-ps-scope.jsonl",
+        shard_index=shard_index,
+        shard_count=shard_count,
+        issuer_getter=lambda row: row["issuerCik"],
+    )
     scope_by_accession = {
         str(row["amendmentAccession"]): row for row in scope_rows
     }
