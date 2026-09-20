@@ -90,8 +90,18 @@ jobs:
           assert p["sourceUnresolvedRows"] == 264
           assert p["priorCandidateRows"] == 102
           assert p["sourceResidualRows"] == 162
-          assert p["newCandidateRows"] > 0
-          assert p["combinedCandidateRows"] + p["residualUnresolvedRows"] == 264
+          assert p["newCandidateRows"] == 71
+          assert p["combinedCandidateRows"] == 173
+          assert p["residualUnresolvedRows"] == 91
+          assert p["newCandidateKeySha256"] == (
+              "sha256:e16d0d769af8d6151fe8cbb570db9ea78ec38f5682615531156e3b4bc79f5348"
+          )
+          assert p["combinedCandidateKeySha256"] == (
+              "sha256:12101a4d11415b1c8a212024baf8cf4febdd05c23e26e70e38a28e1af00451c5"
+          )
+          assert p["residualKeySha256"] == (
+              "sha256:46eeaa05a83960c1ef9537dd88972351b8c984c996ccddffa23f7da8d294ab58"
+          )
           assert p["performanceRead"] is False
           assert p["priceFieldsRead"] == []
           assert p["oosOpened"] is False
