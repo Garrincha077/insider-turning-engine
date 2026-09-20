@@ -1,0 +1,112 @@
+name: Run Phase-1 B3 robustness diagnostics
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-b3-robustness.yml"
+      - "scripts/research_phase1_b3_robustness.py"
+      - "tests/test_research_phase1_b3_robustness.py"
+      - "docs/research-phase1-b3-robustness-gate.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-b3-robustness-v1
+  cancel-in-progress: false
+
+env:
+  SOURCE_RELEASE: research-phase1-b3-development-v1
+  SOURCE_ASSET: b3-development-descriptive-2016-2020.tar.gz
+  SOURCE_DIGEST: sha256:d90a2f08483d6710bb2f2715fa9049b64fd27a3979e7e63e5fb792f3c0274ae7
+  RESULT_RELEASE: research-phase1-b3-robustness-v1
+
+jobs:
+  robustness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+
+      - name: Verify frozen B3 development source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/source
+          gh release view "$SOURCE_RELEASE" --repo "$GITHUB_REPOSITORY" --json assets > work/assets.json
+          python - <<'PY'
+          import json, os
+          assets={x["name"]:x for x in json.load(open("work/assets.json"))["assets"]}
+          assert assets[os.environ["SOURCE_ASSET"]].get("digest")==os.environ["SOURCE_DIGEST"]
+          PY
+          gh release download "$SOURCE_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$SOURCE_ASSET" --dir work/source
+          tar -xzf "work/source/$SOURCE_ASSET" -C work/source             summary.json b3-development-events.csv
+          python - <<'PY'
+          import json
+          s=json.load(open("work/source/summary.json"))
+          assert s["status"]=="PHASE1_B3_DEVELOPMENT_DESCRIPTIVE_COMPLETE"
+          assert s["resultClass"]=="research/descriptive"
+          assert s["formalAlphaClaimed"] is False
+          assert s["validationPerformanceComputed"] is False
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          PY
+
+      - name: Run focused frozen robustness tests
+        run: uv run pytest -q tests/test_research_phase1_b3_robustness.py
+
+      - name: Run unchanged B1-style robustness diagnostics on B3
+        run: >-
+          uv run python scripts/research_phase1_b3_robustness.py
+          --events work/source/b3-development-events.csv
+          --source-summary work/source/summary.json
+          --output work/b3-robustness.json
+          --source-run-id 35502095184
+          --source-release "$SOURCE_RELEASE"
+          --source-asset "$SOURCE_ASSET"
+          --source-asset-digest "$SOURCE_DIGEST"
+
+      - name: Assert no progression leakage
+        run: |
+          python - <<'PY'
+          import json
+          s=json.load(open("work/b3-robustness.json"))
+          assert s["status"]=="PHASE1_B3_ROBUSTNESS_DIAGNOSTICS_COMPLETE"
+          assert s["researchOnly"] is True
+          assert s["formalAlphaClaim"] is False
+          assert s["oosEligible"] is False
+          assert s["calendarTimeHacStageOpened"] is False
+          assert s["validationPerformanceComputed"] is False
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["b3DefinitionChanged"] is False
+          print(json.dumps(s, indent=2, sort_keys=True))
+          PY
+
+      - name: Persist B3 robustness evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 B3 robustness diagnostics v1"               --notes "Development-only B3 dependence/tail diagnostics using unchanged B1 warning semantics. Validation and 2023+ OOS remain sealed."               --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE" work/b3-robustness.json             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3-robustness-${{ github.run_id }}
+          path: work/b3-robustness.json
+          retention-days: 90
