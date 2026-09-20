@@ -9,122 +9,91 @@ history.
 | Benchmark | Meaning | Current state |
 | --- | --- | --- |
 | B0 | any qualified open-market purchase | development descriptive complete |
-| B1 | canonical CMP opportunistic purchase | continuity-corrected development/robustness work complete; HAC/OOS blocked |
+| B1 | canonical CMP opportunistic purchase | continuity-corrected development/robustness complete; HAC/OOS blocked |
 | B2 | independent-owner cluster | development complete |
-| B3 | company net buying | development + robustness complete; performance-blind continuity resolution active |
+| B3 | company net buying | final 264/264 continuity contract complete; corrected development gate next |
 | B4 | B1 AND B2 exact-session intersection | development complete |
 
-## B3 completed data/methodology gates
+## B3 data / development status
 
-- original P/S PIT history: **40/40 quarters PASS**, 570,291 filings
-- amendment scope: run **35471756336**
-- supporting evidence: run **35472366209**, 1,551/1,551 predecessor filings and 596/596 zero-transaction amendments
-- lifecycle reconciliation: run **35499189795**, **8/8 shards PASS + merge PASS**
+- original P/S PIT history: **40/40 quarters PASS**
+- lifecycle reconciliation: **PASS**
 - effective qualified P/S rows end-2022: **1,570,066**
-- B3 definition frozen before performance: `research-phase1-b3-definition-v1`
+- B3 definition: frozen before performance
 - raw candidates 2016-2020: **147,164**
 - exact-XNYS dedup retained events: **35,829**
-- PIT identity eligible: **34,472** / 35,829
-- 2023+ OOS: **sealed**
-- production scoring: **unchanged**
-
-## B3 development result — COMPLETE
-
-Workflow run **35502095184**.
-
-- exact-entry matched events: **29,930**
-- exact-entry coverage: **86.8241%**
+- PIT identity eligible: **34,472**
+- uncorrected B3 development run: **35502095184**
+- exact-entry matched: **29,930**
 - coverage tier: **C_EXPLORATORY**
-- 126-session matured: **29,069**
-- 126-session raw mean / median: **+14.01% / +6.54%**
 - 126-session SPY excess mean / median: **+4.09% / -2.73%**
-- 126-session excess win rate: **44.84%**
+- 126-session win rate: **44.84%**
 
-These are development-only descriptive figures, not an alpha or production
-claim.
+## Frozen uncorrected robustness
 
-## B3 robustness result — BLOCK_HAC_AND_OOS
+Run **35502779482**:
 
-Latest green robustness run: **35502779482**.
-
-At the primary 126-session horizon:
-
-- event-weighted SPY excess mean: **+4.0915%**
+- event-weighted 126d mean: **+4.0915%**
 - issuer equal-weight mean: **+5.0763%**
 - entry-session equal-weight mean: **+3.4260%**
 - positive-mean years: **3 / 5**
 - top-1%-removed mean: **-0.1974%**
-- blocking warning: **true**
 - progression: **BLOCK_HAC_AND_OOS**
 
-The frozen warning that fires is
-`top1PctRemovedMeanNonPositive=true`. Do not retune the rule after observing
-this result.
+Do not retune this rule after observing the result.
 
-## B3 performance-blind continuity resolution — CURRENT ACTIVE WORK
+## B3 continuity resolution — COMPLETE
 
-Authoritative continuity ledger run **35502394856**:
+The original frozen continuity problem contained **264** unresolved
+event-horizon rows.
 
-- event-horizon rows: **119,720**
-- unresolved rows: **264**
-- unique affected events: **146**
-- unique issuer/ticker identities: **67**
-- 200 long-internal-gap rows
-- 64 provider-action ambiguity rows
+Final residual resolution run **35540472056**:
 
-Deterministic candidate run **35502978548** reduced this to:
+- resolved final residual: **13 / 13**
+- unresolved after gate: **0**
+- release: `research-phase1-b3-final-residual13-resolution-v1`
 
-- deterministic candidates: **102**
-- residual: **162**
+Final continuity contract run **35540610883**:
 
-Evidence-only residual work then completed successfully:
+- status: **SUCCESS**
+- source unresolved rows: **264**
+- classified rows: **264**
+- unresolved rows: **0**
+- classified/frozen-scope key SHA-256:
+  `sha256:6125fe42a9559ce937d385b4f49d1a74d33ce1caad7f5ec8487ce72bf854082b`
+- release: `research-phase1-b3-final-continuity-contract-v1`
+- asset SHA-256:
+  `sha256:22e1af6713eb0c0f73604a150787ac9248f044eef63e1f88b70b31697aede163`
+- finalResolutionContractCreated: **true**
+- correctedPerformanceOpened: **false**
 
-- bounded P/S PIT corroboration: run **35503316854**
-- successor corporate-action inventory: run **35503492411**
-- accession-pinned SEC security-title audit: run **35503698067**
-- bounded all-Form345 corroboration: run **35504002615**
+Classification counts:
 
-Strict multi-source synthesis run **35507255962** then added **71**
-performance-blind same-security candidates.
+- same security: **180**
+- symbol changed, same security: **11**
+- transformed holder consideration: **71**
+- transformed multi-component consideration: **1**
+- discontinuous/no complete valuation: **1**
 
-Subsequent performance-blind continuity gates:
+See `docs/progress-2026-09-20-b3-continuity-complete.md`.
 
-- residual-91 scope freeze: run **35507445541**, 91 rows / 35 issuer-tickers;
-- provider primary-source resolution: run **35507604004**, **4 / 4** provider
-  ambiguities resolved as same-security symbol changes;
-- residual-87 scope freeze: run **35507696537**.
+## Active next gate
 
-Current frozen state:
+Freeze and implement B3 continuity-corrected development performance before
+opening corrected outcomes.
 
-- SPAC-unit primary resolution wave 1: run **35507997799**, 4 rows resolved;
-- one-sided primary resolution: run **35508257853**, 20 rows resolved;
-- second SPAC-unit resolution: run **35508586692**, 8 rows resolved;
-- multi-class/reorganization resolution: run **35508859857**, 12 rows resolved;
-- residual-43 scope freeze: run **35508922204**;
-- deterministic continuity candidates/resolutions: **221 / 264**
-- residual unresolved rows: **43**
-- residual issuer/tickers: **19**
-- residual-43 key digest:
-  `sha256:be82164c63ed8c8528017ff3201d5172e818655e5c7a8fa48bd7576c7cb02cd6`
-- release: `research-phase1-b3-residual43-scope-v1`
-- corrected performance remains **closed**
-- final resolution contract remains **not created**
-- 2023+ remains **sealed**
+Required rules:
 
-See `docs/progress-2026-09-20-b3-residual43.md`.
+1. consume only the immutable final continuity contract;
+2. keep development cohort 2016-2020 and outcome ceiling 2022-12-31;
+3. keep exact 21/63/126/252 XNYS targets, 126 primary;
+4. never substitute a later market bar for a missing exact target session;
+5. preserve holder quantities/cash exactly from the contract;
+6. value every component of a multi-component basket at the exact target
+   session or mark it incomplete;
+7. keep 2023+ sealed and production scoring unchanged;
+8. reapply the already frozen robustness semantics after corrected development
+   results, with no retuning.
 
-## Immediate sequence
-
-1. Preserve the exact 43-row residual continuity scope.
-2. Split remaining work into target-specific SPAC/unit life-cycle cases and
-   ordinary-share title-normalization/gap cases.
-3. Resolve each identity only from pinned primary evidence, without reading
-   returns.
-4. Create the final B3 continuity contract only when every frozen row is
-   deterministically classified.
-5. Recompute corrected B3 development performance only after a zero-unresolved
-   continuity gate.
-6. Reapply the already frozen B3 robustness semantics. No retuning.
-7. HAC/OOS remains blocked unless the frozen progression rules later permit it.
-8. Keep 2023+ sealed until the owner explicitly authorizes OOS after all prior
-   methodology/validation gates are satisfied.
+HAC/OOS remains blocked unless the corrected frozen robustness gate later
+permits progression.
