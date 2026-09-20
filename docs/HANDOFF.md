@@ -11,7 +11,7 @@ This is the operational continuation point for a new ChatGPT/Codex session. Read
 3. Treat the exact-calendar P0 market audit as the authoritative market-data gate. Current tier: **C_EXPLORATORY**.
 4. Treat Phase-1 B0, B1, B2 and B4 development outputs as completed descriptive/research benchmarks, not production evidence.
 5. Treat the B3 P/S history, B3 amendment reconciliation, and B3 definition freeze as completed data/methodology gates.
-6. Current active task: complete the performance-blind B3 raw-signal input build, then map it to exact XNYS execution sessions before any B3 development performance is read.
+6. Current active task: finish the performance-blind B3 security-continuity resolution for the frozen 91-row residual scope. Corrected B3 performance stays closed until the final unresolved count is zero.
 7. Keep sealed OOS **2023+ unopened**.
 8. Do **not** change production scoring, weights, thresholds, signal states, alerts, or production methodology unless the owner explicitly asks.
 
@@ -186,7 +186,7 @@ Frozen primary definition:
 - outcome data may not exceed 2022-12-31;
 - 2023+ remains sealed.
 
-No B3 development performance has been opened yet.
+B3 development performance and the frozen robustness diagnostic have now been completed. The robustness progression is **BLOCK_HAC_AND_OOS**; corrected performance remains closed while security-continuity resolution is unfinished.
 
 ### Raw B3 development signal universe — COMPLETE
 
@@ -252,13 +252,37 @@ Persistent release: research-phase1-b3-identity-v1.
 Identity asset SHA-256:
 be808447f2f76bf34904f1950a0639a4b515a7a241165b4ea6267aaacc2a4d91.
 
-### Current active gate — B3 development coverage/performance
+### Current active gate — B3 performance-blind continuity resolution
 
-The first B3 development methodology was predeclared before returns. It first
-applies the existing frozen P0 A/B/C coverage thresholds to the B3 event set.
-If B3-specific coverage is below Tier C, the workflow stops before forward
-returns. If it passes, only the 2016-2020 evaluation-session cohort is evaluated,
-with outcomes bounded through end-2022 and 126 sessions primary.
+B3 development run 35502095184 is complete at coverage tier C_EXPLORATORY.
+Primary 126-session SPY excess mean is +4.09%, median -2.73%, win rate 44.84%.
+
+The frozen robustness gate is also complete. Latest green run 35502779482
+returns `BLOCK_HAC_AND_OOS` because the 126-session top-1%-removed mean is
+non-positive (-0.1974%). Do not retune this warning after seeing the result.
+
+Security-continuity work is therefore a data-validity correction, not a route
+around the robustness block.
+
+Authoritative continuity state:
+
+- ledger run 35502394856: 264 unresolved event-horizon rows;
+- deterministic candidate run 35502978548: 102 candidates / 162 residual;
+- bounded P/S PIT, successor-action, SEC-title and all-Form345 evidence runs:
+  35503316854 / 35503492411 / 35503698067 / 35504002615;
+- strict multi-source synthesis run 35507255962: **71 new candidates**;
+- combined deterministic candidates: **173 / 264**;
+- frozen residual unresolved rows: **91** across **35 issuer/tickers**;
+- residual key SHA-256:
+  `sha256:46eeaa05a83960c1ef9537dd88972351b8c984c996ccddffa23f7da8d294ab58`;
+- release: `research-phase1-b3-residual-multisource-v1`;
+- final resolution contract: not created;
+- corrected performance: not opened;
+- 2023+ OOS: sealed;
+- production scoring: unchanged.
+
+Current work must remain performance-blind and resolve/classify the exact
+91-row residual scope before a final overlay can be frozen.
 
 ---
 
@@ -400,7 +424,7 @@ The current frozen/research benchmark family is:
 | **B0** | any qualified open-market purchase | development descriptive run complete |
 | **B1** | canonical CMP-style opportunistic purchase | development run + continuity-corrected robustness/tail/year/temporal-clustering work complete; formal OOS still blocked |
 | **B2** | independent-owner cluster, primary 30 days and >=2 owner CIKs | development run complete |
-| **B3** | company net buying using complete PIT buy/sale history | data/definition/raw/event/identity gates PASS; coverage-first development run active |
+| **B3** | company net buying using complete PIT buy/sale history | development + robustness complete; continuity resolution active at 91 frozen residual rows; HAC/OOS blocked |
 | **B4** | exact same-issuer + same-XNYS-session intersection of B1 and B2 | development run complete |
 
 Primary horizons remain 21/63/126/252 XNYS sessions, with 126 primary.
@@ -434,16 +458,24 @@ Do not open OOS until transaction eligibility, transforms, benchmark family, fea
 
 ## NEXT EXECUTION SEQUENCE
 
-1. Finish and persist the **performance-blind B3 raw signal universe** for 2016-2020.
-2. Map B3 raw candidates to the exact XNYS evaluation/entry clock and apply the frozen **20-session issuer dedup**, still without outcomes.
-3. Freeze/assert the final B3 event construction artifact.
-4. Run the first B3 development performance on **2016-2020 only**, with outcomes bounded through 2022.
-5. Run B3 dependence-aware robustness: calendar-time/HAC, issuer clustering, tail sensitivity, year stability and concentration diagnostics.
-6. Compare B0/B1/B2/B3/B4 as a Phase-1 benchmark family without post-hoc threshold changes.
-7. Move into the insider **feature tournament** only after the simple benchmark family is understood.
-8. After feature selection, test the **Turning overlay** incrementally against the insider-only model.
-9. Freeze the complete methodology before opening validation 2021-2022.
-10. Keep 2023+ sealed until development/validation methodology is frozen and the owner explicitly authorizes the OOS step.
+1. Freeze and preserve the exact **91-row B3 residual continuity scope**.
+2. Resolve the 4 provider ambiguities and ticker-change/security-change buckets
+   using pinned primary SEC/issuer/exchange/corporate-action evidence only.
+3. Continue through one-sided and title-change residual buckets without reading
+   realized performance.
+4. Do not create the final B3 continuity contract until every frozen residual
+   row is deterministically classified and the unresolved count is zero.
+5. Only after that zero-unresolved gate, recompute corrected B3 development
+   performance with the already frozen 21/63/126/252 horizons and 126 primary.
+6. Reapply the already frozen robustness semantics; do not change warning
+   thresholds after the result.
+7. Keep HAC/OOS blocked while the frozen progression result requires it.
+8. Compare B0/B1/B2/B3/B4 only after B3 data validity is corrected.
+9. Move to the insider feature tournament only after the simple benchmark
+   family is understood.
+10. Test the Turning overlay only after the insider-only model is defensible.
+11. Freeze methodology before 2021-2022 validation.
+12. Keep 2023+ sealed until explicit owner authorization after all prior gates.
 
 ---
 
