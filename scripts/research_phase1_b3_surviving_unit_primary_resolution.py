@@ -195,7 +195,7 @@ def main() -> None:
     parser.add_argument("--evidence", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    print(json.dumps(resolve(scope_path=args.scope, evidence_path=args.evidence, output_path=args.output), indent=2, sort_keys=True))
+    result = resolve(\n        scope_path=args.scope,\n        evidence_path=args.evidence,\n        output_path=args.output,\n    )\n    print(json.dumps(result, indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":
