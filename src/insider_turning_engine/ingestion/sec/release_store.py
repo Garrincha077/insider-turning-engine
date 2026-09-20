@@ -56,9 +56,10 @@ class ReleaseCheckpointStore:
 
     def _download(self, release: dict[str, Any], *, day: date) -> dict[str, Any]:
         tag = release["tag_name"]
-        legacy = tag.startswith(self._prefix(day, LEGACY_PARSER_VERSION))
-        parser_version = LEGACY_PARSER_VERSION if legacy else PARSER_VERSION
-        prefix = self._prefix(day, parser_version)
+        legacy_namespace = tag.startswith(self._prefix(day, LEGACY_PARSER_VERSION))
+        prefix = self._prefix(
+            day, LEGACY_PARSER_VERSION if legacy_namespace else PARSER_VERSION,
+        )
         if not re.fullmatch(re.escape(prefix) + r"[a-f0-9]{64}", tag):
             raise ValueError("invalid checkpoint release tag")
         name = f"checkpoint-{tag.removeprefix(prefix)}.json.gz"
@@ -74,7 +75,8 @@ class ReleaseCheckpointStore:
             if path.is_symlink() or path.stat().st_size != assets[0]["size"]:
                 raise ValueError("downloaded checkpoint size mismatch")
             value = decode_checkpoint(name, path.read_bytes(), day=day)
-            if value["parserVersion"] != parser_version:
+            checkpoint_is_legacy = value["parserVersion"] == LEGACY_PARSER_VERSION
+            if checkpoint_is_legacy != legacy_namespace:
                 raise ValueError("checkpoint namespace does not match parser evidence")
             return value
 

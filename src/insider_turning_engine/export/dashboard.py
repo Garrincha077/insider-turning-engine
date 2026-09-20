@@ -9,6 +9,7 @@ artifacts and their content-addressed manifest.
 
 from __future__ import annotations
 
+import gzip
 import hashlib
 import json
 import math
@@ -152,8 +153,14 @@ def export_dashboard(
         if data.get("researchSnapshot") is not None:
             research = _validate_research(data["researchSnapshot"], publication_run_id,
                                           as_of_text, str(dashboard["scoreVersion"]))
-            _write_bytes(temporary / "research-v2.json", _canonical_bytes(research))
+            research_bytes = _canonical_bytes(research)
+            _write_bytes(temporary / "research-v2.json", research_bytes)
             files.append(_file_record(temporary, "research-v2.json"))
+            _write_bytes(
+                temporary / "research-v2.json.gz",
+                gzip.compress(research_bytes, compresslevel=9, mtime=0),
+            )
+            files.append(_file_record(temporary, "research-v2.json.gz"))
         settings_status = data.get("settingsStatus") or _default_settings_status(generated)
         if not isinstance(settings_status, Mapping):
             raise DashboardExportError("settingsStatus must be an object")
@@ -678,9 +685,19 @@ def validate_dashboard_directory(
         raise DashboardExportError("dashboard.json must contain an object")
     _validate_dashboard(dashboard)
     if "research-v2.json" in expected_paths:
-        _validate_research(json.loads((root / "research-v2.json").read_text(encoding="utf-8")),
+        research_bytes = (root / "research-v2.json").read_bytes()
+        _validate_research(json.loads(research_bytes),
                            str(manifest["runId"]), str(manifest["asOf"]),
                            str(manifest["scoreVersion"]))
+        if "research-v2.json.gz" in expected_paths:
+            try:
+                compressed_research = gzip.decompress(
+                    (root / "research-v2.json.gz").read_bytes()
+                )
+            except (OSError, EOFError) as exc:
+                raise DashboardExportError("compressed research v2 is invalid") from exc
+            if compressed_research != research_bytes:
+                raise DashboardExportError("compressed research v2 disagrees with JSON source")
     if dashboard["scoreVersion"] != manifest["scoreVersion"]:
         raise DashboardExportError("dashboard and manifest score versions disagree")
     if (dashboard["status"] == "VALIDATED") != (manifest["status"] == "SUCCEEDED"):

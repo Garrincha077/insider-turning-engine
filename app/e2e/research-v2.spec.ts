@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { gzipSync } from 'node:zlib';
 import { expect, test, type Page } from '@playwright/test';
 import fixture from './fixtures/research-v2.json' with { type: 'json' };
 import { ready, section } from './helpers';
@@ -7,21 +8,52 @@ import type { SettingsStatus } from '../lib/operations-data';
 
 type Fixture = Omit<typeof fixture, 'economicTransactions'> & { economicTransactions: Array<Omit<typeof fixture.economicTransactions[number], 'shares'> & { shares: number | null }> };
 
-async function v2(page: Page, mutate?: (value: Fixture) => void, digest?: SettingsStatus['digest']) {
+async function v2(page: Page, mutate?: (value: Fixture) => void, digest?: SettingsStatus['digest'], compressed = false) {
   const data: Fixture = structuredClone(fixture); mutate?.(data);
   const bytes = JSON.stringify(data);
+  const gzipBytes = gzipSync(bytes);
   const settingsBytes = JSON.stringify({ ...originalSettings, digest });
   if (digest) await page.route('**/data/settings-status.json', (route) => route.fulfill({ body: settingsBytes, contentType: 'application/json' }));
-  await page.route('**/data/research-v2.json', (route) => route.fulfill({ body: bytes, contentType: 'application/json' }));
+  if (!compressed) await page.route('**/data/research-v2.json', (route) => route.fulfill({ body: bytes, contentType: 'application/json' }));
+  if (compressed) await page.route('**/data/research-v2.json.gz', (route) => route.fulfill({ body: gzipBytes, contentType: 'application/gzip' }));
   await page.route('**/data/manifest.json', async (route) => {
     const response = await route.fetch();
     const manifest = await response.json();
     manifest.runId = fixture.runId; manifest.asOf = fixture.asOf;
     manifest.files.push({ path: 'research-v2.json', size: Buffer.byteLength(bytes), sha256: createHash('sha256').update(bytes).digest('hex') });
+    if (compressed) manifest.files.push({ path: 'research-v2.json.gz', size: gzipBytes.byteLength, sha256: createHash('sha256').update(gzipBytes).digest('hex') });
     if (digest) manifest.files = manifest.files.map((file: { path: string }) => file.path !== 'settings-status.json' ? file : { path: file.path, size: Buffer.byteLength(settingsBytes), sha256: createHash('sha256').update(settingsBytes).digest('hex') });
     await route.fulfill({ json: manifest });
   });
 }
+
+test('verified compressed research loads without requesting the large JSON source', async ({ page }) => {
+  let jsonRequests = 0;
+  await page.route('**/data/research-v2.json', (route) => {
+    jsonRequests += 1;
+    return route.continue();
+  });
+  await v2(page, undefined, undefined, true);
+  await ready(page);
+  await expect(page.locator('tbody tr')).toHaveCount(1);
+  expect(jsonRequests).toBe(0);
+});
+
+test('compressed research must also match the canonical JSON manifest entry', async ({ page }) => {
+  await v2(page, undefined, undefined, true);
+  await page.route('**/data/manifest.json', async (route) => {
+    const response = await route.fetch();
+    const manifest = await response.json();
+    manifest.runId = fixture.runId; manifest.asOf = fixture.asOf;
+    const bytes = JSON.stringify(fixture);
+    const gzipBytes = gzipSync(bytes);
+    manifest.files.push({ path: 'research-v2.json', size: Buffer.byteLength(bytes), sha256: '0'.repeat(64) });
+    manifest.files.push({ path: 'research-v2.json.gz', size: gzipBytes.byteLength, sha256: createHash('sha256').update(gzipBytes).digest('hex') });
+    await route.fulfill({ json: manifest });
+  });
+  await page.goto('/');
+  await expect(page.getByText(/Detailed research snapshot unavailable|integrity mismatch/)).toBeVisible();
+});
 
 test('v2 facts drive scoreless Radar, real clusters, basis and source-linked tape', async ({ page }) => {
   const chartErrors: string[] = [];

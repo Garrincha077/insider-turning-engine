@@ -21,8 +21,13 @@ from .historical import _write_json, sha256_file
 from .parser import parse_sec_filing
 
 LEGACY_PARSER_VERSION = "ownership-eastern-v2.1"
-PARSER_VERSION = "ownership-eastern-v2.2"
-SUPPORTED_PARSER_VERSIONS = {LEGACY_PARSER_VERSION, PARSER_VERSION}
+PREVIOUS_PARSER_VERSION = "ownership-eastern-v2.2"
+PARSER_VERSION = "ownership-eastern-v2.3"
+SUPPORTED_PARSER_VERSIONS = {
+    LEGACY_PARSER_VERSION,
+    PREVIOUS_PARSER_VERSION,
+    PARSER_VERSION,
+}
 
 
 def _digest(value: Any) -> str:
