@@ -17,6 +17,28 @@ This is the operational continuation point for a new ChatGPT/Codex session. Read
 
 ---
 
+## PROJECT / GITHUB SYNCHRONIZATION
+
+When this repository is used through a ChatGPT Project, uploaded Project files
+are context snapshots rather than a live mirror.
+
+Before continuing work, compare the Project snapshot with the live
+`research/b3-ps-pit-history` branch, this live HANDOFF, and relevant GitHub
+Actions/releases.
+
+Conflict rule:
+
+- verified live GitHub wins for current code, workflow/release status and current operational state;
+- this live HANDOFF wins for current research progress/status;
+- frozen/predeclared specs and gates remain authoritative for the methodology they froze;
+- newer code or summaries must not silently override a frozen methodology after results are known;
+- dated progress/result files remain historical audit trail;
+- stale Project copies never justify rerunning, skipping or reinterpreting a gate.
+
+See `CHATGPT_PROJECT_SYNC_POLICY.md` for the full rule.
+
+---
+
 ## PROJECT GOAL
 
 Build an empirically defensible **Insider Turning Engine** that distinguishes genuinely informative insider purchases from noise and then tests whether post-purchase turning/technical confirmation adds incremental value.

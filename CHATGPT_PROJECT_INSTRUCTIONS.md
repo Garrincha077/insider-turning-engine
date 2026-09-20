@@ -25,6 +25,36 @@ At the start of a new chat or after losing context, read in this order:
 
 Treat docs/HANDOFF.md as the operational source of truth for current state. Treat older dated progress/result files as historical audit evidence, not current instructions, unless HANDOFF explicitly points to them.
 
+## Repository / Project synchronization
+
+The ChatGPT Project files are a context snapshot, not an authoritative live mirror of GitHub.
+
+At the beginning of any development or research-continuation task:
+
+1. Check the live GitHub branch `research/b3-ps-pit-history`.
+2. Read the live `docs/HANDOFF.md`.
+3. Check the relevant workflow runs, releases, artifacts and current commit SHA.
+4. Compare those facts with the Project files before acting.
+
+Conflict resolution:
+
+- Live GitHub wins for current code, workflow status, run results, release contents and current operational state.
+- Live `docs/HANDOFF.md` wins for current research progress/status.
+- Frozen/predeclared research specifications and gate definitions remain authoritative for methodology even if newer code, summaries or Project files conflict with them.
+- Historical dated progress/result files remain audit evidence and must not be rewritten merely to match the latest state.
+- Project-uploaded copies never override a newer verified GitHub state.
+- A newer GitHub file does not automatically override a frozen methodology. A methodological change after freeze must be explicitly versioned as a new research definition/gate rather than silently replacing the frozen one.
+
+If a material mismatch is discovered:
+
+1. identify which authority applies using the rules above;
+2. reconcile the difference before continuing;
+3. update live `docs/HANDOFF.md` and the current-status checkpoint when appropriate;
+4. preserve the older dated/frozen artifact as audit history;
+5. only then continue the research sequence.
+
+Never use a stale Project copy as justification to rerun, skip, change or reinterpret a research gate.
+
 ## Hard research boundaries
 
 - Warm-up/history context: 2013-2015.

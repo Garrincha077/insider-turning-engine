@@ -6,6 +6,7 @@ on:
     paths:
       - "CHATGPT_PROJECT_INSTRUCTIONS.md"
       - "CHATGPT_PROJECT_FILE_INDEX.md"
+      - "CHATGPT_PROJECT_SYNC_POLICY.md"
       - ".github/workflows/export-chatgpt-project-bundle.yml"
   workflow_dispatch:
 
@@ -36,6 +37,7 @@ jobs:
           mkdir -p export/context
           cp CHATGPT_PROJECT_INSTRUCTIONS.md export/context/
           cp CHATGPT_PROJECT_FILE_INDEX.md export/context/
+          cp CHATGPT_PROJECT_SYNC_POLICY.md export/context/
           cp README.md export/context/
           cp pyproject.toml export/context/ 2>/dev/null || true
           cp -R docs export/context/
@@ -84,4 +86,5 @@ jobs:
             export/CHATGPT_PROJECT_BUNDLE_MANIFEST.txt
             CHATGPT_PROJECT_INSTRUCTIONS.md
             CHATGPT_PROJECT_FILE_INDEX.md
+            CHATGPT_PROJECT_SYNC_POLICY.md
           retention-days: 90
