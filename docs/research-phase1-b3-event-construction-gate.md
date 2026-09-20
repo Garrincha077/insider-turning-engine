@@ -1,12 +1,49 @@
 # Phase-1 B3 pre-outcome event-construction gate
 
-Status: **PREDECLARED BEFORE B3 DEVELOPMENT OUTCOMES**  
+Status: **PREDECLARED / EXECUTED PASS BEFORE B3 DEVELOPMENT OUTCOMES**  
 Date: **2026-09-20**  
 Scope: map frozen B3 raw positive state-boundary candidates to exact XNYS
 evaluation/entry sessions and apply the already frozen 20-session issuer dedup.  
 Market returns: **prohibited in this gate**.  
 OOS: **2023+ remains sealed**.  
 Production scoring: unchanged.
+
+## Execution result — 2026-09-20
+
+Workflow run: `35501673775` — **SUCCESS**.
+
+Final persisted release:
+`research-phase1-b3-event-construction-v1`.
+
+Result:
+
+- source raw candidates: **147,164**;
+- development evaluation candidates: **147,138**;
+- development-boundary exclusions: **26**;
+- 20-session issuer dedup suppressed: **111,309**;
+- retained pre-outcome events: **35,829**;
+- distinct retained issuers: **5,606**;
+- retained by evaluation year:
+  - 2016: 7,640;
+  - 2017: 6,504;
+  - 2018: 6,884;
+  - 2019: 6,869;
+  - 2020: 7,932;
+- `marketDataJoined=false`;
+- `returnsRead=false`;
+- `developmentPerformanceComputed=false`;
+- `validationPerformanceComputed=false`;
+- `oosOpened=false`;
+- `productionScoringChanged=false`.
+
+Final release asset:
+`b3-development-preoutcome-events-2016-2020.tar.gz`.
+
+Final asset SHA-256:
+`839326d9ce1d3000a476b1d483a71a6501921c58d8012ba4daba4a09cd3d2610`.
+
+The next frozen gate is PIT historical ticker attachment with exact signal-state
+lineage verification. No prices or returns are read by that gate.
 
 ## Inputs
 

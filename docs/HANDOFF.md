@@ -214,8 +214,31 @@ b3-raw-signal-inputs-2016-2020.tar.gz
 SHA-256:
 c39c704bd59e861397be42f8b9a40fa5a6674d68e1cf088372f2f2fdf983ec87.
 
-The current gate is now exact XNYS evaluation/entry mapping plus the already
-frozen 20-session issuer dedup, still before reading B3 development outcomes.
+### B3 exact-XNYS pre-outcome event construction — PASS
+
+Workflow run: 35501673775.
+
+- 147,164 source raw candidates;
+- 147,138 map to the 2016-2020 evaluation-session development cohort;
+- 26 excluded by the evaluation-session boundary;
+- 111,309 suppressed by the frozen <=20-session issuer dedup;
+- **35,829 retained pre-outcome events**;
+- **5,606 distinct issuers**;
+- no market prices or returns read;
+- 2023+ remains sealed.
+
+Persistent release: research-phase1-b3-event-construction-v1.
+Final event asset SHA-256:
+839326d9ce1d3000a476b1d483a71a6501921c58d8012ba4daba4a09cd3d2610.
+
+### Current active gate — PIT identity attachment
+
+Before opening B3 prices/returns, each frozen event is being re-derived from the
+authoritative P/S reconciliation state to verify its exact buy/sale dollars and
+attach only filing-time PIT ticker evidence.
+
+No current-ticker fallback, fuzzy mapping, market prices or returns are allowed
+in this gate.
 
 ---
 
@@ -357,7 +380,7 @@ The current frozen/research benchmark family is:
 | **B0** | any qualified open-market purchase | development descriptive run complete |
 | **B1** | canonical CMP-style opportunistic purchase | development run + continuity-corrected robustness/tail/year/temporal-clustering work complete; formal OOS still blocked |
 | **B2** | independent-owner cluster, primary 30 days and >=2 owner CIKs | development run complete |
-| **B3** | company net buying using complete PIT buy/sale history | data gate PASS, definition frozen, raw 2016-2020 signal universe complete; exact XNYS mapping/dedup next |
+| **B3** | company net buying using complete PIT buy/sale history | data gate + definition + raw signal + exact-XNYS/dedup PASS; PIT identity attachment active before outcomes |
 | **B4** | exact same-issuer + same-XNYS-session intersection of B1 and B2 | development run complete |
 
 Primary horizons remain 21/63/126/252 XNYS sessions, with 126 primary.

@@ -813,3 +813,30 @@ c39c704bd59e861397be42f8b9a40fa5a6674d68e1cf088372f2f2fdf983ec87.
 
 The next gate is exact XNYS evaluation/entry mapping and the frozen 20-session
 issuer dedup before any B3 development outcome is read.
+
+
+---
+
+## 2026-09-20 — B3 exact-XNYS event construction complete
+
+**Status:** PRE-OUTCOME EVENT CONSTRUCTION PASS
+
+Workflow run 35501673775 completed the frozen B3 evaluation/entry clock and
+issuer dedup stage.
+
+- source raw candidates: 147,164;
+- development evaluation candidates: 147,138;
+- boundary excluded: 26;
+- <=20-session issuer dedup suppressed: 111,309;
+- retained pre-outcome events: 35,829;
+- distinct issuers: 5,606.
+
+The stage read no market prices or returns and kept 2023+ sealed.
+
+Persistent release:
+research-phase1-b3-event-construction-v1.
+
+The next pre-outcome gate is PIT ticker attachment by exact reconstruction of
+the event's active reconciled P/S state. Frozen buy/sale dollars must match
+exactly; missing/multiple ticker evidence remains explicit attrition and no
+current-ticker fallback is allowed.

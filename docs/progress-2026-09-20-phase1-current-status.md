@@ -11,7 +11,7 @@ as audit history.
 | B0 | any qualified open-market purchase | development descriptive complete |
 | B1 | canonical CMP opportunistic purchase | development + corrected continuity/robustness/tail/year/temporal-clustering work complete |
 | B2 | independent-owner cluster | development complete |
-| B3 | company net buying | data gate PASS, definition frozen, raw signal universe complete; exact XNYS mapping/dedup next |
+| B3 | company net buying | data/definition/raw-signal/event-construction PASS; PIT identity attachment active before outcomes |
 | B4 | B1 AND B2 exact-session intersection | development complete |
 
 ## B3 data state
@@ -60,3 +60,23 @@ Recovery run 35500436177 completed successfully.
 - asset digest: sha256:c39c704bd59e861397be42f8b9a40fa5a6674d68e1cf088372f2f2fdf983ec87.
 
 Next gate: exact XNYS evaluation/entry mapping plus frozen 20-session issuer dedup before outcomes.
+
+
+## B3 pre-outcome event construction
+
+Workflow run 35501673775 completed successfully.
+
+- raw candidates: 147,164;
+- development evaluation candidates: 147,138;
+- boundary excluded: 26;
+- dedup suppressed: 111,309;
+- retained events: **35,829**;
+- distinct retained issuers: **5,606**;
+- returns read: no;
+- market prices read: no;
+- OOS opened: no.
+
+Persistent release: research-phase1-b3-event-construction-v1.
+
+Current next gate: PIT identity attachment and exact frozen signal-lineage
+verification before any B3 market return is read.
