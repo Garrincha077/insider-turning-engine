@@ -1,0 +1,177 @@
+{
+  "schemaVersion": "1.0.0",
+  "contractId": "phase1-b3-final-residual13-primary-evidence-v1",
+  "frozenAt": "2026-09-20",
+  "researchOnly": true,
+  "performanceRead": false,
+  "priceFieldsRead": [],
+  "oosOpened": false,
+  "productionScoringChanged": false,
+  "scopeRelease": "research-phase1-b3-residual13-scope-v1",
+  "scopeAssetSha256": "sha256:de68c61504c7ec185742a68ac6478807efeda314dbe6f31cba4a28da239286cc",
+  "scopeResidualKeySha256": "sha256:0183d2bb7d158cfa642cb02106eb1937d7e0a327db9e23efb4423188b13c5a18",
+  "expectedResolutionRows": 13,
+  "expectedResolutionKeySha256": "sha256:0183d2bb7d158cfa642cb02106eb1937d7e0a327db9e23efb4423188b13c5a18",
+  "identities": [
+    {
+      "issuerCik": "0001622577",
+      "ticker": "ARWA",
+      "expectedRows": 3,
+      "mode": "COMMON_TO_SUCCESSOR_COMMON",
+      "effectiveDate": "2016-12-28",
+      "successorSymbol": "VVPR",
+      "successorIssuerCik": "0001681348",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "primaryEvidence": [
+        {
+          "accession": "0001213900-15-003190",
+          "evidenceDate": "2015-04-30",
+          "fact": "IPO prospectus distinguishes ARWA ordinary shares from ARWA units, rights and warrants."
+        },
+        {
+          "accession": "0001437749-16-043944",
+          "evidenceDate": "2016-12-28",
+          "fact": "Closing 8-K: 6,088,200 VVPR shares distributed; each ARWA warrant gets 1/20 VVPR and each right gets 1/10 VVPR; 5,648,750 ARWA ordinary shares remained after rights conversion; the filed totals reconcile to one VVPR share for each surviving ARWA ordinary share. VVPR began Nasdaq trading 2016-12-29."
+        }
+      ]
+    },
+    {
+      "issuerCik": "0001630940",
+      "ticker": "AAPC",
+      "expectedRows": 3,
+      "mode": "UNCHANGED_COMMON_DELISTED",
+      "successorSymbol": "AAPC",
+      "successorIssuerCik": "0001630940",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "primaryEvidence": [
+        {
+          "accession": "0001213900-17-010188",
+          "evidenceDate": "2017-09-26",
+          "fact": "Nasdaq initiated delisting procedures; no holder transformation stated."
+        },
+        {
+          "accession": "0001213900-17-010319",
+          "evidenceDate": "2017-10-05",
+          "fact": "Kalyx merger agreement was terminated effective immediately and the proposed transaction was abandoned."
+        },
+        {
+          "accession": "0001213900-18-004569",
+          "evidenceDate": "2017-12-31",
+          "filingDate": "2018-04-16",
+          "fact": "Annual report continues to identify the same AAPC ordinary shares after Nasdaq delisting."
+        }
+      ]
+    },
+    {
+      "issuerCik": "0001641398",
+      "ticker": "WYIG",
+      "expectedRows": 3,
+      "mode": "UNCHANGED_COMMON",
+      "successorSymbol": "WYIG",
+      "successorIssuerCik": "0001641398",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "primaryEvidence": [
+        {
+          "accession": "0001213900-15-006838",
+          "evidenceDate": "2015-09-09",
+          "fact": "SEC exhibit distinguishes common stock WYIG from units WYIGU and warrants WYIGW."
+        },
+        {
+          "accession": "0001213900-17-009244",
+          "evidenceDate": "2017-08-28",
+          "fact": "JM Global still lists common stock as WYIG after all three frozen target exits; the Sunlong transaction was only announced later in 2017."
+        }
+      ]
+    },
+    {
+      "issuerCik": "0001680873",
+      "ticker": "ATACU",
+      "expectedRows": 2,
+      "mode": "UNIT_TO_COMMON_PLUS_RIGHT",
+      "effectiveDate": "2018-08-22",
+      "successorSymbol": "HFFG",
+      "successorIssuerCik": "0001680873",
+      "successorSharesPerEntryShare": 1.1,
+      "cashPerEntryShare": 0,
+      "primaryEvidence": [
+        {
+          "accession": "0001615774-17-004291",
+          "evidenceDate": "2017-08-09",
+          "fact": "Each ATACU unit consists of one common share and one right; each right receives one-tenth common share on an initial business combination."
+        },
+        {
+          "accession": "0001615774-18-008665",
+          "evidenceDate": "2018-08-22",
+          "fact": "HF Group combination closed; Atlantic changed name; units and rights ceased trading and common stock began trading as HFFG on 2018-08-23."
+        }
+      ]
+    },
+    {
+      "issuerCik": "0001698990",
+      "ticker": "TPGE",
+      "expectedRows": 1,
+      "mode": "COMMON_SYMBOL_CHANGE",
+      "effectiveDate": "2018-08-01",
+      "successorSymbol": "MGY",
+      "successorIssuerCik": "0001698990",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "primaryEvidence": [
+        {
+          "accession": "0001193125-18-211576",
+          "evidenceDate": "2018-07-02",
+          "fact": "SEC exhibit states TPGE Class A common will trade as MGY after the business combination."
+        },
+        {
+          "accession": "0001698990-19-000006",
+          "evidenceDate": "2018-12-31",
+          "filingDate": "2019-03-18",
+          "fact": "Annual report states Class A common traded as TPGE through 2018-07-30 and thereafter as MGY; TPGE.U was a separate unit security."
+        }
+      ]
+    },
+    {
+      "issuerCik": "0001823882",
+      "ticker": "NBA.U",
+      "expectedRows": 1,
+      "mode": "UNIT_TO_MULTI_COMPONENT_BASKET",
+      "effectiveDate": "2021-08-13",
+      "basket": [
+        {
+          "symbol": "MIMO",
+          "securityClass": "COMMON_STOCK",
+          "quantityPerEntryUnit": 1
+        },
+        {
+          "symbol": "MIMO WS",
+          "securityClass": "PUBLIC_WARRANT",
+          "quantityPerEntryUnit": 1
+        }
+      ],
+      "cashPerEntryShare": 0,
+      "primaryEvidence": [
+        {
+          "accession": "0001213900-20-034487",
+          "evidenceDate": "2020-11-02",
+          "fact": "Final NBA prospectus: each NBA.U unit consists of one common share and one redeemable warrant; units automatically separate at the initial business combination."
+        },
+        {
+          "accession": "0001829126-21-008369",
+          "evidenceDate": "2021-08-13",
+          "fact": "Airspan closing filing changes registrant name to Airspan Networks Holdings Inc.; post-close common trades as MIMO."
+        },
+        {
+          "accession": "0001829126-22-008403",
+          "evidenceDate": "2021-12-31",
+          "filingDate": "2022-04-19",
+          "fact": "Post-combination filing states NBA public warrants remain outstanding and exercisable; common and public warrants are listed as MIMO and MIMO WS."
+        }
+      ]
+    }
+  ],
+  "finalResolutionContractCreated": false,
+  "correctedPerformanceOpened": false
+}
