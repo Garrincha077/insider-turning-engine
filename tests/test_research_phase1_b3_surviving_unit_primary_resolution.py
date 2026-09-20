@@ -40,7 +40,7 @@ def _contract() -> dict[str, object]:
         "oosOpened": False,
         "productionScoringChanged": False,
         "identities": [
-            _fact(\n                cik,\n                ticker,\n                rows,\n                "UNIT_SYMBOL_CHANGE" if ticker == "TWLVU" else "UNCHANGED_UNIT",\n            )
+            _fact(\n                cik,\n                ticker,\n                rows,\n                "UNIT_SYMBOL_CHANGE"\n                if ticker == "TWLVU"\n                else "UNCHANGED_UNIT",\n            )
             for (cik, ticker), rows in mod.EXPECTED_COUNTS.items()
         ],
     }
