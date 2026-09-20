@@ -1,0 +1,132 @@
+name: Attach PIT identity to Phase-1 B3 events
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-b3-identity-attachment.yml"
+      - "scripts/research_phase1_b3_identity_attachment.py"
+      - "tests/test_research_phase1_b3_identity_attachment.py"
+      - "research/b3-pit-identity-attachment-v1.json"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-b3-identity-attachment-v1
+  cancel-in-progress: false
+
+env:
+  EVENT_RELEASE: research-phase1-b3-event-construction-v1
+  EVENT_ASSET: b3-development-preoutcome-events-2016-2020.tar.gz
+  EVENT_DIGEST: sha256:268ccb66c571513ca5b93f308035b45e1e641d17e5387a6e8a29725c4418b0c0
+  RECON_RELEASE: research-phase1-b3-ps-reconciliation-v1
+  RECON_ASSET: b3-ps-reconciliation-2013-2022.tar.gz
+  RECON_DIGEST: sha256:8fe6707768b7703b2d8b8b8ec1f270c7202710a388739d02d91ddf809483a665
+  IDENTITY_RELEASE: research-phase1-b3-identity-v1
+
+jobs:
+  attach:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --all-groups --frozen
+
+      - name: Verify and download frozen inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/events work/recon-archive work/recon
+
+          gh release view "$EVENT_RELEASE" --repo "$GITHUB_REPOSITORY" --json assets > work/event-assets.json
+          gh release view "$RECON_RELEASE" --repo "$GITHUB_REPOSITORY" --json assets > work/recon-assets.json
+
+          python - <<'PY'
+          import json, os
+          events={x["name"]:x for x in json.load(open("work/event-assets.json"))["assets"]}
+          recon={x["name"]:x for x in json.load(open("work/recon-assets.json"))["assets"]}
+          assert events[os.environ["EVENT_ASSET"]].get("digest")==os.environ["EVENT_DIGEST"]
+          assert recon[os.environ["RECON_ASSET"]].get("digest")==os.environ["RECON_DIGEST"]
+          PY
+
+          gh release download "$EVENT_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$EVENT_ASSET" --dir work/events
+          tar -xzf "work/events/$EVENT_ASSET" -C work/events
+
+          gh release download "$RECON_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$RECON_ASSET" --dir work/recon-archive
+          tar -xzf "work/recon-archive/$RECON_ASSET" -C work/recon             reconciled-ps-revisions.jsonl summary.json
+
+          python - <<'PY'
+          import json
+          event=json.load(open("work/events/summary.json"))
+          recon=json.load(open("work/recon/summary.json"))
+          assert event["status"]=="B3_EVENT_CONSTRUCTION_PREOUTCOME_PASS"
+          assert event["retainedEventCount"]==35829
+          assert event["returnsRead"] is False
+          assert recon["status"]=="B3_PS_AMENDMENT_RECONCILIATION_PASS"
+          assert recon["oosOpened"] is False
+          PY
+
+      - name: Run focused identity tests
+        run: uv run pytest -q tests/test_research_phase1_b3_identity_attachment.py
+
+      - name: Attach PIT identity and verify signal lineage
+        run: >-
+          uv run python scripts/research_phase1_b3_identity_attachment.py
+          --events work/events/b3-development-preoutcome-events.jsonl
+          --event-summary work/events/summary.json
+          --revisions work/recon/reconciled-ps-revisions.jsonl
+          --definition research/b3-pit-identity-attachment-v1.json
+          --output work/identity
+
+      - name: Assert performance remains unopened
+        run: |
+          python - <<'PY'
+          import json
+          s=json.load(open("work/identity/summary.json"))
+          assert s["status"]=="B3_PIT_IDENTITY_ATTACHMENT_PASS"
+          assert s["sourceEventCount"]==35829
+          assert s["signalStateLineageVerified"] is True
+          assert s["currentTickerFallbackUsed"] is False
+          assert s["fuzzyIdentityMatchingUsed"] is False
+          assert s["marketPricesRead"] is False
+          assert s["returnsRead"] is False
+          assert s["developmentPerformanceComputed"] is False
+          assert s["validationPerformanceComputed"] is False
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          print(json.dumps(s, indent=2, sort_keys=True))
+          PY
+
+      - name: Persist PIT identity gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp research/b3-pit-identity-attachment-v1.json work/identity/
+          tar -C work/identity -czf work/b3-development-pit-identity-2016-2020.tar.gz             summary.json             b3-development-identity-events.jsonl             b3-development-identity-quarantine.jsonl             b3-pit-identity-attachment-v1.json
+
+          if ! gh release view "$IDENTITY_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$IDENTITY_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 B3 PIT identity attachment v1"               --notes "Performance-blind PIT ticker attachment and exact B3 signal-state lineage verification. No market prices, returns, validation performance or 2023+ OOS read."               --prerelease
+          fi
+
+          gh release upload "$IDENTITY_RELEASE"             work/b3-development-pit-identity-2016-2020.tar.gz             work/identity/summary.json             work/identity/b3-pit-identity-attachment-v1.json             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3-pit-identity-${{ github.run_id }}
+          path: work/identity
+          retention-days: 90
