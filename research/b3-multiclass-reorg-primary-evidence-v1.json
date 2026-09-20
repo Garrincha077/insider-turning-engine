@@ -1,0 +1,157 @@
+{
+  "schemaVersion": "1.0.0",
+  "contractId": "phase1-b3-multiclass-reorg-primary-evidence-v1",
+  "frozenAt": "2026-09-20",
+  "researchOnly": true,
+  "performanceRead": false,
+  "priceFieldsRead": [],
+  "oosOpened": false,
+  "productionScoringChanged": false,
+  "scopeRelease": "research-phase1-b3-residual55-scope-v1",
+  "scopeResidualKeySha256": "sha256:378820b3ab1a31441aa5b6a3e0faa54c51961e08aa5747d502a5638000e5a6dc",
+  "expectedResolutionRows": 12,
+  "expectedResolutionKeySha256": "sha256:d9103eb5d9b5e04e18f955f4f6361ba39932ad285dff823a1046f72b613c2e91",
+  "identities": [
+    {
+      "issuerCik": "0001635193",
+      "ticker": "GGO",
+      "expectedRows": 8,
+      "resolutionDecision": "SAME_SECURITY_CONTINUITY",
+      "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+      "transformationKind": "",
+      "successorSymbol": "GGO",
+      "successorIssuerCik": "0001635193",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "primaryEvidence": [
+        {
+          "accession": "0001193125-16-649186",
+          "evidenceDate": "2016-07-12",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1635193/000119312516649186/d201517d497.htm",
+          "fact": "Issuer prospectus defines GGO common, GGO.A Series A preferred and GGO.C combinations as distinct security classes."
+        },
+        {
+          "accession": "0000807249-16-000447",
+          "evidenceDate": "2016-09-06",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/807249/000080724916000447/ggo_00_pref.htm",
+          "fact": "SEC Schedule 13D states common and Series A preferred begin trading separately on 2016-11-02."
+        },
+        {
+          "accession": "0001140361-20-007026",
+          "evidenceDate": "2020-05-11",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1635193/000114036120007026/formdef14a.htm",
+          "fact": "2020 proxy confirms the same Gabelli Go Anywhere Trust and shareholder common/preferred structure before the maximum 2020-07-08 scoped target."
+        },
+        {
+          "accession": "0001193125-21-275185",
+          "evidenceDate": "2021-09-16",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1635193/000119312521275185/d196760dex99a5v.htm",
+          "fact": "2021 SEC exhibit identifies the Fund as NYSE American:GGO and offers to purchase outstanding common shares, confirming common shares continued beyond all scoped targets."
+        }
+      ]
+    },
+    {
+      "issuerCik": "0001471824",
+      "ticker": "TAGS",
+      "expectedRows": 1,
+      "resolutionDecision": "SAME_SECURITY_CONTINUITY",
+      "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+      "transformationKind": "",
+      "successorSymbol": "TAGS",
+      "successorIssuerCik": "0001471824",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "primaryEvidence": [
+        {
+          "accession": "0001654954-19-005629",
+          "evidenceDate": "2019-03-31",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1471824/000165495419005629/tctr-10q_033119.htm",
+          "fact": "Form 10-Q identifies TAGS as a distinct series of Teucrium Commodity Trust and states its shares are listed on NYSE Arca under TAGS immediately before the 2019-04-02 target."
+        },
+        {
+          "accession": "0001654954-19-009134",
+          "evidenceDate": "2019-06-30",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1471824/000165495419009134/tctr-10q_06302019.htm",
+          "fact": "Later 2019 Form 10-Q continues to identify TAGS as a distinct series alongside CORN, CANE, SOYB and WEAT."
+        }
+      ]
+    },
+    {
+      "issuerCik": "0001647088",
+      "ticker": "EAGL",
+      "expectedRows": 2,
+      "resolutionDecision": "SYMBOL_CHANGED_SAME_SECURITY",
+      "resultState": "SYMBOL_CHANGED_SAME_SECURITY",
+      "transformationKind": "SAME_SECURITY_DOMESTICATION",
+      "effectiveDate": "2017-11-30",
+      "successorSymbol": "WSC",
+      "successorIssuerCik": "0001647088",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "primaryEvidence": [
+        {
+          "accession": "0001144204-17-046740",
+          "evidenceDate": "2017-09-06",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1647088/000114420417046740/v474601_s4.htm",
+          "fact": "S-4 states outstanding Class A ordinary shares automatically convert one-for-one into WSC Class A common stock in the domestication."
+        },
+        {
+          "accession": "0001104659-17-072958",
+          "evidenceDate": "2017-11-29",
+          "filingDate": "2017-12-12",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1647088/000110465917072958/a17-28340_28ka.htm",
+          "fact": "8-K/A states holders continued as holders of the successor company and retained the same proportional equity interest after the one-for-one conversion."
+        },
+        {
+          "accession": "0001104659-17-071936",
+          "evidenceDate": "2017-11-29",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1647088/000110465917071936/a17-27887_2ex99d4.htm",
+          "fact": "Closing release states WSC Class A common begins Nasdaq trading under WSC on 2017-11-30."
+        }
+      ]
+    },
+    {
+      "issuerCik": "0001697152",
+      "ticker": "FMCIU",
+      "expectedRows": 1,
+      "resolutionDecision": "DISCONTINUOUS_NO_COMPLETE_VALUATION",
+      "resultState": "DISCONTINUOUS_NO_COMPLETE_VALUATION",
+      "transformationKind": "MULTI_LEG_UNIT_SEPARATION_UNVALUED_WARRANT",
+      "effectiveDate": "2018-02-22",
+      "successorSymbol": "",
+      "successorIssuerCik": "0001697152",
+      "successorSharesPerEntryShare": 0,
+      "cashPerEntryShare": 0,
+      "unitComposition": {
+        "commonShares": 1,
+        "rightsPerUnit": 1,
+        "warrantPerUnit": 0.5,
+        "rightConversionCommonShares": 0.1
+      },
+      "primaryEvidence": [
+        {
+          "accession": "0001213900-17-002618",
+          "evidenceDate": "2017-03-28",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1697152/000121390017002618/fs12017_forummerger.htm",
+          "fact": "IPO prospectus defines each FMCIU unit as one common share, one right to 0.1 common share on business combination, and one-half warrant."
+        },
+        {
+          "accession": "0001193125-18-054834",
+          "evidenceDate": "2018-02-22",
+          "filingDate": "2018-02-23",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1697152/000119312518054834/d514051d8k.htm",
+          "fact": "Closing filing states units and rights ceased trading and successor common and warrants began trading as CVON and CVONW."
+        },
+        {
+          "source": "NASDAQ_CORPORATE_ACTION",
+          "evidenceDate": "2018-02-22",
+          "sourceUrl": "https://www.nasdaqtrader.com/TraderNews.aspx?id=ECA2018-32",
+          "fact": "Nasdaq confirms FMCIU was voluntarily separated, each right converted to 0.1 CVON common, and the warrant leg continued separately."
+        }
+      ],
+      "completeHolderValuationRepresentableByFrozenShareCashSchema": false
+    }
+  ],
+  "finalResolutionContractCreated": false,
+  "correctedPerformanceOpened": false
+}
