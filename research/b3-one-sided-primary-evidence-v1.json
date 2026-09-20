@@ -1,0 +1,130 @@
+{
+  "schemaVersion": "1.0.0",
+  "contractId": "phase1-b3-one-sided-primary-evidence-v1",
+  "frozenAt": "2026-09-20",
+  "researchOnly": true,
+  "performanceRead": false,
+  "priceFieldsRead": [],
+  "oosOpened": false,
+  "productionScoringChanged": false,
+  "scopeRelease": "research-phase1-b3-residual83-scope-v1",
+  "scopeResidualKeySha256": "sha256:d1758905bedc027e7f7448cbffed1bf9a35506b947bd8bdec77e48096f28adcd",
+  "expectedResolutionRows": 20,
+  "expectedResolutionKeySha256": "sha256:6380297ba23e117849914bb4e2f9e1956a53c22c65a6514d99e992537294861f",
+  "identities": [
+    {
+      "issuerCik": "0000865058",
+      "ticker": "NSEC",
+      "expectedRows": 7,
+      "resolutionDecision": "SAME_SECURITY_CONTINUITY",
+      "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+      "transformationKind": "",
+      "successorSymbol": "NSEC",
+      "successorIssuerCik": "0000865058",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "primaryEvidence": [
+        {
+          "accession": "0000865058-21-000010",
+          "evidenceDate": "2020-12-31",
+          "filingDate": "2021-03-26",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/865058/000086505821000010/nsec-20201231.htm",
+          "fact": "Form 10-K identifies the same Common Stock, par value $1.00 per share, under NSEC on Nasdaq through 2020."
+        },
+        {
+          "accession": "0000865058-21-000045",
+          "evidenceDate": "2021-09-30",
+          "filingDate": "2021-11-15",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/865058/000086505821000045/nsec-20210930.htm",
+          "fact": "Form 10-Q continues to register the same NSEC common stock after the maximum scoped target exit."
+        }
+      ]
+    },
+    {
+      "issuerCik": "0001122063",
+      "ticker": "FTNW",
+      "expectedRows": 5,
+      "resolutionDecision": "SAME_SECURITY_CONTINUITY",
+      "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+      "transformationKind": "",
+      "successorSymbol": "FTNW",
+      "successorIssuerCik": "0001122063",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "primaryEvidence": [
+        {
+          "accession": "0001493152-19-008323",
+          "evidenceDate": "2019-05-28",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1122063/000149315219008323/form8-k.htm",
+          "fact": "Form 8-K after the frozen long-gap pivot registers the same $0.001 par common stock under FTNW on NYSE American."
+        },
+        {
+          "accession": "0001493152-19-019434",
+          "evidenceDate": "2019-12-17",
+          "filingDate": "2019-12-19",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1122063/000149315219019434/form8-k.htm",
+          "fact": "NYSE American suspension/delisting proceedings concern the same FTNW common stock; the filing does not report a merger, cancellation, exchange or holder transformation."
+        }
+      ],
+      "tradingSuspensionDate": "2019-12-17",
+      "suspensionIsNotHolderTransformation": true
+    },
+    {
+      "issuerCik": "0001314475",
+      "ticker": "LOV",
+      "expectedRows": 7,
+      "resolutionDecision": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "resultState": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "transformationKind": "ADS_EXCHANGE",
+      "effectiveDate": "2017-11-02",
+      "successorSymbol": "LOV",
+      "successorIssuerCik": "0001705338",
+      "successorSharesPerEntryShare": 0.1,
+      "cashPerEntryShare": 0,
+      "primaryEvidence": [
+        {
+          "accession": "0001144204-17-057262",
+          "evidenceDate": "2017-11-02",
+          "filingDate": "2017-11-08",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1314475/000114420417057262/tv478744_8k.htm",
+          "fact": "Closing 8-K states each old Spark Networks, Inc. common share was exchanged for the right to receive 0.1 Spark Networks SE ADS."
+        },
+        {
+          "accession": "0001144204-17-055907",
+          "evidenceDate": "2017-11-02",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1314475/000114420417055907/tv478498_ex99-1.htm",
+          "fact": "Closing release states one new Spark Networks SE ADS for every 10 old common shares and that the successor ADS trades under LOV."
+        }
+      ]
+    },
+    {
+      "issuerCik": "0001330421",
+      "ticker": "BV",
+      "expectedRows": 1,
+      "resolutionDecision": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "resultState": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "transformationKind": "CASH_MERGER",
+      "effectiveDate": "2018-02-01",
+      "successorSymbol": "",
+      "successorIssuerCik": "",
+      "successorSharesPerEntryShare": 0,
+      "cashPerEntryShare": 5.5,
+      "primaryEvidence": [
+        {
+          "accession": "0001330421-18-000011",
+          "evidenceDate": "2018-02-01",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1330421/000133042118000011/form8-kxmergerclosing.htm",
+          "fact": "Merger closing filing states the acquisition completed on 2018-02-01."
+        },
+        {
+          "accession": "0001330421-18-000011",
+          "evidenceDate": "2018-02-01",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1330421/000133042118000011/exhibit991-mergerpressrele.htm",
+          "fact": "Closing release states Bazaarvoice stockholders receive $5.50 per share in cash."
+        }
+      ]
+    }
+  ],
+  "finalResolutionContractCreated": false,
+  "correctedPerformanceOpened": false
+}
