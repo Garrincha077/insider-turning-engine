@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "fixtureSetId": "B3_SECURITY_CONTINUITY_EMPTY_V1",
+  "researchOnly": true,
+  "performanceRead": false,
+  "oosOpened": false,
+  "productionScoringChanged": false,
+  "purpose": "B3 continuity starts from provider evidence plus the frozen long-gap rule only. No performance-selected B1 fixtures are reused.",
+  "fixtures": []
+}

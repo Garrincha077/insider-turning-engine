@@ -1,0 +1,158 @@
+name: Build Phase-1 B3 security continuity ledger
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-b3-security-continuity-ledger.yml"
+      - "research/b3-security-continuity-empty-fixtures-v1.json"
+      - "docs/research-phase1-b3-security-continuity-ledger-gate.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-b3-security-continuity-ledger-v1
+  cancel-in-progress: false
+
+env:
+  SOURCE_RELEASE: research-phase1-b3-development-v1
+  SOURCE_ASSET: b3-development-descriptive-2016-2020.tar.gz
+  SOURCE_DIGEST: sha256:d90a2f08483d6710bb2f2715fa9049b64fd27a3979e7e63e5fb792f3c0274ae7
+  MARKET_RELEASE: research-market-alpaca-v1
+  RESULT_RELEASE: research-phase1-b3-continuity-ledger-v1
+
+jobs:
+  ledger:
+    name: Performance-blind B3 security continuity ledger
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY_ID }}
+      ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+
+      - name: Test frozen continuity machinery
+        run: >-
+          uv run pytest -q
+          tests/test_research_market_corporate_action_inventory.py
+          tests/test_research_phase1_security_continuity_ledger.py
+
+      - name: Verify frozen source and bounded market evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ALPACA_API_KEY_ID"
+          test -n "$ALPACA_API_SECRET_KEY"
+          mkdir -p work/source work/downloads work/market work/ca work/ledger
+
+          gh release view "$SOURCE_RELEASE" --repo "$GITHUB_REPOSITORY" --json assets > work/source-assets.json
+          gh release view "$MARKET_RELEASE" --repo "$GITHUB_REPOSITORY" --json assets > work/market-assets.json
+
+          python - <<'PY'
+          import json, os
+          source={x["name"]:x for x in json.load(open("work/source-assets.json"))["assets"]}
+          assert source[os.environ["SOURCE_ASSET"]].get("digest")==os.environ["SOURCE_DIGEST"]
+          PY
+
+          gh release download "$SOURCE_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$SOURCE_ASSET" --dir work/source
+          tar -xzf "work/source/$SOURCE_ASSET" -C work/source             summary.json b3-development-events.csv
+
+          python - <<'PY'
+          import json
+          s=json.load(open("work/source/summary.json"))
+          assert s["status"]=="PHASE1_B3_DEVELOPMENT_DESCRIPTIVE_COMPLETE"
+          assert s["selection"]["exactEntryMatched"]==29930
+          assert s["validationPerformanceComputed"] is False
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          PY
+
+          gh release download "$MARKET_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern 'alpaca-market-20*.tar.gz' --dir work/downloads
+          for year in 2016 2017 2018 2019 2020 2021 2022; do
+            mkdir -p "work/market/$year"
+            tar -xzf "work/downloads/alpaca-market-$year.tar.gz" -C "work/market/$year"
+          done
+          test ! -e work/market/2023
+
+      - name: Build performance-blind B3 corporate-action inventory
+        run: >-
+          uv run python scripts/research_market_corporate_action_inventory.py
+          --events work/source/b3-development-events.csv
+          --output-dir work/ca
+
+      - name: Assert inventory boundaries
+        run: |
+          python - <<'PY'
+          import json
+          s=json.load(open("work/ca/summary.json"))
+          assert s["period"]==["2016-01-01","2022-12-31"]
+          assert s["performanceRead"] is False
+          assert s["researchOnly"] is True
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["eventTickerCount"] > 0
+          PY
+
+      - name: Build B3 continuity ledger without performance-selected fixtures
+        run: >-
+          uv run python scripts/research_phase1_security_continuity_ledger.py
+          --events work/source/b3-development-events.csv
+          --corporate-actions work/ca/corporate-actions.json
+          --fixtures research/b3-security-continuity-empty-fixtures-v1.json
+          --market-root work/market
+          --output-dir work/ledger
+
+      - name: Assert performance blindness and frozen continuity contract
+        run: |
+          python - <<'PY'
+          import json
+          s=json.load(open("work/ledger/summary.json"))
+          assert s["status"]=="PHASE1_SECURITY_CONTINUITY_LEDGER_COMPLETE"
+          assert s["eventRowsScanned"]==29930
+          assert s["performanceRead"] is False
+          assert s["researchOnly"] is True
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["gapThresholdSessions"]==10
+          for field in ("raw_21","raw_63","raw_126","raw_252",
+                        "excess_21","excess_63","excess_126","excess_252",
+                        "mae_21","mae_63","mae_126","mae_252"):
+              assert field in s["performanceColumnsIgnored"]
+          print(json.dumps(s, indent=2, sort_keys=True))
+          PY
+
+      - name: Persist B3 continuity ledger
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C work -czf work/b3-security-continuity-ledger.tar.gz             ca/corporate-actions.json ca/summary.json             ledger/continuity-ledger.csv ledger/summary.json
+
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 B3 security continuity ledger v1"               --notes "Performance-blind cohort-wide B3 security continuity ledger. No B1 performance-selected fixtures reused; validation and 2023+ remain sealed."               --prerelease
+          fi
+
+          gh release upload "$RESULT_RELEASE"             work/b3-security-continuity-ledger.tar.gz             work/ledger/summary.json             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3-security-continuity-ledger-${{ github.run_id }}
+          path: |
+            work/ca/corporate-actions.json
+            work/ca/summary.json
+            work/ledger/continuity-ledger.csv
+            work/ledger/summary.json
+          retention-days: 90
