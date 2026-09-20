@@ -1,0 +1,130 @@
+name: Freeze B3 residual-87 continuity scope
+
+on:
+  push:
+    branches:
+      - research/b3-ps-pit-history
+    paths:
+      - "scripts/research_phase1_b3_residual87_scope.py"
+      - "tests/test_research_phase1_b3_residual87_scope.py"
+      - "docs/research-phase1-b3-residual87-scope-gate.md"
+      - ".github/workflows/research-phase1-b3-residual87-scope.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  freeze:
+    runs-on: ubuntu-24.04
+    env:
+      SCOPE91_RELEASE: research-phase1-b3-residual91-scope-v1
+      SCOPE91_ASSET: b3-residual91-scope.json
+      SCOPE91_ASSET_DIGEST: sha256:f6ac0a711148af6229e7461b64c3034d3272646fbb7490219947f16b14267891
+      PROVIDER_RELEASE: research-phase1-b3-provider-primary-resolution-v1
+      PROVIDER_ASSET: b3-provider-primary-resolution.json
+      PROVIDER_ASSET_DIGEST: sha256:4f37195c3fda7a2db119f7391c8dbad4571d928aca80b78bc6e5630cdc48dfc1
+      RESIDUAL87_KEY_DIGEST: sha256:c28829aa56204db04633546d91b06b938d06f897cd022d2c8147f488415d2742
+      RESULT_RELEASE: research-phase1-b3-residual87-scope-v1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync frozen environment
+        run: uv sync --all-groups --frozen
+
+      - name: Lint residual-87 scope implementation
+        run: >-
+          uv run ruff check
+          scripts/research_phase1_b3_residual87_scope.py
+          tests/test_research_phase1_b3_residual87_scope.py
+
+      - name: Test residual-87 scope semantics
+        run: >-
+          uv run pytest -q
+          tests/test_research_phase1_b3_residual87_scope.py
+
+      - name: Download pinned sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/scope91 work/provider work/output
+          gh release download "$SCOPE91_RELEASE" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$SCOPE91_ASSET" --dir work/scope91
+          gh release download "$PROVIDER_RELEASE" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$PROVIDER_ASSET" --dir work/provider
+
+          d1="sha256:$(sha256sum "work/scope91/$SCOPE91_ASSET" | cut -d' ' -f1)"
+          d2="sha256:$(sha256sum "work/provider/$PROVIDER_ASSET" | cut -d' ' -f1)"
+          test "$d1" = "$SCOPE91_ASSET_DIGEST"
+          test "$d2" = "$PROVIDER_ASSET_DIGEST"
+
+      - name: Freeze exact residual-87 scope
+        run: >-
+          uv run python scripts/research_phase1_b3_residual87_scope.py
+          --scope "work/scope91/$SCOPE91_ASSET"
+          --provider-resolution "work/provider/$PROVIDER_ASSET"
+          --output work/output/b3-residual87-scope.json
+
+      - name: Assert immutable residual-87 boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          p = json.loads(Path("work/output/b3-residual87-scope.json").read_text())
+          assert p["status"] == "B3_RESIDUAL87_SCOPE_FROZEN"
+          assert p["sourceRows"] == 91
+          assert p["subtractedProviderRows"] == 4
+          assert p["residualRows"] == 87
+          assert p["uniqueIssuerTickerPairs"] == 33
+          assert p["residualKeySha256"] == os.environ["RESIDUAL87_KEY_DIGEST"]
+          assert p["performanceRead"] is False
+          assert p["priceFieldsRead"] == []
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          assert p["autoExpansionAllowed"] is False
+          assert p["finalResolutionContractCreated"] is False
+          assert p["correctedPerformanceOpened"] is False
+          print(json.dumps({
+              "residualRows": p["residualRows"],
+              "uniqueIssuerTickerPairs": p["uniqueIssuerTickerPairs"],
+              "residualKeySha256": p["residualKeySha256"],
+              "evidenceBucketCounts": p["evidenceBucketCounts"],
+          }, indent=2, sort_keys=True))
+          PY
+
+      - name: Publish immutable residual-87 scope release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" \
+              --title "Phase-1 B3 residual-87 continuity scope v1" \
+              --notes "Exact performance-blind residual continuity queue after the four-row provider primary-source resolution. Corrected performance and 2023+ OOS remain closed." \
+              --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE" \
+            work/output/b3-residual87-scope.json \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3-residual87-scope-${{ github.run_id }}
+          path: work/output/b3-residual87-scope.json
+          retention-days: 90
