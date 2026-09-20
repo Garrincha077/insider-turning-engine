@@ -16,7 +16,7 @@ def test_identity_metrics_use_frozen_p0_tiers() -> None:
         "identityQuarantineEvents": 50,
         "quarantineStatusCounts": {
             "MISSING_REAL_TICKER": 30,
-            "MULTIPLE_REAL_TICKERS": 15,
+            "MULTIPLE_REAL_TICKERS": 10,
             "TICKER_SESSION_CIK_COLLISION": 5,
         },
     }
