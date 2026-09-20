@@ -1,0 +1,174 @@
+name: Build B3 final continuity contract
+
+on:
+  push:
+    branches:
+      - research/b3-ps-pit-history
+    paths:
+      - "scripts/research_phase1_b3_final_continuity_contract.py"
+      - "tests/test_research_phase1_b3_final_continuity_contract.py"
+      - "docs/research-phase1-b3-final-continuity-contract-gate.md"
+      - ".github/workflows/research-phase1-b3-final-continuity-contract.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      MULTI_RELEASE: research-phase1-b3-residual-multisource-v1
+      MULTI_ASSET: b3-residual-multisource-synthesis.json
+      MULTI_DIGEST: sha256:b88512259b21b31b1defa63328cba4f2e56ba32f6fbf071452ff32251777f56a
+
+      PROVIDER_RELEASE: research-phase1-b3-provider-primary-resolution-v1
+      PROVIDER_ASSET: b3-provider-primary-resolution.json
+      PROVIDER_DIGEST: sha256:4f37195c3fda7a2db119f7391c8dbad4571d928aca80b78bc6e5630cdc48dfc1
+
+      SPAC1_RELEASE: research-phase1-b3-spac-unit-primary-resolution-v1
+      SPAC1_ASSET: b3-spac-unit-primary-resolution.json
+      SPAC1_DIGEST: sha256:0a6e5f9b271508959f3628babc86965254fe715720790958fd5883202e612065
+
+      ONE_RELEASE: research-phase1-b3-one-sided-primary-resolution-v1
+      ONE_ASSET: b3-one-sided-primary-resolution.json
+      ONE_DIGEST: sha256:2b4e30dcac2d032e9f27495f72e67ed1cb70fc14d11ed58abe8d4e2a73d5c45b
+
+      SPAC2_RELEASE: research-phase1-b3-spac-unit2-primary-resolution-v1
+      SPAC2_ASSET: b3-spac-unit2-primary-resolution.json
+      SPAC2_DIGEST: sha256:1a4e0b9fb67ce72a80d49b39ec827b3ad2ca8e5ce53ca36bcdf44470bf2ecb04
+
+      REORG_RELEASE: research-phase1-b3-multiclass-reorg-primary-resolution-v1
+      REORG_ASSET: b3-multiclass-reorg-primary-resolution.json
+      REORG_DIGEST: sha256:a844ea830b9503a045b55a490c30b9e3cd77456974b741a696f16617caf75969
+
+      COMMON_RELEASE: research-phase1-b3-common-security-primary-resolution-v1
+      COMMON_ASSET: b3-common-security-primary-resolution.json
+      COMMON_DIGEST: sha256:fec6e91a78c665686d5a00baa1baef9a9c6493c4bf53841e8b39bc0e20cc2ac4
+
+      SURVIVING_RELEASE: research-phase1-b3-surviving-unit-primary-resolution-v1
+      SURVIVING_ASSET: b3-surviving-unit-primary-resolution.json
+      SURVIVING_DIGEST: sha256:65ce412c1bee4abdb0e47851f13afa9c8cfa2abd33190c8ac401da29c5c5c8f9
+
+      FINAL13_RELEASE: research-phase1-b3-final-residual13-resolution-v1
+      FINAL13_ASSET: b3-final-residual13-resolution.json
+      FINAL13_DIGEST: sha256:6ac4dc4adee77e32747ad4e536fec3036c99c23bb664f3ccf5be2b4ab5b4981e
+
+      RESULT_RELEASE: research-phase1-b3-final-continuity-contract-v1
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync frozen environment
+        run: uv sync --all-groups --frozen
+
+      - name: Lint final contract implementation
+        run: >-
+          uv run ruff check
+          scripts/research_phase1_b3_final_continuity_contract.py
+          tests/test_research_phase1_b3_final_continuity_contract.py
+
+      - name: Test final contract semantics
+        run: >-
+          uv run pytest -q
+          tests/test_research_phase1_b3_final_continuity_contract.py
+
+      - name: Download pinned continuity sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/input work/output
+
+          download_and_check() {
+            local release="$1"
+            local asset="$2"
+            local digest="$3"
+            gh release download "$release" --repo "$GITHUB_REPOSITORY" --pattern "$asset" --dir work/input
+            test "sha256:$(sha256sum "work/input/$asset" | cut -d' ' -f1)" = "$digest"
+          }
+
+          download_and_check "$MULTI_RELEASE" "$MULTI_ASSET" "$MULTI_DIGEST"
+          download_and_check "$PROVIDER_RELEASE" "$PROVIDER_ASSET" "$PROVIDER_DIGEST"
+          download_and_check "$SPAC1_RELEASE" "$SPAC1_ASSET" "$SPAC1_DIGEST"
+          download_and_check "$ONE_RELEASE" "$ONE_ASSET" "$ONE_DIGEST"
+          download_and_check "$SPAC2_RELEASE" "$SPAC2_ASSET" "$SPAC2_DIGEST"
+          download_and_check "$REORG_RELEASE" "$REORG_ASSET" "$REORG_DIGEST"
+          download_and_check "$COMMON_RELEASE" "$COMMON_ASSET" "$COMMON_DIGEST"
+          download_and_check "$SURVIVING_RELEASE" "$SURVIVING_ASSET" "$SURVIVING_DIGEST"
+          download_and_check "$FINAL13_RELEASE" "$FINAL13_ASSET" "$FINAL13_DIGEST"
+
+      - name: Build exact 264-row final contract
+        run: >-
+          uv run python scripts/research_phase1_b3_final_continuity_contract.py
+          --multisource "work/input/$MULTI_ASSET"
+          --later "work/input/$PROVIDER_ASSET"
+          --later "work/input/$SPAC1_ASSET"
+          --later "work/input/$ONE_ASSET"
+          --later "work/input/$SPAC2_ASSET"
+          --later "work/input/$REORG_ASSET"
+          --later "work/input/$COMMON_ASSET"
+          --later "work/input/$SURVIVING_ASSET"
+          --later "work/input/$FINAL13_ASSET"
+          --output work/output/b3-final-continuity-contract.json
+
+      - name: Assert final continuity boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          p=json.loads(Path("work/output/b3-final-continuity-contract.json").read_text())
+          assert p["status"] == "B3_FINAL_CONTINUITY_CONTRACT_COMPLETE"
+          assert p["sourceUnresolvedRows"] == 264
+          assert p["classifiedRows"] == 264
+          assert p["unresolvedRows"] == 0
+          assert len(p["resolutionRows"]) == 264
+          assert p["classifiedKeySha256"] == p["frozenScopeKeySha256"]
+          assert len(p["sourceProvenance"]) == 9
+          assert sum(x["rows"] for x in p["sourceProvenance"]) == 264
+          assert p["finalResolutionContractCreated"] is True
+          assert p["correctedPerformanceOpened"] is False
+          assert p["performanceRead"] is False
+          assert p["priceFieldsRead"] == []
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          basket=[
+              r for r in p["resolutionRows"]
+              if r["resolutionDecision"] == "TRANSFORMED_MULTI_COMPONENT_CONSIDERATION"
+          ]
+          assert len(basket) == 1
+          assert {x["symbol"] for x in basket[0]["basket"]} == {"MIMO", "MIMO WS"}
+          print(json.dumps({
+              "classifiedRows": p["classifiedRows"],
+              "unresolvedRows": p["unresolvedRows"],
+              "classifiedKeySha256": p["classifiedKeySha256"],
+              "resolutionDecisionCounts": p["resolutionDecisionCounts"],
+          }, indent=2, sort_keys=True))
+          PY
+
+      - name: Publish immutable final continuity contract
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" --title "Phase-1 B3 final continuity contract v1" --notes "Exact 264/264 performance-blind continuity contract. Corrected performance and 2023+ OOS remain closed." --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE" work/output/b3-final-continuity-contract.json --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3-final-continuity-contract-${{ github.run_id }}
+          path: work/output/b3-final-continuity-contract.json
+          retention-days: 90
