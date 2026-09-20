@@ -1,0 +1,141 @@
+name: Resolve B3 multi-class reorganization rows
+
+on:
+  push:
+    branches:
+      - research/b3-ps-pit-history
+    paths:
+      - "research/b3-multiclass-reorg-primary-evidence-v1.json"
+      - "scripts/research_phase1_b3_multiclass_reorg_primary_resolution.py"
+      - "tests/test_research_phase1_b3_multiclass_reorg_primary_resolution.py"
+      - "docs/research-phase1-b3-multiclass-reorg-primary-resolution-gate.md"
+      - ".github/workflows/research-phase1-b3-multiclass-reorg-primary-resolution.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  resolve:
+    runs-on: ubuntu-24.04
+    env:
+      SCOPE_RELEASE: research-phase1-b3-residual55-scope-v1
+      SCOPE_ASSET: b3-residual55-scope.json
+      SCOPE_ASSET_DIGEST: sha256:6d767895389c63b2397cf39121b05370408070c31b37877416945da5c96e88b6
+      RESOLUTION_KEY_DIGEST: sha256:d9103eb5d9b5e04e18f955f4f6361ba39932ad285dff823a1046f72b613c2e91
+      RESULT_RELEASE: research-phase1-b3-multiclass-reorg-primary-resolution-v1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync frozen environment
+        run: uv sync --all-groups --frozen
+
+      - name: Lint resolver
+        run: >-
+          uv run ruff check
+          scripts/research_phase1_b3_multiclass_reorg_primary_resolution.py
+          tests/test_research_phase1_b3_multiclass_reorg_primary_resolution.py
+
+      - name: Test semantics
+        run: >-
+          uv run pytest -q
+          tests/test_research_phase1_b3_multiclass_reorg_primary_resolution.py
+
+      - name: Download frozen residual-55 scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/scope work/output
+          gh release download "$SCOPE_RELEASE" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$SCOPE_ASSET" --dir work/scope
+          digest="sha256:$(sha256sum "work/scope/$SCOPE_ASSET" | cut -d' ' -f1)"
+          test "$digest" = "$SCOPE_ASSET_DIGEST"
+
+      - name: Resolve exact multi-class subset
+        run: >-
+          uv run python
+          scripts/research_phase1_b3_multiclass_reorg_primary_resolution.py
+          --scope "work/scope/$SCOPE_ASSET"
+          --evidence research/b3-multiclass-reorg-primary-evidence-v1.json
+          --output work/output/b3-multiclass-reorg-primary-resolution.json
+
+      - name: Assert frozen result
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          p = json.loads(
+              Path("work/output/b3-multiclass-reorg-primary-resolution.json")
+              .read_text()
+          )
+          assert p["status"] == "B3_MULTICLASS_REORG_PRIMARY_RESOLUTION_COMPLETE"
+          assert p["sourceResidualRows"] == 55
+          assert p["resolvedRows"] == 12
+          assert p["remainingResidualRowsBeforeOtherRules"] == 43
+          assert p["resolutionKeySha256"] == os.environ["RESOLUTION_KEY_DIGEST"]
+          assert p["resolutionDecisionCounts"] == {
+              "DISCONTINUOUS_NO_COMPLETE_VALUATION": 1,
+              "SAME_SECURITY_CONTINUITY": 9,
+              "SYMBOL_CHANGED_SAME_SECURITY": 2,
+          }
+          assert p["resultStateCounts"] == {
+              "DISCONTINUOUS_NO_COMPLETE_VALUATION": 1,
+              "PRICE_CONTINUOUS_ADJUSTED": 9,
+              "SYMBOL_CHANGED_SAME_SECURITY": 2,
+          }
+          fmciu = [r for r in p["resolutionRows"] if r["ticker"] == "FMCIU"]
+          assert len(fmciu) == 1
+          assert fmciu[0]["resultState"] == (
+              "DISCONTINUOUS_NO_COMPLETE_VALUATION"
+          )
+          eagl = [r for r in p["resolutionRows"] if r["ticker"] == "EAGL"]
+          assert len(eagl) == 2
+          assert all(r["successorSymbol"] == "WSC" for r in eagl)
+          assert p["performanceRead"] is False
+          assert p["priceFieldsRead"] == []
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          assert p["correctedPerformanceOpened"] is False
+          print(json.dumps({
+              "resolvedRows": p["resolvedRows"],
+              "remaining": p["remainingResidualRowsBeforeOtherRules"],
+              "digest": p["resolutionKeySha256"],
+              "decisions": p["resolutionDecisionCounts"],
+          }, indent=2, sort_keys=True))
+          PY
+
+      - name: Publish immutable release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" \
+              --title "Phase-1 B3 multi-class reorganization resolution v1" \
+              --notes "Performance-blind primary-evidence resolution of the frozen GGO/TAGS/EAGL/FMCIU subset. Corrected performance and 2023+ OOS remain closed." \
+              --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE" \
+            work/output/b3-multiclass-reorg-primary-resolution.json \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3-multiclass-reorg-primary-resolution-${{ github.run_id }}
+          path: work/output/b3-multiclass-reorg-primary-resolution.json
+          retention-days: 90
