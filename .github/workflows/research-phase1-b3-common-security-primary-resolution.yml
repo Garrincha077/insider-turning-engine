@@ -1,0 +1,134 @@
+name: Resolve B3 ordinary common-security continuity
+
+on:
+  push:
+    branches:
+      - research/b3-ps-pit-history
+    paths:
+      - "research/b3-common-security-primary-evidence-v1.json"
+      - "scripts/research_phase1_b3_common_security_primary_resolution.py"
+      - "tests/test_research_phase1_b3_common_security_primary_resolution.py"
+      - "docs/research-phase1-b3-common-security-continuity-gate.md"
+      - ".github/workflows/research-phase1-b3-common-security-primary-resolution.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  resolve:
+    runs-on: ubuntu-24.04
+    env:
+      SCOPE_RELEASE: research-phase1-b3-residual43-scope-v1
+      SCOPE_ASSET: b3-residual43-scope.json
+      SCOPE_ASSET_DIGEST: sha256:eeb929e959cfe606764d251ad9f9a262c80336e79f395a6c701b84fdbed4cbe3
+      RESOLUTION_KEY_DIGEST: sha256:a99206160529fc915c30b9859307e1cd603f7f4fab5d24278519af18919bc430
+      RESULT_RELEASE: research-phase1-b3-common-security-primary-resolution-v1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync frozen environment
+        run: uv sync --all-groups --frozen
+
+      - name: Lint ordinary-common resolver
+        run: >-
+          uv run ruff check
+          scripts/research_phase1_b3_common_security_primary_resolution.py
+          tests/test_research_phase1_b3_common_security_primary_resolution.py
+
+      - name: Test ordinary-common resolution semantics
+        run: >-
+          uv run pytest -q
+          tests/test_research_phase1_b3_common_security_primary_resolution.py
+
+      - name: Download exact frozen residual-43 scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/scope work/output
+          gh release download "$SCOPE_RELEASE" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$SCOPE_ASSET" --dir work/scope
+          digest="sha256:$(sha256sum "work/scope/$SCOPE_ASSET" | cut -d' ' -f1)"
+          test "$digest" = "$SCOPE_ASSET_DIGEST"
+
+      - name: Resolve exact ordinary-common rows
+        run: >-
+          uv run python scripts/research_phase1_b3_common_security_primary_resolution.py
+          --scope "work/scope/$SCOPE_ASSET"
+          --evidence research/b3-common-security-primary-evidence-v1.json
+          --output work/output/b3-common-security-primary-resolution.json
+
+      - name: Assert frozen ordinary-common resolution
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          p = json.loads(
+              Path("work/output/b3-common-security-primary-resolution.json").read_text()
+          )
+          assert p["status"] == "B3_COMMON_SECURITY_PRIMARY_RESOLUTION_COMPLETE"
+          assert p["sourceResidualRows"] == 43
+          assert p["resolvedRows"] == 19
+          assert p["remainingResidualRowsBeforeOtherRules"] == 24
+          assert p["resolutionKeySha256"] == os.environ["RESOLUTION_KEY_DIGEST"]
+          assert all(
+              r["resolutionDecision"] == "SAME_SECURITY_CONTINUITY"
+              for r in p["resolutionRows"]
+          )
+          assert all(
+              r["resultState"] == "PRICE_CONTINUOUS_ADJUSTED"
+              for r in p["resolutionRows"]
+          )
+          assert all(
+              r["successorSymbol"] == r["ticker"] for r in p["resolutionRows"]
+          )
+          assert p["performanceRead"] is False
+          assert p["priceFieldsRead"] == []
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          assert p["finalResolutionContractCreated"] is False
+          assert p["correctedPerformanceOpened"] is False
+          print(json.dumps({
+              "resolvedRows": p["resolvedRows"],
+              "remainingResidualRowsBeforeOtherRules":
+                  p["remainingResidualRowsBeforeOtherRules"],
+              "resolutionKeySha256": p["resolutionKeySha256"],
+          }, indent=2, sort_keys=True))
+          PY
+
+      - name: Publish immutable ordinary-common resolution release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" \
+              --title "Phase-1 B3 ordinary common-security resolution v1" \
+              --notes "Performance-blind primary SEC resolution of 19 frozen ordinary common-security continuity rows. Corrected performance and 2023+ OOS remain closed." \
+              --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE" \
+            work/output/b3-common-security-primary-resolution.json \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3-common-security-primary-resolution-${{ github.run_id }}
+          path: work/output/b3-common-security-primary-resolution.json
+          retention-days: 90
