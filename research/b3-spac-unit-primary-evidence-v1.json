@@ -1,0 +1,87 @@
+{
+  "schemaVersion": "1.0.0",
+  "contractId": "phase1-b3-spac-unit-primary-evidence-v1",
+  "frozenAt": "2026-09-20",
+  "researchOnly": true,
+  "performanceRead": false,
+  "priceFieldsRead": [],
+  "oosOpened": false,
+  "productionScoringChanged": false,
+  "scopeRelease": "research-phase1-b3-residual87-scope-v1",
+  "scopeResidualKeySha256": "sha256:c28829aa56204db04633546d91b06b938d06f897cd022d2c8147f488415d2742",
+  "expectedResolutionRows": 4,
+  "expectedResolutionKeySha256": "sha256:2d93f63e9002ef10c913315a7a30bde9377bebf95a7e0442ade39b496e12beba",
+  "identities": [
+    {
+      "issuerCik": "0001705771",
+      "unitSymbol": "DOTAU",
+      "componentCommonSymbol": "DOTA",
+      "componentRightSymbol": "DOTAR",
+      "componentWarrantSymbol": "DOTAW",
+      "unitSecurityKind": "SPAC_UNIT",
+      "unitComposition": "one Class A common share + one-half warrant + one right",
+      "separationAccession": "0001213900-17-010446",
+      "separationEventDate": "2017-10-10",
+      "separationEffectiveDate": "2017-10-12",
+      "separationSecUrl": "https://www.sec.gov/Archives/edgar/data/1705771/000121390017010446/f8k101017_draperoakwood.htm",
+      "postGapEvidence": [
+        {
+          "accession": "0001213900-18-012101",
+          "evidenceDate": "2018-09-04",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1705771/000121390018012101/f8k090418ex99-1_draper.htm",
+          "fact": "DOTAU and DOTA are concurrently identified as NASDAQ-listed securities before the 2018-09-24 maximum scoped target exit."
+        },
+        {
+          "accession": "0001213900-18-013065",
+          "evidenceDate": "2018-09-26",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1705771/000121390018013065/f8k092618_draperoakwood.htm",
+          "fact": "DOTAU remains concurrently identified with DOTA, DOTAR and DOTAW immediately after the maximum scoped target exit."
+        }
+      ],
+      "businessCombinationEffectiveDate": "2018-12-19",
+      "scopedTargetExitMax": "2018-09-24",
+      "primaryConclusion": "ORIGINAL_UNIT_REMAINED_LISTED_UNDER_SAME_SYMBOL",
+      "resolutionDecision": "SAME_SECURITY_CONTINUITY",
+      "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+      "successorSymbol": "DOTAU",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0
+    },
+    {
+      "issuerCik": "0001735041",
+      "unitSymbol": "GLACU",
+      "componentCommonSymbol": "GLAC",
+      "componentRightSymbol": "GLACR",
+      "componentWarrantSymbol": "GLACW",
+      "unitSecurityKind": "SPAC_UNIT",
+      "unitComposition": "one ordinary share + one right + one warrant",
+      "separationAccession": "0001615774-18-007661",
+      "separationEventDate": "2018-08-06",
+      "separationEffectiveDate": "2018-08-08",
+      "separationSecUrl": "https://www.sec.gov/Archives/edgar/data/1735041/000161577418007661/s111926_8k.htm",
+      "postGapEvidence": [
+        {
+          "accession": "0001213900-19-012745",
+          "evidenceDate": "2019-07-09",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1735041/000121390019012745/f10q0519_greenlandacqu.htm",
+          "fact": "SEC Form 10-Q concurrently lists GLACU units and GLAC ordinary shares before the 2019-08-02 maximum scoped target exit."
+        },
+        {
+          "accession": "0001213900-19-017866",
+          "evidenceDate": "2019-09-03",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1735041/000121390019017866/f8k090319_greenlandacqui.htm",
+          "fact": "SEC Form 8-K continues to list GLACU units after the maximum scoped target exit."
+        }
+      ],
+      "scopedTargetExitMax": "2019-08-02",
+      "primaryConclusion": "ORIGINAL_UNIT_REMAINED_LISTED_UNDER_SAME_SYMBOL",
+      "resolutionDecision": "SAME_SECURITY_CONTINUITY",
+      "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+      "successorSymbol": "GLACU",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0
+    }
+  ],
+  "finalResolutionContractCreated": false,
+  "correctedPerformanceOpened": false
+}
