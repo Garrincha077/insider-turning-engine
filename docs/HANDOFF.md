@@ -11,7 +11,7 @@ This is the operational continuation point for a new ChatGPT/Codex session. Read
 3. Treat the exact-calendar P0 market audit as the authoritative market-data gate. Current tier: **C_EXPLORATORY**.
 4. Treat Phase-1 B0, B1, B2 and B4 development outputs as completed descriptive/research benchmarks, not production evidence.
 5. Treat the B3 P/S history, B3 amendment reconciliation, and B3 definition freeze as completed data/methodology gates.
-6. Current active task: finish the performance-blind B3 security-continuity resolution for the frozen 63-row residual scope. Provider ambiguities, SPAC-unit reporting-symbol drift, and the 20-row one-sided identity bucket are resolved; corrected B3 performance stays closed until the final unresolved count is zero.
+6. Current active task: finish the performance-blind B3 security-continuity resolution for the frozen 43-row residual scope. Provider ambiguity, two SPAC-unit waves, one-sided identity, and the first multi-class/reorganization subset are resolved; corrected B3 performance stays closed until the final unresolved count is zero.
 7. Keep sealed OOS **2023+ unopened**.
 8. Do **not** change production scoring, weights, thresholds, signal states, alerts, or production methodology unless the owner explicitly asks.
 
@@ -277,17 +277,20 @@ Authoritative continuity state:
 - SPAC-unit resolution run 35507997799: **4 rows resolved**;
 - one-sided identity resolution run 35508257853: **20 rows resolved**;
 - residual-63 scope freeze run 35508340176: **63 rows / 27 issuer-tickers**;
-- deterministic continuity candidates/resolutions: **201 / 264**;
-- residual-63 key SHA-256:
-  `sha256:ed13976872da6522da2973a450a1f1c39e22cc19e2ffcc8367b9cc1a1b016b50`;
-- release: `research-phase1-b3-residual63-scope-v1`;
+- second SPAC-unit resolution run 35508586692: **8 rows resolved**;
+- multi-class/reorganization resolution run 35508859857: **12 rows resolved**;
+- residual-43 scope freeze run 35508922204: **43 rows / 19 issuer-tickers**;
+- deterministic continuity candidates/resolutions: **221 / 264**;
+- residual-43 key SHA-256:
+  `sha256:be82164c63ed8c8528017ff3201d5172e818655e5c7a8fa48bd7576c7cb02cd6`;
+- release: `research-phase1-b3-residual43-scope-v1`;
 - final resolution contract: not created;
 - corrected performance: not opened;
 - 2023+ OOS: sealed;
 - production scoring: unchanged.
 
 Current work must remain performance-blind and resolve/classify the exact
-63-row residual scope before a final overlay can be frozen.
+43-row residual scope before a final overlay can be frozen.
 
 ---
 
@@ -429,7 +432,7 @@ The current frozen/research benchmark family is:
 | **B0** | any qualified open-market purchase | development descriptive run complete |
 | **B1** | canonical CMP-style opportunistic purchase | development run + continuity-corrected robustness/tail/year/temporal-clustering work complete; formal OOS still blocked |
 | **B2** | independent-owner cluster, primary 30 days and >=2 owner CIKs | development run complete |
-| **B3** | company net buying using complete PIT buy/sale history | development + robustness complete; continuity resolution active at 63 frozen residual rows; HAC/OOS blocked |
+| **B3** | company net buying using complete PIT buy/sale history | development + robustness complete; continuity resolution active at 43 frozen residual rows; HAC/OOS blocked |
 | **B4** | exact same-issuer + same-XNYS-session intersection of B1 and B2 | development run complete |
 
 Primary horizons remain 21/63/126/252 XNYS sessions, with 126 primary.
@@ -463,11 +466,11 @@ Do not open OOS until transaction eligibility, transforms, benchmark family, fea
 
 ## NEXT EXECUTION SEQUENCE
 
-1. Preserve the exact **63-row B3 residual continuity scope**.
-2. Resolve ticker-change/title-change identities using pinned primary
-   SEC/issuer/exchange/corporate-action evidence only.
-3. Continue through overlapping/changed-title and remaining one-sided residual
-   buckets without reading realized performance.
+1. Preserve the exact **43-row B3 residual continuity scope**.
+2. Split remaining cases into target-specific SPAC/unit life-cycle cases and
+   ordinary-share title-normalization/market-gap cases.
+3. Resolve each identity from pinned primary SEC/issuer/exchange evidence only,
+   without reading realized performance.
 4. Do not create the final B3 continuity contract until every frozen residual
    row is deterministically classified and the unresolved count is zero.
 5. Only after that zero-unresolved gate, recompute corrected B3 development
