@@ -1,4 +1,5 @@
 name: Resolve B3 surviving-unit continuity
+# checkpoint: formatting-repaired
 
 on:
   push:
