@@ -32,8 +32,8 @@ class DigestPolicy(BaseModel):
     schemaVersion: Literal["1.0.0"]
     enabled: bool
     channel: Literal["telegram"]
-    minimumPurchaseUsd: Literal[250000]
-    maximumItems: Literal[5]
+    minimumPurchaseUsd: int = Field(ge=10_000, le=10_000_000)
+    maximumItems: int = Field(ge=1, le=10)
 
 
 class DigestDraft(BaseModel):
@@ -55,13 +55,19 @@ def load_digest_policy(path: Path = Path("config/digest.v1.json")) -> DigestPoli
     return DigestPolicy.model_validate_json(path.read_bytes())
 
 
-def preview_digest(snapshot: ResearchSnapshot) -> DigestDraft:
+def preview_digest(
+    snapshot: ResearchSnapshot, policy: DigestPolicy | None = None,
+) -> DigestDraft:
     """Use only the newest inventoried SEC day, never an older complete fallback.
 
     Preview does not inspect credentials, mutate state or contact any provider.
     Missing market data/score and incomplete earlier backfill do not suppress facts.
     """
     snapshot = ResearchSnapshot.model_validate(snapshot.model_dump())
+    policy = policy or DigestPolicy(
+        schemaVersion="1.0.0", enabled=True, channel="telegram",
+        minimumPurchaseUsd=250_000, maximumItems=5,
+    )
     coverage = snapshot.coverage
     day = max(coverage.expected_sec_days, default=None)
     proof = [item for item in coverage.days if item.day == day]
@@ -86,11 +92,13 @@ def preview_digest(snapshot: ResearchSnapshot) -> DigestDraft:
                 and row.table == "NON_DERIVATIVE" and row.code == "P" and row.side == "BUY"
                 and row.shares is not None and row.shares > 0
                 and row.price is not None and row.price > 0
-                and row.value is not None and row.value >= 250000
+                and row.value is not None and row.value >= policy.minimumPurchaseUsd
                 and company.identity_status == "RESOLVED" and company.insider_status == "AVAILABLE")
 
     selected = sorted((row for row in latest if eligible(row)),
-                      key=lambda row: (-(row.value or 0), row.event_id))[:5]
+                      key=lambda row: (-(row.value or 0), row.event_id))[
+                          :policy.maximumItems
+                      ]
     # An unknown purchase value cannot support a negative factual assertion.
     unknown = any(row.table == "NON_DERIVATIVE" and row.code == "P"
                   and row.value is None for row in latest)
@@ -98,8 +106,10 @@ def preview_digest(snapshot: ResearchSnapshot) -> DigestDraft:
         return DigestDraft(run_id=snapshot.run_id, sec_day=day, excluded_issuers=len(excluded),
                            reasons=("EMPTY_DIGEST_HAS_UNRESOLVED_INPUTS",))
     parts = [f"<b>Insider Turning Engine — daily facts</b>\nSEC day: {day}",
-             "Observed eligible US common-stock purchases ≥ $250,000; largest five. "
+             f"Observed eligible US common-stock purchases ≥ "
+             f"${policy.minimumPurchaseUsd:,.0f}; largest {policy.maximumItems}. "
              "Not a market-wide census. No score criteria or trading recommendations."]
+    displayed: list[EconomicEvent] = []
     for row in selected:
         company = companies[row.issuer_cik]
         # Truncate individual labels, never an assembled HTML document/link.
@@ -107,21 +117,23 @@ def preview_digest(snapshot: ResearchSnapshot) -> DigestDraft:
         names = html.escape(" / ".join(owners[link.owner_cik]
                                       for link in sorted(row.owners,
                                                          key=lambda link: link.owner_cik))[:180])
-        parts.append(f"<b>{label} — ${row.value:,.0f}</b>\n{names}\n"
-                     f"Transaction: {row.transaction_date}\n"
-                     f'<a href="{html.escape(row.source_url, quote=True)}">SEC filing</a> · '
-                     f'<a href="{SITE}#view=company-lab&amp;issuer={row.issuer_cik}">'
-                     'Company Lab</a>')
+        item = (f"<b>{label} — ${row.value:,.0f}</b>\n{names}\n"
+                f"Transaction: {row.transaction_date}\n"
+                f'<a href="{html.escape(row.source_url, quote=True)}">SEC filing</a> · '
+                f'<a href="{SITE}#view=company-lab&amp;issuer={row.issuer_cik}">'
+                'Company Lab</a>')
+        candidate = "\n\n".join([*parts, item])
+        if len(candidate.encode("utf-16-le")) // 2 > 4096:
+            break
+        parts.append(item)
+        displayed.append(row)
     if not selected:
         parts.append("No new qualifying purchases in the resolved eligible universe.")
     if excluded:
         parts.append(f"{len(excluded)} unresolved issuer(s) excluded; see Data Coverage.")
     text = "\n\n".join(parts)
-    if len(text.encode("utf-16-le")) // 2 > 4096:
-        return DigestDraft(run_id=snapshot.run_id, sec_day=day,
-                           reasons=("DIGEST_MESSAGE_TOO_LONG",))
     return DigestDraft(run_id=snapshot.run_id, sec_day=day, text=text,
-                       event_ids=tuple(row.event_id for row in selected),
+                       event_ids=tuple(row.event_id for row in displayed),
                        excluded_issuers=len(excluded))
 
 
@@ -228,7 +240,7 @@ def public_digest_status(
     production: bool, configured: bool, outbox: Path,
 ) -> dict[str, object]:
     """Operational projection shares the exact backend selection and gates."""
-    draft = preview_digest(snapshot)
+    draft = preview_digest(snapshot, policy)
     reasons = delivery_reasons(draft, snapshot, policy, now=now,
                                production=production, configured=configured)
     history = digest_history(outbox)
