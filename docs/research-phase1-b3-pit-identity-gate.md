@@ -14,7 +14,7 @@ Pre-outcome event construction:
 - release: `research-phase1-b3-event-construction-v1`;
 - retained events: **35,829**;
 - source asset SHA-256:
-  `268ccb66c571513ca5b93f308035b45e1e641d17e5387a6e8a29725c4418b0c0`.
+  `839326d9ce1d3000a476b1d483a71a6501921c58d8012ba4daba4a09cd3d2610`.
 
 Authoritative P/S reconciliation:
 
