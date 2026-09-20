@@ -5,9 +5,10 @@ import json
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+
 import research_market_event_audit_v2 as p0
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 mod = importlib.import_module("research_phase1_b3_event_construction")
 
 
