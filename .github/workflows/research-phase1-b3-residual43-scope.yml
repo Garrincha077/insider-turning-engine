@@ -1,0 +1,121 @@
+name: Freeze B3 residual-43 continuity scope
+
+on:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - "scripts/research_phase1_b3_residual43_scope.py"
+      - "tests/test_research_phase1_b3_residual43_scope.py"
+      - "docs/research-phase1-b3-residual43-scope-gate.md"
+      - ".github/workflows/research-phase1-b3-residual43-scope.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  freeze:
+    runs-on: ubuntu-24.04
+    env:
+      SCOPE_RELEASE: research-phase1-b3-residual55-scope-v1
+      SCOPE_ASSET: b3-residual55-scope.json
+      SCOPE_ASSET_DIGEST: sha256:6d767895389c63b2397cf39121b05370408070c31b37877416945da5c96e88b6
+      RESOLUTION_RELEASE: research-phase1-b3-multiclass-reorg-primary-resolution-v1
+      RESOLUTION_ASSET: b3-multiclass-reorg-primary-resolution.json
+      RESOLUTION_ASSET_DIGEST: sha256:a844ea830b9503a045b55a490c30b9e3cd77456974b741a696f16617caf75969
+      RESIDUAL_KEY_DIGEST: sha256:be82164c63ed8c8528017ff3201d5172e818655e5c7a8fa48bd7576c7cb02cd6
+      RESULT_RELEASE: research-phase1-b3-residual43-scope-v1
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync frozen environment
+        run: uv sync --all-groups --frozen
+
+      - name: Lint
+        run: >-
+          uv run ruff check
+          scripts/research_phase1_b3_residual43_scope.py
+          tests/test_research_phase1_b3_residual43_scope.py
+
+      - name: Test
+        run: uv run pytest -q tests/test_research_phase1_b3_residual43_scope.py
+
+      - name: Download pinned sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/scope work/resolution work/output
+          gh release download "$SCOPE_RELEASE" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$SCOPE_ASSET" --dir work/scope
+          gh release download "$RESOLUTION_RELEASE" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$RESOLUTION_ASSET" --dir work/resolution
+          d1="sha256:$(sha256sum "work/scope/$SCOPE_ASSET" | cut -d' ' -f1)"
+          d2="sha256:$(sha256sum "work/resolution/$RESOLUTION_ASSET" | cut -d' ' -f1)"
+          test "$d1" = "$SCOPE_ASSET_DIGEST"
+          test "$d2" = "$RESOLUTION_ASSET_DIGEST"
+
+      - name: Freeze residual-43
+        run: >-
+          uv run python scripts/research_phase1_b3_residual43_scope.py
+          --scope "work/scope/$SCOPE_ASSET"
+          --resolution "work/resolution/$RESOLUTION_ASSET"
+          --output work/output/b3-residual43-scope.json
+
+      - name: Assert boundary
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          p = json.loads(Path("work/output/b3-residual43-scope.json").read_text())
+          assert p["status"] == "B3_RESIDUAL43_SCOPE_FROZEN"
+          assert p["sourceRows"] == 55
+          assert p["subtractedResolutionRows"] == 12
+          assert p["residualRows"] == 43
+          assert p["uniqueIssuerTickerPairs"] == 19
+          assert p["residualKeySha256"] == os.environ["RESIDUAL_KEY_DIGEST"]
+          assert p["performanceRead"] is False
+          assert p["priceFieldsRead"] == []
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          assert p["correctedPerformanceOpened"] is False
+          print(json.dumps({
+              "rows": p["residualRows"],
+              "pairs": p["uniqueIssuerTickerPairs"],
+              "digest": p["residualKeySha256"],
+              "buckets": p["evidenceBucketCounts"],
+          }, indent=2, sort_keys=True))
+          PY
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" \
+              --title "Phase-1 B3 residual-43 continuity scope v1" \
+              --notes "Exact performance-blind residual scope after the 12-row multi-class/reorganization resolution." \
+              --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE" \
+            work/output/b3-residual43-scope.json \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3-residual43-scope-${{ github.run_id }}
+          path: work/output/b3-residual43-scope.json
+          retention-days: 90
