@@ -2,7 +2,8 @@ name: Resolve B3 final residual-13 continuity
 
 on:
   push:
-    branches: [research/b3-ps-pit-history]
+    branches:
+      - research/b3-ps-pit-history
     paths:
       - "research/b3-final-residual13-primary-evidence-v1.json"
       - "scripts/research_phase1_b3_final_residual13_resolution.py"
@@ -32,12 +33,18 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-      - run: uv sync --all-groups --frozen
-      - name: Lint
-        run: uv run ruff check scripts/research_phase1_b3_final_residual13_resolution.py tests/test_research_phase1_b3_final_residual13_resolution.py
-      - name: Test
-        run: uv run pytest -q tests/test_research_phase1_b3_final_residual13_resolution.py
-      - name: Download frozen scope
+      - name: Sync frozen environment
+        run: uv sync --all-groups --frozen
+      - name: Lint final residual resolver
+        run: >-
+          uv run ruff check
+          scripts/research_phase1_b3_final_residual13_resolution.py
+          tests/test_research_phase1_b3_final_residual13_resolution.py
+      - name: Test final residual semantics
+        run: >-
+          uv run pytest -q
+          tests/test_research_phase1_b3_final_residual13_resolution.py
+      - name: Download frozen residual-13 scope
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -45,10 +52,15 @@ jobs:
           set -euo pipefail
           mkdir -p work/scope work/output
           gh release download "$SCOPE_RELEASE" --repo "$GITHUB_REPOSITORY" --pattern "$SCOPE_ASSET" --dir work/scope
-          test "sha256:$(sha256sum "work/scope/$SCOPE_ASSET" | cut -d' ' -f1)" = "$SCOPE_ASSET_DIGEST"
-      - name: Resolve final 13
-        run: uv run python scripts/research_phase1_b3_final_residual13_resolution.py --scope "work/scope/$SCOPE_ASSET" --evidence research/b3-final-residual13-primary-evidence-v1.json --output work/output/b3-final-residual13-resolution.json
-      - name: Assert zero unresolved
+          digest="sha256:$(sha256sum "work/scope/$SCOPE_ASSET" | cut -d' ' -f1)"
+          test "$digest" = "$SCOPE_ASSET_DIGEST"
+      - name: Resolve exact final residual-13 scope
+        run: >-
+          uv run python scripts/research_phase1_b3_final_residual13_resolution.py
+          --scope "work/scope/$SCOPE_ASSET"
+          --evidence research/b3-final-residual13-primary-evidence-v1.json
+          --output work/output/b3-final-residual13-resolution.json
+      - name: Assert zero continuity unresolved
         shell: bash
         run: |
           set -euo pipefail
@@ -56,25 +68,33 @@ jobs:
           import json, os
           from pathlib import Path
           p=json.loads(Path("work/output/b3-final-residual13-resolution.json").read_text())
-          assert p["status"]=="B3_FINAL_RESIDUAL13_PRIMARY_RESOLUTION_COMPLETE"
-          assert p["resolvedRows"]==13
-          assert p["unresolvedRowsAfterThisGate"]==0
-          assert p["resolutionKeySha256"]==os.environ["KEY_DIGEST"]
-          assert p["resolutionDecisionCounts"]=={
-            "SAME_SECURITY_CONTINUITY":8,
-            "SYMBOL_CHANGED_SAME_SECURITY":1,
-            "TRANSFORMED_HOLDER_CONSIDERATION":3,
-            "TRANSFORMED_MULTI_COMPONENT_CONSIDERATION":1,
+          assert p["status"] == "B3_FINAL_RESIDUAL13_PRIMARY_RESOLUTION_COMPLETE"
+          assert p["sourceResidualRows"] == 13
+          assert p["resolvedRows"] == 13
+          assert p["unresolvedRowsAfterThisGate"] == 0
+          assert p["resolutionKeySha256"] == os.environ["KEY_DIGEST"]
+          assert p["resolutionDecisionCounts"] == {
+              "SAME_SECURITY_CONTINUITY": 8,
+              "SYMBOL_CHANGED_SAME_SECURITY": 1,
+              "TRANSFORMED_HOLDER_CONSIDERATION": 3,
+              "TRANSFORMED_MULTI_COMPONENT_CONSIDERATION": 1,
           }
           assert p["performanceRead"] is False
-          assert p["priceFieldsRead"]==[]
+          assert p["priceFieldsRead"] == []
           assert p["oosOpened"] is False
           assert p["productionScoringChanged"] is False
           assert p["finalResolutionContractCreated"] is False
           assert p["correctedPerformanceOpened"] is False
+          print(json.dumps({
+              "resolvedRows": p["resolvedRows"],
+              "unresolvedRowsAfterThisGate": p["unresolvedRowsAfterThisGate"],
+              "resolutionDecisionCounts": p["resolutionDecisionCounts"],
+              "resolutionKeySha256": p["resolutionKeySha256"],
+          }, indent=2, sort_keys=True))
           PY
-      - name: Publish release
-        env: {GH_TOKEN: ${{ github.token }}}
+      - name: Publish immutable final residual release
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
