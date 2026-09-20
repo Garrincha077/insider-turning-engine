@@ -1,0 +1,136 @@
+name: Resolve B3 provider ambiguities from primary SEC evidence
+
+on:
+  push:
+    branches:
+      - research/b3-ps-pit-history
+    paths:
+      - "research/b3-provider-primary-resolution-evidence-v1.json"
+      - "scripts/research_phase1_b3_provider_primary_resolution.py"
+      - "tests/test_research_phase1_b3_provider_primary_resolution.py"
+      - "docs/research-phase1-b3-provider-primary-resolution-gate.md"
+      - ".github/workflows/research-phase1-b3-provider-primary-resolution.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  resolve:
+    runs-on: ubuntu-24.04
+    env:
+      SCOPE_RELEASE: research-phase1-b3-residual91-scope-v1
+      SCOPE_ASSET: b3-residual91-scope.json
+      SCOPE_ASSET_DIGEST: sha256:f6ac0a711148af6229e7461b64c3034d3272646fbb7490219947f16b14267891
+      SCOPE_KEY_DIGEST: sha256:46eeaa05a83960c1ef9537dd88972351b8c984c996ccddffa23f7da8d294ab58
+      RESULT_RELEASE: research-phase1-b3-provider-primary-resolution-v1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync frozen environment
+        run: uv sync --all-groups --frozen
+
+      - name: Lint provider resolver
+        run: >-
+          uv run ruff check
+          scripts/research_phase1_b3_provider_primary_resolution.py
+          tests/test_research_phase1_b3_provider_primary_resolution.py
+
+      - name: Test provider resolution semantics
+        run: >-
+          uv run pytest -q
+          tests/test_research_phase1_b3_provider_primary_resolution.py
+
+      - name: Download exact frozen residual-91 scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/scope work/output
+          gh release download "$SCOPE_RELEASE" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$SCOPE_ASSET" --dir work/scope
+          digest="sha256:$(sha256sum "work/scope/$SCOPE_ASSET" | cut -d' ' -f1)"
+          test "$digest" = "$SCOPE_ASSET_DIGEST"
+
+      - name: Resolve exact provider-ambiguity rows
+        run: >-
+          uv run python scripts/research_phase1_b3_provider_primary_resolution.py
+          --scope "work/scope/$SCOPE_ASSET"
+          --evidence research/b3-provider-primary-resolution-evidence-v1.json
+          --output work/output/b3-provider-primary-resolution.json
+
+      - name: Assert primary-source resolution boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          p = json.loads(Path("work/output/b3-provider-primary-resolution.json").read_text())
+          assert p["status"] == "B3_PROVIDER_PRIMARY_RESOLUTION_COMPLETE"
+          assert p["sourceResidualRows"] == 91
+          assert p["sourceProviderAmbiguityRows"] == 4
+          assert p["resolvedProviderRows"] == 4
+          assert p["remainingResidualRowsBeforeOtherRules"] == 87
+          assert len(p["resolutionRows"]) == 4
+          assert {r["ticker"] for r in p["resolutionRows"]} == {"CLNY", "CLNC"}
+          assert {r["successorSymbol"] for r in p["resolutionRows"]} == {"DBRG", "BRSP"}
+          assert all(r["resolutionDecision"] == "SYMBOL_CHANGED_SAME_SECURITY" for r in p["resolutionRows"])
+          assert all(r["successorSharesPerEntryShare"] == 1.0 for r in p["resolutionRows"])
+          assert all(r["cashPerEntryShare"] == 0.0 for r in p["resolutionRows"])
+          assert p["performanceRead"] is False
+          assert p["priceFieldsRead"] == []
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          assert p["finalResolutionContractCreated"] is False
+          assert p["correctedPerformanceOpened"] is False
+          print(json.dumps({
+              "resolvedProviderRows": p["resolvedProviderRows"],
+              "remainingResidualRowsBeforeOtherRules": p["remainingResidualRowsBeforeOtherRules"],
+              "resolutionKeySha256": p["resolutionKeySha256"],
+              "resolutions": [
+                  {
+                      "issuerCik": r["issuerCik"],
+                      "ticker": r["ticker"],
+                      "successorSymbol": r["successorSymbol"],
+                      "effectiveDate": r["effectiveDate"],
+                      "primarySecAccession": r["primarySecAccession"],
+                      "providerCusipConflict": r["providerCusipConflict"],
+                  }
+                  for r in p["resolutionRows"]
+              ],
+          }, indent=2, sort_keys=True))
+          PY
+
+      - name: Publish immutable primary-source resolution release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" \
+              --title "Phase-1 B3 provider primary-source resolution v1" \
+              --notes "Performance-blind primary SEC resolution of the four frozen provider-ambiguity rows. Corrected performance and 2023+ OOS remain closed." \
+              --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE" \
+            work/output/b3-provider-primary-resolution.json \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3-provider-primary-resolution-${{ github.run_id }}
+          path: work/output/b3-provider-primary-resolution.json
+          retention-days: 90
