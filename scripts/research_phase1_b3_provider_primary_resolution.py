@@ -110,7 +110,8 @@ def resolve(
             raise ValueError("provider residual is not a name-change case")
         if str(row["pivotDate"]) != str(fact["effectiveSymbolDate"]):
             raise ValueError("provider pivot differs from official symbol-change date")
-        if not str(row["entrySession"]) < str(fact["effectiveSymbolDate"]) <= str(row["targetExitSession"]):
+        effective = str(fact["effectiveSymbolDate"])
+        if not str(row["entrySession"]) < effective <= str(row["targetExitSession"]):
             raise ValueError("official symbol-change date outside event horizon")
 
         resolutions.append(
@@ -118,7 +119,7 @@ def resolve(
                 **base._key_object(row),
                 "evidenceClass": "PRIMARY_SEC_NAME_CHANGE",
                 "expectedSourceResolutionSource": "provider",
-                "effectiveDate": str(fact["effectiveSymbolDate"]),
+                "effectiveDate": effective,
                 "resolutionDecision": "SYMBOL_CHANGED_SAME_SECURITY",
                 "transformationKind": "SAME_SECURITY_SYMBOL_CHANGE",
                 "resultState": "SYMBOL_CHANGED_SAME_SECURITY",
