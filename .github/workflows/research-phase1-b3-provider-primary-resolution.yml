@@ -83,6 +83,9 @@ jobs:
           assert p["sourceProviderAmbiguityRows"] == 4
           assert p["resolvedProviderRows"] == 4
           assert p["remainingResidualRowsBeforeOtherRules"] == 87
+          assert p["resolutionKeySha256"] == (
+              "sha256:8db525671fcc4381ca8b5e906f132df28fe64f5d6c7d5000699b48730cfc5f2c"
+          )
           assert len(p["resolutionRows"]) == 4
           assert {r["ticker"] for r in p["resolutionRows"]} == {"CLNY", "CLNC"}
           assert {r["successorSymbol"] for r in p["resolutionRows"]} == {"DBRG", "BRSP"}
