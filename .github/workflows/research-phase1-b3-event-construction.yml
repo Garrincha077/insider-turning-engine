@@ -1,0 +1,120 @@
+name: Build Phase-1 B3 pre-outcome events
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-b3-event-construction.yml"
+      - "scripts/research_phase1_b3_event_construction.py"
+      - "tests/test_research_phase1_b3_event_construction.py"
+      - "research/b3-event-construction-v1.json"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-b3-event-construction-v1
+  cancel-in-progress: false
+
+env:
+  SIGNAL_RELEASE: research-phase1-b3-signal-input-v1
+  SIGNAL_ASSET: b3-raw-signal-inputs-2016-2020.tar.gz
+  SIGNAL_ASSET_DIGEST: sha256:c39c704bd59e861397be42f8b9a40fa5a6674d68e1cf088372f2f2fdf983ec87
+  EVENT_RELEASE: research-phase1-b3-event-construction-v1
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --all-groups --frozen
+
+      - name: Verify frozen raw B3 source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/raw
+          gh release view "$SIGNAL_RELEASE" --repo "$GITHUB_REPOSITORY" --json assets > work/assets.json
+          python - <<'PY'
+          import json, os
+          assets={x["name"]:x for x in json.load(open("work/assets.json"))["assets"]}
+          name=os.environ["SIGNAL_ASSET"]
+          assert name in assets
+          assert assets[name].get("digest")==os.environ["SIGNAL_ASSET_DIGEST"]
+          PY
+          gh release download "$SIGNAL_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$SIGNAL_ASSET" --dir work/raw
+          tar -xzf "work/raw/$SIGNAL_ASSET" -C work/raw
+          python - <<'PY'
+          import json
+          s=json.load(open("work/raw/summary.json"))
+          assert s["rawCandidateCount"]==147164
+          assert s["definitionId"]=="B3_COMPANY_NET_BUYING_V1"
+          assert s["marketDataJoined"] is False
+          assert s["returnsRead"] is False
+          assert s["developmentPerformanceComputed"] is False
+          assert s["validationPerformanceComputed"] is False
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          PY
+
+      - name: Run focused event-construction tests
+        run: uv run pytest -q tests/test_research_phase1_b3_event_construction.py
+
+      - name: Build exact-XNYS pre-outcome events
+        run: >-
+          uv run python scripts/research_phase1_b3_event_construction.py
+          --candidates work/raw/b3-raw-signal-candidates.jsonl
+          --source-summary work/raw/summary.json
+          --definition research/b3-event-construction-v1.json
+          --output work/events
+
+      - name: Assert no outcomes were opened
+        run: |
+          python - <<'PY'
+          import json
+          s=json.load(open("work/events/summary.json"))
+          assert s["status"]=="B3_EVENT_CONSTRUCTION_PREOUTCOME_PASS"
+          assert s["sourceRawCandidateCount"]==147164
+          assert s["retainedEventCount"] > 0
+          assert s["marketDataJoined"] is False
+          assert s["returnsRead"] is False
+          assert s["developmentPerformanceComputed"] is False
+          assert s["validationPerformanceComputed"] is False
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          print(json.dumps(s, indent=2, sort_keys=True))
+          PY
+
+      - name: Persist frozen pre-outcome event construction
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp research/b3-event-construction-v1.json work/events/
+          tar -C work/events -czf work/b3-development-preoutcome-events-2016-2020.tar.gz             summary.json             b3-development-preoutcome-events.jsonl             b3-development-dedup-suppressed.jsonl             b3-event-construction-v1.json
+
+          if ! gh release view "$EVENT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$EVENT_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 B3 pre-outcome event construction v1"               --notes "Frozen exact-XNYS B3 development event construction. No prices, returns, validation performance or 2023+ OOS were read."               --prerelease
+          fi
+
+          gh release upload "$EVENT_RELEASE"             work/b3-development-preoutcome-events-2016-2020.tar.gz             work/events/summary.json             work/events/b3-event-construction-v1.json             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3-preoutcome-events-${{ github.run_id }}
+          path: work/events
+          retention-days: 90

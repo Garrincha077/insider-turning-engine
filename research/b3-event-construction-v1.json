@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "1.0.0",
+  "definitionId": "B3_EVENT_CONSTRUCTION_V1",
+  "status": "PREDECLARED_BEFORE_B3_DEVELOPMENT_OUTCOMES",
+  "researchOnly": true,
+  "sourceDefinitionId": "B3_COMPANY_NET_BUYING_V1",
+  "sourceSignalRelease": "research-phase1-b3-signal-input-v1",
+  "sourceSignalAsset": "b3-raw-signal-inputs-2016-2020.tar.gz",
+  "sourceSignalAssetSha256": "c39c704bd59e861397be42f8b9a40fa5a6674d68e1cf088372f2f2fdf983ec87",
+  "sourceRawCandidateCount": 147164,
+  "evaluationRule": "Map each raw positive state-changing boundary using the same XNYS evaluation-session function as the frozen Phase-1 market audit: public knowledge at or before the eligible session close maps to that close; later/non-session knowledge maps to the next XNYS session.",
+  "entryRule": "Exact next XNYS session after evaluationSession; no nearest/later substitution.",
+  "developmentCohortRule": "Development membership is determined by evaluationSession from 2016-01-01 through 2020-12-31 inclusive. A raw 2020 knowledge boundary mapping to a 2021 evaluation session is excluded from development.",
+  "candidateOrdering": [
+    "evaluationIndex ASC",
+    "knowledgeBoundaryAt ASC",
+    "issuerCik ASC",
+    "signalId ASC"
+  ],
+  "issuerDedupSessions": 20,
+  "dedupKey": "issuerCik",
+  "dedupRule": "Retain the first ordered event for an issuer; suppress a later event when evaluationIndex - lastRetainedEvaluationIndex <= 20. Suppressed events do not advance the retained anchor. A gap of 21 or more sessions is retained.",
+  "sameEvaluationSessionRule": "Raw positive boundaries are event candidates. Multiple positive boundaries for the same issuer mapping to one evaluation session are ordered by public knowledge time; the first retained candidate anchors the issuer dedup window. This benchmark does not post-hoc collapse or optimize same-session state transitions.",
+  "marketPricesRequired": false,
+  "returnsAllowed": false,
+  "developmentPerformanceComputed": false,
+  "validationPerformanceComputed": false,
+  "oosOpened": false,
+  "productionScoringChanged": false
+}
