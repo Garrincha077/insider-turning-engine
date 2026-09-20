@@ -1,0 +1,113 @@
+{
+  "schemaVersion": "1.0.0",
+  "contractId": "phase1-b3-surviving-unit-primary-evidence-v1",
+  "frozenAt": "2026-09-20",
+  "researchOnly": true,
+  "performanceRead": false,
+  "priceFieldsRead": [],
+  "oosOpened": false,
+  "productionScoringChanged": false,
+  "scopeRelease": "research-phase1-b3-residual24-scope-v1",
+  "scopeResidualKeySha256": "sha256:cd190ed2cfbd8147b5f8c3b3c3f562e4b20093e775b88dfc9a6f0f57dc1167f5",
+  "expectedResolutionRows": 11,
+  "expectedResolutionKeySha256": "sha256:a59cce3f542956da1d04b11ebcf783732ac0513668ef7fff3e4f40fa95a55371",
+  "identities": [
+    {
+      "issuerCik": "0001719489",
+      "ticker": "GIG.U",
+      "expectedRows": 1,
+      "mode": "UNCHANGED_UNIT",
+      "successorSymbol": "GIG.U",
+      "primaryEvidence": [
+        {
+          "accession": "0001564590-19-030864",
+          "evidenceDate": "2019-06-30",
+          "fact": "Form 10-Q registers GIG.U units after the scoped target."
+        }
+      ]
+    },
+    {
+      "issuerCik": "0001726146",
+      "ticker": "TWLVU",
+      "expectedRows": 4,
+      "mode": "UNIT_SYMBOL_CHANGE",
+      "symbolChangeEffectiveDate": "2019-04-15",
+      "successorSymbol": "BROGU",
+      "primaryEvidence": [
+        {
+          "accession": "0001213900-19-006239",
+          "evidenceDate": "2019-04-12",
+          "fact": "Form 8-K states TWLVU changes to BROGU effective 2019-04-15."
+        },
+        {
+          "accession": "0001213900-19-015746",
+          "evidenceDate": "2019-06-30",
+          "fact": "Form 10-Q registers BROGU units after the change."
+        }
+      ]
+    },
+    {
+      "issuerCik": "0001742927",
+      "ticker": "TZACU",
+      "expectedRows": 2,
+      "mode": "UNCHANGED_UNIT",
+      "successorSymbol": "TZACU",
+      "primaryEvidence": [
+        {
+          "accession": "0001104659-20-003044",
+          "evidenceDate": "2019-11-30",
+          "fact": "Form 10-Q registers TZACU after both scoped targets."
+        }
+      ]
+    },
+    {
+      "issuerCik": "0001743858",
+      "ticker": "LOACU",
+      "expectedRows": 1,
+      "mode": "UNCHANGED_UNIT",
+      "successorSymbol": "LOACU",
+      "primaryEvidence": [
+        {
+          "accession": "0001144204-19-044586",
+          "evidenceDate": "2019-09-13",
+          "fact": "Form 8-K registers LOACU after the scoped target."
+        }
+      ]
+    },
+    {
+      "issuerCik": "0001773086",
+      "ticker": "ZGYHU",
+      "expectedRows": 2,
+      "mode": "UNCHANGED_UNIT",
+      "successorSymbol": "ZGYHU",
+      "primaryEvidence": [
+        {
+          "accession": "0001104659-21-026308",
+          "evidenceDate": "2020-12-31",
+          "fact": "Form 10-Q registers ZGYHU through the scoped period."
+        },
+        {
+          "accession": "0001104659-21-067520",
+          "evidenceDate": "2021-05-14",
+          "fact": "Later Form 8-K still registers ZGYHU after both targets."
+        }
+      ]
+    },
+    {
+      "issuerCik": "0001781162",
+      "ticker": "SRACU",
+      "expectedRows": 1,
+      "mode": "UNCHANGED_UNIT",
+      "successorSymbol": "SRACU",
+      "primaryEvidence": [
+        {
+          "accession": "0001213900-21-017762",
+          "evidenceDate": "2021-03-24",
+          "fact": "Form 8-K still registers SRACU after the scoped target."
+        }
+      ]
+    }
+  ],
+  "finalResolutionContractCreated": false,
+  "correctedPerformanceOpened": false
+}
