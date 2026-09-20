@@ -231,14 +231,34 @@ Persistent release: research-phase1-b3-event-construction-v1.
 Final event asset SHA-256:
 839326d9ce1d3000a476b1d483a71a6501921c58d8012ba4daba4a09cd3d2610.
 
-### Current active gate — PIT identity attachment
+### B3 PIT identity attachment — PASS
 
-Before opening B3 prices/returns, each frozen event is being re-derived from the
-authoritative P/S reconciliation state to verify its exact buy/sale dollars and
-attach only filing-time PIT ticker evidence.
+Workflow run: 35501855162.
 
-No current-ticker fallback, fuzzy mapping, market prices or returns are allowed
-in this gate.
+- frozen source events: **35,829**;
+- exact signal-state lineage: **verified**;
+- identity-eligible events: **34,472**;
+- identity coverage: **96.2126%**;
+- distinct eligible issuers: **5,420**;
+- identity quarantine: **1,357**;
+  - missing real ticker: 1,248;
+  - multiple real tickers: 89;
+  - ticker/session CIK collision: 20;
+- current-ticker fallback: false;
+- fuzzy mapping: false;
+- market prices/returns read: false.
+
+Persistent release: research-phase1-b3-identity-v1.
+Identity asset SHA-256:
+be808447f2f76bf34904f1950a0639a4b515a7a241165b4ea6267aaacc2a4d91.
+
+### Current active gate — B3 development coverage/performance
+
+The first B3 development methodology was predeclared before returns. It first
+applies the existing frozen P0 A/B/C coverage thresholds to the B3 event set.
+If B3-specific coverage is below Tier C, the workflow stops before forward
+returns. If it passes, only the 2016-2020 evaluation-session cohort is evaluated,
+with outcomes bounded through end-2022 and 126 sessions primary.
 
 ---
 
@@ -380,7 +400,7 @@ The current frozen/research benchmark family is:
 | **B0** | any qualified open-market purchase | development descriptive run complete |
 | **B1** | canonical CMP-style opportunistic purchase | development run + continuity-corrected robustness/tail/year/temporal-clustering work complete; formal OOS still blocked |
 | **B2** | independent-owner cluster, primary 30 days and >=2 owner CIKs | development run complete |
-| **B3** | company net buying using complete PIT buy/sale history | data gate + definition + raw signal + exact-XNYS/dedup PASS; PIT identity attachment active before outcomes |
+| **B3** | company net buying using complete PIT buy/sale history | data/definition/raw/event/identity gates PASS; coverage-first development run active |
 | **B4** | exact same-issuer + same-XNYS-session intersection of B1 and B2 | development run complete |
 
 Primary horizons remain 21/63/126/252 XNYS sessions, with 126 primary.

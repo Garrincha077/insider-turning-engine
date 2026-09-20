@@ -840,3 +840,30 @@ The next pre-outcome gate is PIT ticker attachment by exact reconstruction of
 the event's active reconciled P/S state. Frozen buy/sale dollars must match
 exactly; missing/multiple ticker evidence remains explicit attrition and no
 current-ticker fallback is allowed.
+
+
+---
+
+## 2026-09-20 — B3 PIT identity attachment complete
+
+**Status:** PERFORMANCE-BLIND PIT IDENTITY PASS
+
+Workflow run 35501855162 re-derived every frozen B3 event from the authoritative
+reconciled P/S state before attaching ticker evidence.
+
+Result:
+
+- source events: 35,829;
+- exact signal-state lineage verified for all source events;
+- identity eligible: 34,472;
+- coverage: 96.2126%;
+- distinct eligible issuers: 5,420;
+- quarantined: 1,357;
+- missing real ticker: 1,248;
+- multiple real tickers: 89;
+- ticker/session CIK collision events: 20 across 10 collision keys.
+
+No current ticker fallback or fuzzy mapping was used. No market price or return
+was read.
+
+Persistent release: research-phase1-b3-identity-v1.

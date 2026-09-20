@@ -1,6 +1,6 @@
 # Phase-1 B3 development-performance gate
 
-Status: **PREDECLARED / PENDING FINAL IDENTITY ARTIFACT PIN**  
+Status: **PREDECLARED / FINAL IDENTITY ARTIFACT PINNED BEFORE EXECUTION**  
 Date: **2026-09-20**  
 Purpose: define the first B3 development performance run before any B3 forward
 returns are read.  
@@ -12,6 +12,22 @@ Production scoring: unchanged.
 
 Definition file:
 `research/b3-development-performance-v1.json`.
+
+## Final identity source pinned
+
+The prerequisite identity gate passed in workflow run `35501855162`.
+
+Pinned release:
+`research-phase1-b3-identity-v1`.
+
+Pinned asset:
+`b3-development-pit-identity-2016-2020.tar.gz`.
+
+SHA-256:
+`be808447f2f76bf34904f1950a0639a4b515a7a241165b4ea6267aaacc2a4d91`.
+
+This pin occurred before B3 development returns were opened and does not alter
+any methodology below.
 
 ## Prerequisite
 

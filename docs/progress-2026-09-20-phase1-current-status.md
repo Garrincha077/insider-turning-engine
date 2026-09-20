@@ -11,7 +11,7 @@ as audit history.
 | B0 | any qualified open-market purchase | development descriptive complete |
 | B1 | canonical CMP opportunistic purchase | development + corrected continuity/robustness/tail/year/temporal-clustering work complete |
 | B2 | independent-owner cluster | development complete |
-| B3 | company net buying | data/definition/raw-signal/event-construction PASS; PIT identity attachment active before outcomes |
+| B3 | company net buying | data/definition/raw/event/identity PASS; coverage-first development run active |
 | B4 | B1 AND B2 exact-session intersection | development complete |
 
 ## B3 data state
@@ -80,3 +80,23 @@ Persistent release: research-phase1-b3-event-construction-v1.
 
 Current next gate: PIT identity attachment and exact frozen signal-lineage
 verification before any B3 market return is read.
+
+
+## B3 PIT identity attachment
+
+Workflow run 35501855162: PASS.
+
+- source events: 35,829;
+- exact signal lineage verified: yes;
+- identity eligible: 34,472;
+- identity coverage: 96.2126%;
+- distinct eligible issuers: 5,420;
+- quarantined: 1,357;
+- missing real ticker: 1,248;
+- multiple real tickers: 89;
+- ticker/session CIK collision events: 20;
+- current ticker fallback: no;
+- fuzzy identity mapping: no;
+- prices/returns read: no.
+
+Persistent release: research-phase1-b3-identity-v1.
