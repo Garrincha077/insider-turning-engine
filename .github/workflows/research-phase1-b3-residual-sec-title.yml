@@ -1,0 +1,110 @@
+name: Corroborate residual B3 SEC security titles
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-b3-residual-sec-title.yml"
+      - "scripts/research_phase1_b3_residual_sec_title.py"
+      - "docs/research-phase1-b3-residual-sec-title.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-b3-residual-sec-title-v1
+  cancel-in-progress: false
+
+env:
+  SOURCE_RELEASE: research-phase1-b3-residual-sec-corroboration-v1
+  SOURCE_ASSET: b3-residual-sec-corroboration.json
+  SOURCE_DIGEST: sha256:702784fc368b4e5def9fe4cdeb83c6120920431a4a33e1f9843467c9cd599e0e
+  PS_RELEASE: research-sec-ps-pit-v1
+  RESULT_RELEASE: research-phase1-b3-residual-sec-title-v1
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+
+      - name: Verify frozen accession source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/source work/ps/downloads work/output
+          gh release view "$SOURCE_RELEASE" --repo "$GITHUB_REPOSITORY" --json assets > work/assets.json
+          python - <<'PY'
+          import json, os
+          assets={x["name"]:x for x in json.load(open("work/assets.json"))["assets"]}
+          assert assets[os.environ["SOURCE_ASSET"]].get("digest")==os.environ["SOURCE_DIGEST"]
+          PY
+          gh release download "$SOURCE_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$SOURCE_ASSET" --dir work/source
+
+      - name: Download bounded P/S PIT title evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for year in 2016 2017 2018 2019 2020 2021 2022; do
+            for q in 1 2 3 4; do
+              name="sec-ps-pit-${year}q${q}.tar.gz"
+              mkdir -p "work/ps/${year}q${q}"
+              gh release download "$PS_RELEASE" --repo "$GITHUB_REPOSITORY"                 --pattern "$name" --dir work/ps/downloads
+              tar -xzf "work/ps/downloads/$name" -C "work/ps/${year}q${q}" canonical-research.jsonl
+            done
+          done
+          test ! -e work/ps/2023
+
+      - name: Audit exact accession security titles
+        run: >-
+          uv run python scripts/research_phase1_b3_residual_sec_title.py
+          --corroboration work/source/b3-residual-sec-corroboration.json
+          --pit-root work/ps
+          --output-dir work/output
+
+      - name: Assert evidence-only boundaries
+        run: |
+          python - <<'PY'
+          import json
+          s=json.load(open("work/output/summary.json"))
+          assert s["status"]=="B3_RESIDUAL_SEC_TITLE_CORROBORATION_COMPLETE"
+          assert s["sourceRows"]==162
+          assert s["performanceRead"] is False
+          assert s["priceFieldsRead"]==[]
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["continuityStatesChanged"]==0
+          assert s["finalResolutionContractCreated"] is False
+          assert s["correctedPerformanceOpened"] is False
+          print(json.dumps(s,indent=2,sort_keys=True))
+          PY
+
+      - name: Persist title evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 B3 residual SEC title corroboration v1"               --notes "Accession-pinned bounded SEC security-title corroboration. Evidence-only; no continuity state, performance, validation or OOS changed."               --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE"             work/output/b3-residual-sec-title-corroboration.json             work/output/summary.json             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3-residual-sec-title-${{ github.run_id }}
+          path: work/output
+          retention-days: 90
