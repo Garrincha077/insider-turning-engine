@@ -1,0 +1,216 @@
+{
+  "schemaVersion": "1.0.0",
+  "contractId": "phase1-b3-common-security-primary-evidence-v1",
+  "frozenAt": "2026-09-20",
+  "researchOnly": true,
+  "performanceRead": false,
+  "priceFieldsRead": [],
+  "oosOpened": false,
+  "productionScoringChanged": false,
+  "scopeRelease": "research-phase1-b3-residual43-scope-v1",
+  "scopeResidualKeySha256": "sha256:be82164c63ed8c8528017ff3201d5172e818655e5c7a8fa48bd7576c7cb02cd6",
+  "expectedResolutionRows": 19,
+  "expectedResolutionKeySha256": "sha256:a99206160529fc915c30b9859307e1cd603f7f4fab5d24278519af18919bc430",
+  "identities": [
+    {
+      "issuerCik": "0001624326",
+      "ticker": "PAVM",
+      "expectedRows": 6,
+      "primaryEvidence": [
+        {
+          "accession": "0001571049-17-001422",
+          "evidenceDate": "2016-12-31",
+          "filingDate": "2017-03-09",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1624326/000157104917001422/t1700390_10k.htm",
+          "fact": "2016 Form 10-K identifies common stock and warrants as separate Nasdaq securities; common trades as PAVM after unit separation."
+        },
+        {
+          "accession": "0001493152-18-003367",
+          "evidenceDate": "2017-12-31",
+          "filingDate": "2018-03-14",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1624326/000149315218003367/form10-k.htm",
+          "fact": "2017 Form 10-K continues the same PAVM common and separate warrant structure beyond all scoped targets."
+        }
+      ],
+      "resolutionDecision": "SAME_SECURITY_CONTINUITY",
+      "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+      "transformationKind": "",
+      "successorSymbol": "PAVM",
+      "successorIssuerCik": "0001624326",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0
+    },
+    {
+      "issuerCik": "0000100716",
+      "ticker": "UNAM",
+      "expectedRows": 3,
+      "primaryEvidence": [
+        {
+          "accession": "0000100716-19-000043",
+          "evidenceDate": "2019-06-30",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/100716/000010071619000043/form10-q.htm",
+          "fact": "2019 Form 10-Q registers Common Stock, No Par Value under UNAM and reports the same class outstanding."
+        },
+        {
+          "accession": "0000100716-20-000021",
+          "evidenceDate": "2019-12-31",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/100716/000010071620000021/form-10k.htm",
+          "fact": "2019 Form 10-K continues Common Stock, No Par Value under UNAM after the maximum target exit."
+        }
+      ],
+      "resolutionDecision": "SAME_SECURITY_CONTINUITY",
+      "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+      "transformationKind": "",
+      "successorSymbol": "UNAM",
+      "successorIssuerCik": "0000100716",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0
+    },
+    {
+      "issuerCik": "0000744452",
+      "ticker": "APDN",
+      "expectedRows": 3,
+      "splitAdjustmentOnly": true,
+      "primaryEvidence": [
+        {
+          "accession": "0001104659-19-072186",
+          "evidenceDate": "2019-09-30",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/744452/000110465919072186/tm1919812d1_10k.htm",
+          "fact": "2019 Form 10-K identifies APDN common and APDNW warrants as separate securities and records the 1-for-40 reverse split while common remains APDN."
+        },
+        {
+          "accession": "0001104659-20-114880",
+          "evidenceDate": "2020-10-07",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/744452/000110465920114880/tm2033064d1_8k.htm",
+          "fact": "2020 Form 8-K continues the same APDN common stock and separately describes warrants exercisable for that common."
+        }
+      ],
+      "resolutionDecision": "SAME_SECURITY_CONTINUITY",
+      "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+      "transformationKind": "",
+      "successorSymbol": "APDN",
+      "successorIssuerCik": "0000744452",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0
+    },
+    {
+      "issuerCik": "0001610853",
+      "ticker": "HSDT",
+      "expectedRows": 3,
+      "splitAdjustmentOnly": true,
+      "primaryEvidence": [
+        {
+          "accession": "0001564590-20-010496",
+          "evidenceDate": "2019-12-31",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1610853/000156459020010496/hsdt-10k_20191231.htm",
+          "fact": "2019 Form 10-K registers Class A Common Stock under HSDT on Nasdaq."
+        },
+        {
+          "accession": "0001564590-20-058917",
+          "evidenceDate": "2020-12-31",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1610853/000156459020058917/hsdt-8k_20201231.htm",
+          "fact": "2020 Form 8-K states the 1-for-35 reverse split leaves the common trading under HSDT."
+        },
+        {
+          "accession": "0001193125-21-273951",
+          "evidenceDate": "2021-09-14",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1610853/000119312521273951/d184071d424b3.htm",
+          "fact": "2021 prospectus continues to identify the split-adjusted common stock under HSDT after every scoped target."
+        }
+      ],
+      "resolutionDecision": "SAME_SECURITY_CONTINUITY",
+      "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+      "transformationKind": "",
+      "successorSymbol": "HSDT",
+      "successorIssuerCik": "0001610853",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0
+    },
+    {
+      "issuerCik": "0001023994",
+      "ticker": "SGBX",
+      "expectedRows": 2,
+      "primaryEvidence": [
+        {
+          "accession": "0001213900-18-002467",
+          "evidenceDate": "2017-12-31",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1023994/000121390018002467/f10k2017_sgblocksinc.htm",
+          "fact": "2017 Form 10-K states SGBX common began Nasdaq trading June 22, 2017 and remains the scoped post-entry common security."
+        },
+        {
+          "accession": "0001213900-19-005149",
+          "evidenceDate": "2018-12-31",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1023994/000121390019005149/sgbx-20181231.htm",
+          "fact": "2018 Form 10-K continues the same common-stock class on Nasdaq beyond both scoped targets."
+        }
+      ],
+      "resolutionDecision": "SAME_SECURITY_CONTINUITY",
+      "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+      "transformationKind": "",
+      "successorSymbol": "SGBX",
+      "successorIssuerCik": "0001023994",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0
+    },
+    {
+      "issuerCik": "0001130166",
+      "ticker": "CYCC",
+      "expectedRows": 1,
+      "primaryEvidence": [
+        {
+          "accession": "0001144204-18-028276",
+          "evidenceDate": "2018-03-31",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1130166/000114420418028276/tv493632_10q.htm",
+          "fact": "2018 Q1 Form 10-Q reports the common stock outstanding and separately reports preferred stock and common-stock warrants."
+        },
+        {
+          "accession": "0001144204-18-043377",
+          "evidenceDate": "2018-06-30",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1130166/000114420418043377/tv499859_10q.htm",
+          "fact": "2018 Q2 Form 10-Q continues the same issuer/common structure around the 2018-07-25 target."
+        }
+      ],
+      "resolutionDecision": "SAME_SECURITY_CONTINUITY",
+      "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+      "transformationKind": "",
+      "successorSymbol": "CYCC",
+      "successorIssuerCik": "0001130166",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0
+    },
+    {
+      "issuerCik": "0001640384",
+      "ticker": "LMFA",
+      "expectedRows": 1,
+      "primaryEvidence": [
+        {
+          "accession": "0001564590-16-024409",
+          "evidenceDate": "2016-06-30",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1640384/000156459016024409/lmfa-10q_20160630.htm",
+          "fact": "2016 Q2 Form 10-Q reports LM Funding common stock after prior unit separation."
+        },
+        {
+          "accession": "0001564590-16-029215",
+          "evidenceDate": "2016-09-30",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1640384/000156459016029215/lmfa-10q_20160930.htm",
+          "fact": "2016 Q3 Form 10-Q continues the same common stock after the 2016-09-30 scoped target."
+        },
+        {
+          "accession": "0001564590-17-005849",
+          "evidenceDate": "2016-12-31",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1640384/000156459017005849/lmfa-10k_20161231.htm",
+          "fact": "2016 Form 10-K confirms LMFA common and LMFAW warrants traded separately throughout the scoped period."
+        }
+      ],
+      "resolutionDecision": "SAME_SECURITY_CONTINUITY",
+      "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+      "transformationKind": "",
+      "successorSymbol": "LMFA",
+      "successorIssuerCik": "0001640384",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0
+    }
+  ],
+  "finalResolutionContractCreated": false,
+  "correctedPerformanceOpened": false
+}
