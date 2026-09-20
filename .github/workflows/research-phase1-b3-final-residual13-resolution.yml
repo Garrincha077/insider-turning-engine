@@ -27,16 +27,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: {python-version: "3.12"}
+        with:
+          python-version: "3.12"
       - uses: astral-sh/setup-uv@v5
-        with: {enable-cache: true}
+        with:
+          enable-cache: true
       - run: uv sync --all-groups --frozen
       - name: Lint
         run: uv run ruff check scripts/research_phase1_b3_final_residual13_resolution.py tests/test_research_phase1_b3_final_residual13_resolution.py
       - name: Test
         run: uv run pytest -q tests/test_research_phase1_b3_final_residual13_resolution.py
       - name: Download frozen scope
-        env: {GH_TOKEN: ${{ github.token }}}
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
