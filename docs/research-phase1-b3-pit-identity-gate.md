@@ -1,11 +1,41 @@
 # Phase-1 B3 PIT identity-attachment gate
 
-Status: **PREDECLARED BEFORE B3 DEVELOPMENT OUTCOMES**  
+Status: **PREDECLARED / EXECUTED PASS BEFORE B3 DEVELOPMENT OUTCOMES**  
 Date: **2026-09-20**  
 Scope: attach historical ticker identity to the frozen B3 pre-outcome events.  
 Performance/price fields: **prohibited**.  
 2023+ OOS: **sealed**.  
 Production scoring: unchanged.
+
+## Execution result — 2026-09-20
+
+Workflow run: `35501855162` — **SUCCESS**.
+
+- source frozen events: **35,829**;
+- signal-state lineage: **verified exactly**;
+- identity-eligible events: **34,472**;
+- identity coverage: **96.2126%**;
+- distinct eligible issuers: **5,420**;
+- quarantined events: **1,357**;
+  - `MISSING_REAL_TICKER`: 1,248;
+  - `MULTIPLE_REAL_TICKERS`: 89;
+  - `TICKER_SESSION_CIK_COLLISION`: 20;
+- ticker/session collision keys: 10;
+- current-ticker fallback: false;
+- fuzzy identity matching: false;
+- market prices read: false;
+- returns read: false;
+- 2023+ opened: false.
+
+Persistent release:
+`research-phase1-b3-identity-v1`.
+
+Identity asset SHA-256:
+`be808447f2f76bf34904f1950a0639a4b515a7a241165b4ea6267aaacc2a4d91`.
+
+This gate is closed. The first B3 development performance definition was
+predeclared separately and the final identity artifact is pinned before
+execution.
 
 ## Frozen source
 

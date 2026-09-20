@@ -1,0 +1,140 @@
+name: Run Phase-1 B3 development performance
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-b3-development-performance.yml"
+      - "scripts/research_phase1_b3_development_performance.py"
+      - "tests/test_research_phase1_b3_development_performance.py"
+      - "research/b3-development-performance-v1.json"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-b3-development-performance-v1
+  cancel-in-progress: false
+
+env:
+  IDENTITY_RELEASE: research-phase1-b3-identity-v1
+  IDENTITY_ASSET: b3-development-pit-identity-2016-2020.tar.gz
+  IDENTITY_DIGEST: sha256:be808447f2f76bf34904f1950a0639a4b515a7a241165b4ea6267aaacc2a4d91
+  MARKET_RELEASE: research-market-alpaca-v1
+  RESULT_RELEASE: research-phase1-b3-development-v1
+
+jobs:
+  development:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --all-groups --frozen
+
+      - name: Verify frozen identity and market inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/identity work/market work/downloads
+
+          gh release view "$IDENTITY_RELEASE" --repo "$GITHUB_REPOSITORY" --json assets > work/identity-assets.json
+          gh release view "$MARKET_RELEASE" --repo "$GITHUB_REPOSITORY" --json assets > work/market-assets.json
+
+          python - <<'PY'
+          import json, os
+          definition=json.load(open("research/b3-development-performance-v1.json"))
+          identity={x["name"]:x for x in json.load(open("work/identity-assets.json"))["assets"]}
+          market={x["name"]:x for x in json.load(open("work/market-assets.json"))["assets"]}
+
+          assert definition["status"]=="PREDECLARED_IDENTITY_PINNED_BEFORE_EXECUTION"
+          assert definition["sourceIdentityAssetSha256"]==os.environ["IDENTITY_DIGEST"].removeprefix("sha256:")
+          assert identity[os.environ["IDENTITY_ASSET"]].get("digest")==os.environ["IDENTITY_DIGEST"]
+
+          for name, digest in definition["marketAssets"].items():
+              assert market[name].get("digest")==digest
+          PY
+
+          gh release download "$IDENTITY_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$IDENTITY_ASSET" --dir work/identity
+          tar -xzf "work/identity/$IDENTITY_ASSET" -C work/identity
+
+          gh release download "$MARKET_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern 'alpaca-market-20*.tar.gz' --dir work/downloads
+          for year in 2016 2017 2018 2019 2020 2021 2022; do
+            mkdir -p "work/market/$year"
+            tar -xzf "work/downloads/alpaca-market-$year.tar.gz" -C "work/market/$year"
+          done
+          test ! -e work/market/2023
+
+          python - <<'PY'
+          import json
+          s=json.load(open("work/identity/summary.json"))
+          assert s["status"]=="B3_PIT_IDENTITY_ATTACHMENT_PASS"
+          assert s["identityEligibleEvents"]==34472
+          assert s["returnsRead"] is False
+          assert s["marketPricesRead"] is False
+          assert s["oosOpened"] is False
+          PY
+
+      - name: Run focused B3 development tests
+        run: uv run pytest -q tests/test_research_phase1_b3_development_performance.py
+
+      - name: Run B3 coverage-first development performance
+        run: >-
+          uv run python scripts/research_phase1_b3_development_performance.py
+          --identity-events work/identity/b3-development-identity-events.jsonl
+          --identity-summary work/identity/summary.json
+          --definition research/b3-development-performance-v1.json
+          --market-root work/market
+          --output work/b3
+
+      - name: Assert research boundaries and descriptive-only status
+        run: |
+          python - <<'PY'
+          import json
+          s=json.load(open("work/b3/summary.json"))
+          c=json.load(open("work/b3/coverage-summary.json"))
+          assert c["tier"] in {"A_HIGH_CONFIDENCE","B_RESEARCH_GRADE","C_EXPLORATORY"}
+          assert s["status"]=="PHASE1_B3_DEVELOPMENT_DESCRIPTIVE_COMPLETE"
+          assert s["resultClass"]=="research/descriptive"
+          assert s["formalAlphaClaimed"] is False
+          assert s["period"]=="2016-2020 XNYS evaluation-session cohort"
+          assert s["outcomeMarketBoundary"]=="2016-2022 only"
+          assert s["primaryHorizonSessions"]==126
+          assert s["validationPerformanceComputed"] is False
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["b3DefinitionChanged"] is False
+          print(json.dumps(s, indent=2, sort_keys=True))
+          PY
+
+      - name: Persist B3 descriptive development evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp research/b3-development-performance-v1.json work/b3/
+          tar -C work/b3 -czf work/b3-development-descriptive-2016-2020.tar.gz             summary.json coverage-summary.json b3-development-events.csv             b3-development-performance-v1.json
+
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 B3 development descriptive v1"               --notes "Research/descriptive B3 development results. 2016-2020 event cohort, outcomes through 2022 only. Validation and 2023+ OOS remain unopened; production scoring unchanged."               --prerelease
+          fi
+
+          gh release upload "$RESULT_RELEASE"             work/b3-development-descriptive-2016-2020.tar.gz             work/b3/summary.json work/b3/coverage-summary.json             work/b3/b3-development-performance-v1.json             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3-development-descriptive-${{ github.run_id }}
+          path: work/b3
+          retention-days: 90

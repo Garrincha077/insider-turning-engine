@@ -1,11 +1,11 @@
 {
   "schemaVersion": "1.0.0",
   "definitionId": "B3_DEVELOPMENT_PERFORMANCE_V1",
-  "status": "PREDECLARED_PENDING_IDENTITY_GATE_PIN",
+  "status": "PREDECLARED_IDENTITY_PINNED_BEFORE_EXECUTION",
   "researchOnly": true,
   "sourceIdentityRelease": "research-phase1-b3-identity-v1",
   "sourceIdentityAsset": "b3-development-pit-identity-2016-2020.tar.gz",
-  "sourceIdentityAssetSha256": null,
+  "sourceIdentityAssetSha256": "be808447f2f76bf34904f1950a0639a4b515a7a241165b4ea6267aaacc2a4d91",
   "identityDigestMustBePinnedBeforeExecution": true,
   "marketRelease": "research-market-alpaca-v1",
   "marketAssets": {
@@ -20,7 +20,12 @@
   "developmentCohort": "2016-2020 XNYS evaluation-session cohort",
   "outcomeMarketBoundary": "2016-2022 only",
   "entryRule": "exact frozen entrySession; stock and SPY entry bars must exist on that exact XNYS session",
-  "horizonsSessions": [21, 63, 126, 252],
+  "horizonsSessions": [
+    21,
+    63,
+    126,
+    252
+  ],
   "primaryHorizonSessions": 126,
   "exitRule": "entry session index + horizon on the XNYS/SPY session calendar; no nearest/later substitution",
   "benchmark": "SPY exact same entry open and exit close",
