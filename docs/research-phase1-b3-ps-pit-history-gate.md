@@ -1,10 +1,27 @@
 # Phase-1 B3 P/S PIT history gate
 
-Status: **FROZEN BEFORE PILOT EXECUTION**  
+Status: **PREDECLARED SPEC / EXECUTED PASS**  
 Date: **2026-09-18**  
 Scope: research-only preparation for B3 company net buying.  
 Sealed OOS: **2023+ remains closed.**  
 Production scoring: **unchanged.**
+
+## Execution result — 2026-09-20
+
+The predeclared gate has been executed without lowering its thresholds.
+
+- frozen 2016 Q1 pilot: PASS;
+- full original P/S history: **40 / 40 quarters PASS**;
+- persistent release: research-sec-ps-pit-v1;
+- original P/S filing universe: **570,291**;
+- recovery/final completion run: 35469045909;
+- historical SEC clock knowledgeAt == acceptedAt preserved;
+- 2023+ remained sealed;
+- production scoring remained unchanged.
+
+The original-P/S prerequisite is therefore closed. B3 eligibility still required
+the separately predeclared broader amendment gate, which has subsequently also
+passed; see docs/research-phase1-b3-ps-amendment-gate.md and docs/HANDOFF.md.
 
 ## Purpose
 

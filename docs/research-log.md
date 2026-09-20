@@ -717,3 +717,57 @@ Literature research can continue, but we should not claim that R-001/R-006/R-010
 - **2026-09-14:** Created research log and recorded initial findings R-001 through R-005. No production code or scoring configuration changed.
 - **2026-09-14:** Added Research Roadmap v1 and started first sprint. Added R-006 through R-009 covering purchase-size normalization, dependence-aware/calendar-time inference, execution/liquidity realism, and insider trade sequences. No production code or scoring configuration changed.
 - **2026-09-14:** Continued second research sprint. Added R-010 through R-013 covering first-buy/re-entry novelty, sales classification, firm-size/liquidity controls, and the Phase-0 data-readiness blocker. No production code or scoring configuration changed.
+
+
+---
+
+## 2026-09-20 — B3 P/S data gate closed and definition frozen
+
+**Status:** DATA GATE PASS / DEFINITION FROZEN / PERFORMANCE UNOPENED
+
+The B3 company-net-buying prerequisite work has advanced materially beyond the
+earlier blocked state.
+
+### Completed evidence
+
+- original P/S PIT history 2013-2022: **40 / 40 quarters PASS**;
+- original P/S filing universe: **570,291 filings**;
+- amendment scope inventory: PASS, run 35471756336;
+- supporting predecessor hydration: **1,551 / 1,551**;
+- zero-transaction amendment hydration: **596 / 596**;
+- hydration failures: **0**;
+- supporting-evidence run: 35472366209;
+- P/S lifecycle reconciliation: **8 / 8 issuer shards PASS** plus deterministic merge PASS, run 35499189795;
+- reconciliation status: B3_PS_AMENDMENT_RECONCILIATION_PASS;
+- linked amendment rows: **31,048**;
+- reconciled revision rows: **2,320,279**;
+- effective qualified P/S rows at end-2022: **1,570,066**.
+
+### B3 v1 frozen before performance
+
+The primary company-net-buying definition is now frozen independently of
+development outcomes:
+
+- primary lookback: 30 calendar days;
+- qualified non-derivative priced P/A buys and S/D sales;
+- buy/sale dollars = shares × price;
+- net dollars = buys - sales;
+- intensity = net / gross;
+- raw signal requires positive buy dollars and positive net dollars;
+- no insider-role, D/I, or 10b5-1 scoring weights;
+- downstream issuer dedup: 20 XNYS sessions;
+- development cohort: 2016-2020;
+- outcomes may not extend beyond 2022-12-31;
+- 2023+ remains sealed.
+
+Persistent definition release: research-phase1-b3-definition-v1.
+
+### Current execution state
+
+The first monolithic raw-signal build was interrupted by a GitHub runner shutdown
+while processing the merged revision file. The recovery path now streams
+issuer-contiguous revisions and reuses the persisted reconciliation and frozen
+definition instead of recomputing upstream gates.
+
+No B3 development return, validation return, or 2023+ OOS result has been opened
+as part of this work.

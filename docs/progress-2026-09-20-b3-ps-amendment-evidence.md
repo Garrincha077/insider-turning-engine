@@ -2,7 +2,7 @@
 
 Date: 2026-09-20
 
-Status: **IMPLEMENTED / EXECUTING**
+Status: **COMPLETE / PASS**
 
 Authoritative frozen scope:
 - workflow run: `35471756336`;
@@ -22,3 +22,19 @@ amendments. Supporting-predecessor canonical rows are marked
 This stage does not classify zero-transaction amendment economics, reconcile
 lifecycles, define B3, compute returns, open 2023+, or change production
 scoring.
+
+## Result
+
+Workflow run: 35472366209.
+
+- supporting predecessor targets: **1,551**;
+- supporting predecessors hydrated: **1,551**;
+- zero-transaction amendment targets on P/S roots: **596**;
+- zero-transaction amendments hydrated: **596**;
+- failures: **0**;
+- PIT acceptance-time contract preserved;
+- 2023+ remained sealed;
+- production scoring remained unchanged.
+
+The next gate was zero-transaction semantic classification plus deterministic
+P/S lifecycle reconciliation. That later gate passed in run 35499189795.

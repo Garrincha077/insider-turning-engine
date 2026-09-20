@@ -1,17 +1,19 @@
 # Insider Turning Engine — HANDOFF
 
-_Last updated: 2026-09-18_
+_Last updated: 2026-09-20_
 
 This is the operational continuation point for a new ChatGPT/Codex session. Read this file first, then `docs/research-log.md`, `docs/research-predeclared-spec.md`, and `docs/P0_PHASE1_IMPLEMENTATION.md`.
 
 ## FIRST ACTIONS IN A NEW CHAT
 
-1. Open GitHub repository `Garrincha077/insider-turning-engine`, branch `main`.
-2. Treat SEC original-buy PIT history 2016-2022, warm-up 2013-2015, and amendment reconciliation as completed research-data stages.
+1. Open GitHub repository Garrincha077/insider-turning-engine, branch research/b3-ps-pit-history.
+2. Read this HANDOFF first. Treat older dated progress files as historical audit trail unless this file explicitly points to them as the current gate.
 3. Treat the exact-calendar P0 market audit as the authoritative market-data gate. Current tier: **C_EXPLORATORY**.
-4. Treat the first B0 development run as a descriptive/plumbing baseline only, not formal alpha evidence.
-5. Keep sealed OOS **2023+ unopened**.
-6. Do **not** change production scoring, weights, thresholds, signal states, alerts, or production methodology unless the owner explicitly asks.
+4. Treat Phase-1 B0, B1, B2 and B4 development outputs as completed descriptive/research benchmarks, not production evidence.
+5. Treat the B3 P/S history, B3 amendment reconciliation, and B3 definition freeze as completed data/methodology gates.
+6. Current active task: complete the performance-blind B3 raw-signal input build, then map it to exact XNYS execution sessions before any B3 development performance is read.
+7. Keep sealed OOS **2023+ unopened**.
+8. Do **not** change production scoring, weights, thresholds, signal states, alerts, or production methodology unless the owner explicitly asks.
 
 ---
 
@@ -86,112 +88,94 @@ Policy remains deterministic/PIT-safe: original state remains effective until am
 
 ---
 
-## 2026-09-18 B3 P/S SALE-HISTORY STATUS
+## B3 COMPANY NET BUYING — CURRENT STATUS 2026-09-20
 
-B3 remains blocked on complete PIT buy/sale history. No B3 signal formula or performance has been opened.
+B3 is no longer blocked by missing sale history.
 
-### Frozen P/S universe and pilot
+### Original P/S PIT history — COMPLETE
 
-A separate original P/S PIT contract is frozen in
-`docs/research-phase1-b3-ps-pit-history-gate.md`.
+Persistent release: research-sec-ps-pit-v1.
 
-Universe:
-
-- original Form 4/5 only;
-- 2013-2022 only;
-- priced positive-share non-derivative `P/A` buys or `S/D` sales;
-- SEC `accepted_at` remains the historical knowledge clock;
-- 2023+ remains sealed.
-
-Frozen 2016 Q1 pilot:
-
-- workflow run: **35282934646**;
-- artifact: `phase1-b3-ps-pit-pilot-35282934646`;
-- artifact digest:
-  `sha256:0ddaff2b57329c29537146fe3ec7fb5c4c19127b543dd08f85965c5653b33aa1`;
-- 13,088 / 13,088 original P/S filings hydrated;
-- zero failures;
-- buy accession concordance: 5,482 / 5,482 = **100%**;
-- sale accession concordance: 7,664 / 7,664 = **100%**;
-- predeclared threshold was >=99.5% separately for both sides;
-- `oosOpened=false`;
-- `productionScoringChanged=false`.
-
-The pilot is frozen and its workflow is manual-rerun only.
-
-### Full original P/S history
-
-Persistent research release: **`research-sec-ps-pit-v1`**.
-
-Source universe:
-
-- 2013-2022 original P/S filings: **570,291**;
+- original Form 4/5 P/S universe, 2013-2022: **570,291 filings**;
+- 40 / 40 quarters PASS;
 - buy-only: 168,334;
 - sale-only: 400,230;
 - mixed buy/sale: 1,727;
-- sale-only filings are about 70.18% of the P/S filing universe.
+- historical clock remains knowledgeAt == acceptedAt;
+- 2023+ remained sealed.
 
-This confirms the earlier buy-centric history cannot serve as a complete B3 denominator.
+The 2014 Q3 discovery incident is resolved. The final recovery run was
+35469045909, including the bounded verified archive fallback.
 
-Persistent quarters at the latest checkpoint:
+### B3 amendment scope — COMPLETE
 
-- 2013 Q1-Q4: PASS;
-- 2014 Q1-Q2: PASS;
-- 2016 Q1 frozen pilot quarter: PASS;
-- persistent total: **7 / 40**.
+Workflow run: 35471756336.
 
-The hydration matrix is resumable with `fail-fast: false`; a failed quarter no longer discards later independent work.
+Frozen scope results:
 
-### 2014 Q3 discovery incident
+- 39,817 transaction-bearing amendments;
+- 2,174 zero-transaction amendments observed;
+- 1,551 unique supporting predecessor filings required;
+- 596 zero-transaction amendments on P/S roots;
+- ambiguous/unresolved evidence remains explicit quarantine rather than fuzzy matching.
 
-2014 Q3 repeatedly failed the unchanged 100% coverage gate:
+### Supporting evidence hydration — COMPLETE
 
-`P/S accession discovery is incomplete`
+Workflow run: 35472366209.
 
-This is a filing-discovery/data-quality issue, not a signal/performance result.
+- supporting predecessors: **1,551 / 1,551 hydrated**;
+- zero-transaction amendments: **596 / 596 hydrated**;
+- failures: **0**;
+- all historical knowledge clocks remain SEC acceptance-time based.
 
-Do not lower the 100% coverage requirement.
+### P/S lifecycle reconciliation — PASS
 
-Recovery rule is documented in
-`docs/progress-2026-09-18-b3-ps-2014q3-discovery-incident.md`.
+Workflow run: 35499189795.
 
-The verified archive fallback now uses:
+- issuer-safe reconciliation shards: **8 / 8 PASS**;
+- deterministic merge: **PASS**;
+- status: B3_PS_AMENDMENT_RECONCILIATION_PASS;
+- linked amendment rows: **31,048**;
+- reconciled revision rows: **2,320,279**;
+- effective qualified P/S rows at end-2022: **1,570,066**;
+- research quarantine rows: **23,986**;
+- resolver quarantine rows: **28**;
+- all 596 zero-transaction amendments on P/S roots were explicitly classified;
+- amendmentsReconciledForPsUniverse=true;
+- oosOpened=false;
+- productionScoringChanged=false.
 
-1. frozen quarterly-bulk **issuer CIK** as the primary archive directory;
-2. distinct verified **reporting-owner CIKs** as secondary archive paths;
-3. no fuzzy matching, ticker mapping, future information or market outcomes.
+### B3 definition — FROZEN BEFORE PERFORMANCE
 
-All recovered filings must still pass exact accession/header, issuer-CIK,
-ownership-XML, SEC acceptance datetime and `knowledgeAt == acceptedAt` checks.
+Persistent release: research-phase1-b3-definition-v1.
 
-Recovery implementation and synthetic attempt-order tests are CI green.
+Frozen primary definition:
 
-Latest recovery/backfill run queued after the active resumable run:
-**35363456434**, commit
-`27e29d3a03a89ff480eb54ed4c0648e4bac10594`.
+- 30-calendar-day company window;
+- qualified non-derivative priced P/A buys and S/D sales;
+- buy/sale dollars = shares × price;
+- net dollars = buy dollars - sale dollars;
+- gross dollars = buy dollars + sale dollars;
+- net-buying intensity = net / gross;
+- raw positive-net candidate requires buy dollars > 0 and net dollars > 0;
+- no role, direct/indirect, or 10b5-1 score weighting;
+- downstream 20-XNYS-session issuer dedup remains required;
+- development period 2016-2020;
+- outcome data may not exceed 2022-12-31;
+- 2023+ remains sealed.
 
-### Broader P/S amendment gate
+No B3 development performance has been opened yet.
 
-Predeclared in
-`docs/research-phase1-b3-ps-amendment-gate.md`.
+### Current active step
 
-The gate explicitly covers:
+The first raw-signal build hit GitHub runner-memory limits after reconciliation
+had already passed. The recovery implementation streams by issuer and reuses
+the persisted reconciliation and frozen definition rather than recomputing the
+eight shards.
 
-- amendments whose root is already in the P/S universe;
-- qualified P/S amendments that require a supporting predecessor outside the
-  original P/S universe;
-- zero-transaction Form 4/A and 5/A on P/S roots;
-- ambiguous chains via quarantine, never fuzzy matching.
-
-The deterministic amendment-scope builder and tests are CI green.
-
-Do **not** run B3 development performance until:
-
-1. all 40 original P/S quarters pass;
-2. broader P/S amendment reconciliation passes;
-3. the actual B3 company-net-buying definition is separately frozen before
-   observing B3 development outcomes.
-
+Current recovery workflow: Recover Phase-1 B3 raw signal inputs.
+The next gate after a PASS is exact XNYS evaluation/entry mapping plus the
+frozen 20-session issuer dedup, still without reading development outcomes.
 
 ---
 
@@ -326,18 +310,31 @@ For all research periods:
 
 ## PHASE-1 BENCHMARK FAMILY
 
-B0 — any qualified open-market purchase: development plumbing complete.
+The current frozen/research benchmark family is:
 
-Next planned research baselines:
+| Benchmark | Definition | Current state |
+| --- | --- | --- |
+| **B0** | any qualified open-market purchase | development descriptive run complete |
+| **B1** | canonical CMP-style opportunistic purchase | development run + continuity-corrected robustness/tail/year/temporal-clustering work complete; formal OOS still blocked |
+| **B2** | independent-owner cluster, primary 30 days and >=2 owner CIKs | development run complete |
+| **B3** | company net buying using complete PIT buy/sale history | data gate PASS, definition frozen, raw development signal construction in progress |
+| **B4** | exact same-issuer + same-XNYS-session intersection of B1 and B2 | development run complete |
 
-- **B2 independent-owner cluster:** primary definition 30 calendar days and >=2 distinct owner CIKs; >=3 owners secondary subgroup.
-- **B1 canonical opportunistic:** implement separately from the existing custom opportunistic heuristic; do not call the current heuristic canonical Cohen-Malloy-Pomorski.
-- **B4:** B1 AND B2.
-- **B3 company net buying:** BLOCKED until a complete PIT sale-history contract is verified. Do not compute company buy/sell ratios from a buy-centric historical universe.
+Primary horizons remain 21/63/126/252 XNYS sessions, with 126 primary.
 
-Required horizons remain 21/63/126/252 XNYS sessions, with 126 primary.
+Known development-only descriptive comparison at 126 sessions before B3:
 
-Formal inference must not rely only on IID event bootstrap. Add calendar-time equal-weight active-signal portfolio inference with HAC/Newey-West and clustered robustness before promoting a benchmark to formal evidence.
+- B0 mean SPY excess: about +5.20%;
+- B1 mean SPY excess: about +9.79%;
+- B2 mean SPY excess: about +4.14%;
+- B4 mean SPY excess: about +4.04%.
+
+These are not sufficient production-alpha evidence. B1 remains right-tail
+sensitive, which is why corrected robustness and temporal-clustering gates were
+added.
+
+Formal inference must remain dependence-aware; no benchmark is promoted from an
+IID event bootstrap alone.
 
 ---
 
@@ -354,15 +351,16 @@ Do not open OOS until transaction eligibility, transforms, benchmark family, fea
 
 ## NEXT EXECUTION SEQUENCE
 
-1. Add synthetic regression tests for exact-session entry/horizon handling and tier selection; GitHub issue **#1** tracks this work.
-2. Freeze the B0 event/dedup/execution/reporting contract after tests.
-3. Build **B2 independent-owner cluster** on development 2016-2020 using the same exact-calendar outcome layer.
-4. Implement the **canonical CMP** research classifier as B1, using 2013-2015 warm-up history where required; keep the existing heuristic separate.
-5. Build B4 = B1 AND B2.
-6. Verify/build a complete PIT sale-history universe before unblocking B3.
-7. Add calendar-time/HAC and clustered robustness to Phase-1 baselines.
-8. Freeze Phase-1 definitions before opening validation 2021-2022 performance.
-9. Only after validation and methodology freeze may the owner consider authorizing sealed 2023+ OOS.
+1. Finish and persist the **performance-blind B3 raw signal universe** for 2016-2020.
+2. Map B3 raw candidates to the exact XNYS evaluation/entry clock and apply the frozen **20-session issuer dedup**, still without outcomes.
+3. Freeze/assert the final B3 event construction artifact.
+4. Run the first B3 development performance on **2016-2020 only**, with outcomes bounded through 2022.
+5. Run B3 dependence-aware robustness: calendar-time/HAC, issuer clustering, tail sensitivity, year stability and concentration diagnostics.
+6. Compare B0/B1/B2/B3/B4 as a Phase-1 benchmark family without post-hoc threshold changes.
+7. Move into the insider **feature tournament** only after the simple benchmark family is understood.
+8. After feature selection, test the **Turning overlay** incrementally against the insider-only model.
+9. Freeze the complete methodology before opening validation 2021-2022.
+10. Keep 2023+ sealed until development/validation methodology is frozen and the owner explicitly authorizes the OOS step.
 
 ---
 

@@ -2,6 +2,8 @@
 
 _Last updated: 2026-09-17_
 
+> **Historical-status note (2026-09-20):** this file is the frozen P0/B0 implementation specification and is retained for auditability. Section 4 describes the sequence as it was predeclared on 2026-09-17. B1, B2 and B4 have since been executed, and the B3 sale-history/amendment prerequisites have since passed. Use docs/HANDOFF.md for the current execution state; do not rewrite the frozen definitions below based on later results.
+
 Research-only specification. Production scoring, thresholds, signal states and alerts are unchanged. Sealed OOS 2023+ remains unopened.
 
 ## 1. Data-quality tiers

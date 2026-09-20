@@ -1,10 +1,36 @@
 # Phase-1 B3 P/S amendment-reconciliation gate
 
-Status: **PREDECLARED / NOT YET EXECUTED**  
+Status: **PREDECLARED SPEC / EXECUTED PASS**  
 Date: **2026-09-18**  
 Scope: research-only completion of the B3 buy/sale PIT history prerequisite.  
 OOS: **2023+ remains sealed.**  
 Production scoring: unchanged.
+
+## Execution result — 2026-09-20
+
+The gate was executed performance-blind under the frozen rules below.
+
+- amendment-scope run: 35471756336 — PASS;
+- supporting-evidence hydration run: 35472366209 — PASS;
+- supporting predecessor filings: **1,551 / 1,551 hydrated**;
+- zero-transaction amendments on P/S roots: **596 / 596 hydrated**;
+- hydration failures: **0**;
+- lifecycle reconciliation run: 35499189795;
+- issuer-safe reconciliation shards: **8 / 8 PASS**;
+- deterministic global merge: **PASS**;
+- final status: B3_PS_AMENDMENT_RECONCILIATION_PASS;
+- linked amendment rows: **31,048**;
+- reconciled revision rows: **2,320,279**;
+- effective qualified P/S rows at end-2022: **1,570,066**;
+- all 596 zero-transaction amendments on P/S roots were explicitly classified;
+- fullPsHistoryComplete=true;
+- amendmentsReconciledForPsUniverse=true;
+- 2023+ remained sealed;
+- production scoring remained unchanged.
+
+After this gate passed, the separate B3 company-net-buying v1 definition was
+frozen before any B3 development performance was opened. The frozen definition
+is persisted in research-phase1-b3-definition-v1.
 
 ## Why a broader amendment gate is required
 

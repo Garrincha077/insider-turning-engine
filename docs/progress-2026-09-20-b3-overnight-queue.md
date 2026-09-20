@@ -23,3 +23,16 @@ The primary B3 definition is fixed before performance:
 - no role, D/I, or 10b5-1 score weights;
 - company economic rows deduplicated across reporting-owner aliases;
 - downstream 20-XNYS-session issuer dedup remains required.
+
+## Execution status
+
+- supporting-evidence prerequisite: PASS;
+- eight lifecycle reconciliation shards: **8 / 8 PASS**;
+- deterministic merge: **PASS**;
+- reconciliation status: B3_PS_AMENDMENT_RECONCILIATION_PASS;
+- B3 company-net-buying v1 definition: **FROZEN BEFORE PERFORMANCE**;
+- first raw-signal build: interrupted by GitHub runner shutdown while processing the merged ~2.32M-revision file;
+- this was an infrastructure/memory-path failure, not a research-gate failure;
+- recovery implementation now streams by issuer and consumes the persisted reconciliation + frozen definition directly;
+- recovery workflow: Recover Phase-1 B3 raw signal inputs;
+- 2023+ remains sealed and no B3 development outcomes have been read.
