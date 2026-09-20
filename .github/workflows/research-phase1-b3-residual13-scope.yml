@@ -1,0 +1,110 @@
+name: Freeze B3 residual-13 continuity scope
+
+on:
+  push:
+    branches:
+      - research/b3-ps-pit-history
+    paths:
+      - "scripts/research_phase1_b3_residual13_scope.py"
+      - "tests/test_research_phase1_b3_residual13_scope.py"
+      - "docs/research-phase1-b3-residual13-scope-gate.md"
+      - ".github/workflows/research-phase1-b3-residual13-scope.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  freeze:
+    runs-on: ubuntu-24.04
+    env:
+      SCOPE24_RELEASE: research-phase1-b3-residual24-scope-v1
+      SCOPE24_ASSET: b3-residual24-scope.json
+      SCOPE24_ASSET_DIGEST: sha256:0ae68307aa7c28e366266c14896521b33391edc8093fb51c68546e76e3a31523
+      SURVIVING_RELEASE: research-phase1-b3-surviving-unit-primary-resolution-v1
+      SURVIVING_ASSET: b3-surviving-unit-primary-resolution.json
+      SURVIVING_ASSET_DIGEST: sha256:65ce412c1bee4abdb0e47851f13afa9c8cfa2abd33190c8ac401da29c5c5c8f9
+      RESIDUAL13_KEY_DIGEST: sha256:0183d2bb7d158cfa642cb02106eb1937d7e0a327db9e23efb4423188b13c5a18
+      RESULT_RELEASE: research-phase1-b3-residual13-scope-v1
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Sync frozen environment
+        run: uv sync --all-groups --frozen
+      - name: Lint residual-13 scope implementation
+        run: >-
+          uv run ruff check
+          scripts/research_phase1_b3_residual13_scope.py
+          tests/test_research_phase1_b3_residual13_scope.py
+      - name: Test residual-13 scope semantics
+        run: >-
+          uv run pytest -q
+          tests/test_research_phase1_b3_residual13_scope.py
+      - name: Download pinned sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/scope24 work/surviving work/output
+          gh release download "$SCOPE24_RELEASE" --repo "$GITHUB_REPOSITORY" --pattern "$SCOPE24_ASSET" --dir work/scope24
+          gh release download "$SURVIVING_RELEASE" --repo "$GITHUB_REPOSITORY" --pattern "$SURVIVING_ASSET" --dir work/surviving
+          d1="sha256:$(sha256sum "work/scope24/$SCOPE24_ASSET" | cut -d' ' -f1)"
+          d2="sha256:$(sha256sum "work/surviving/$SURVIVING_ASSET" | cut -d' ' -f1)"
+          test "$d1" = "$SCOPE24_ASSET_DIGEST"
+          test "$d2" = "$SURVIVING_ASSET_DIGEST"
+      - name: Freeze exact residual-13 scope
+        run: >-
+          uv run python scripts/research_phase1_b3_residual13_scope.py
+          --scope "work/scope24/$SCOPE24_ASSET"
+          --surviving-resolution "work/surviving/$SURVIVING_ASSET"
+          --output work/output/b3-residual13-scope.json
+      - name: Assert immutable residual-13 boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=json.loads(Path("work/output/b3-residual13-scope.json").read_text())
+          assert p["status"] == "B3_RESIDUAL13_SCOPE_FROZEN"
+          assert p["sourceRows"] == 24
+          assert p["subtractedSurvivingRows"] == 11
+          assert p["residualRows"] == 13
+          assert p["uniqueIssuerTickerPairs"] == 6
+          assert p["residualKeySha256"] == os.environ["RESIDUAL13_KEY_DIGEST"]
+          assert p["performanceRead"] is False
+          assert p["priceFieldsRead"] == []
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          assert p["autoExpansionAllowed"] is False
+          assert p["finalResolutionContractCreated"] is False
+          assert p["correctedPerformanceOpened"] is False
+          print(json.dumps({
+              "residualRows": p["residualRows"],
+              "uniqueIssuerTickerPairs": p["uniqueIssuerTickerPairs"],
+              "residualKeySha256": p["residualKeySha256"],
+              "evidenceBucketCounts": p["evidenceBucketCounts"],
+          }, indent=2, sort_keys=True))
+          PY
+      - name: Publish immutable residual-13 scope release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" --title "Phase-1 B3 residual-13 continuity scope v1" --notes "Exact performance-blind final transformation/lifecycle queue after surviving-unit resolution." --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE" work/output/b3-residual13-scope.json --repo "$GITHUB_REPOSITORY" --clobber
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3-residual13-scope-${{ github.run_id }}
+          path: work/output/b3-residual13-scope.json
+          retention-days: 90
