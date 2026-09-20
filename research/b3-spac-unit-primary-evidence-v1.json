@@ -26,6 +26,13 @@
       "separationSecUrl": "https://www.sec.gov/Archives/edgar/data/1705771/000121390017010446/f8k101017_draperoakwood.htm",
       "postGapEvidence": [
         {
+          "accession": "0001213900-18-006259",
+          "evidenceDate": "2018-03-31",
+          "filingDate": "2018-05-15",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1705771/000121390018006259/f10q0318_draperoakwood.htm",
+          "fact": "Quarterly report through 2018-03-31 continues to account for the same outstanding Units and records no business-combination transformation through the 2018-03-26 scoped target."
+        },
+        {
           "accession": "0001213900-18-012101",
           "evidenceDate": "2018-09-04",
           "secUrl": "https://www.sec.gov/Archives/edgar/data/1705771/000121390018012101/f8k090418ex99-1_draper.htm",
@@ -60,6 +67,12 @@
       "separationEffectiveDate": "2018-08-08",
       "separationSecUrl": "https://www.sec.gov/Archives/edgar/data/1735041/000161577418007661/s111926_8k.htm",
       "postGapEvidence": [
+        {
+          "accession": "0001615774-19-003176",
+          "evidenceDate": "2019-02-20",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1735041/000161577419003176/s116249_10k.htm",
+          "fact": "Annual report states GLACU units remain traded on Nasdaq and separately identifies GLAC ordinary shares, after the 2019-02-01 scoped target."
+        },
         {
           "accession": "0001213900-19-012745",
           "evidenceDate": "2019-07-09",
