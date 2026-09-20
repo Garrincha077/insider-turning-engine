@@ -124,7 +124,11 @@ def _resolution(row: dict[str, Any], fact: dict[str, Any]) -> dict[str, Any]:
         "expectedSourceResolutionSource": "long_internal_gap",
         "effectiveDate": resolution_effective,
         "resolutionDecision": decision,
-        "transformationKind": (\n            "SAME_SECURITY_SYMBOL_CHANGE"\n            if decision.startswith("SYMBOL")\n            else ""\n        ),
+        "transformationKind": (
+            "SAME_SECURITY_SYMBOL_CHANGE"
+            if decision.startswith("SYMBOL")
+            else ""
+        ),
         "resultState": state,
         "successorSymbol": successor,
         "successorSharesPerEntryShare": 1.0,
@@ -195,7 +199,12 @@ def main() -> None:
     parser.add_argument("--evidence", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    result = resolve(\n        scope_path=args.scope,\n        evidence_path=args.evidence,\n        output_path=args.output,\n    )\n    print(json.dumps(result, indent=2, sort_keys=True))
+    result = resolve(
+        scope_path=args.scope,
+        evidence_path=args.evidence,
+        output_path=args.output,
+    )
+    print(json.dumps(result, indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":
