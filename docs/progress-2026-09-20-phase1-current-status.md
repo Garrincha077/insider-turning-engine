@@ -87,29 +87,36 @@ Evidence-only residual work then completed successfully:
 Strict multi-source synthesis run **35507255962** then added **71**
 performance-blind same-security candidates.
 
+Subsequent performance-blind continuity gates:
+
+- residual-91 scope freeze: run **35507445541**, 91 rows / 35 issuer-tickers;
+- provider primary-source resolution: run **35507604004**, **4 / 4** provider
+  ambiguities resolved as same-security symbol changes;
+- residual-87 scope freeze: run **35507696537**.
+
 Current frozen state:
 
-- combined deterministic candidates: **173 / 264**
-- residual unresolved rows: **91**
-- residual issuer/tickers: **35 / 35**
-- combined candidate key digest:
-  `sha256:12101a4d11415b1c8a212024baf8cf4febdd05c23e26e70e38a28e1af00451c5`
-- residual key digest:
-  `sha256:46eeaa05a83960c1ef9537dd88972351b8c984c996ccddffa23f7da8d294ab58`
-- release: `research-phase1-b3-residual-multisource-v1`
+- deterministic continuity candidates/resolutions: **177 / 264**
+- residual unresolved rows: **87**
+- residual issuer/tickers: **33**
+- every remaining row is `long_internal_gap`;
+- provider ambiguities remaining: **0**
+- residual-87 key digest:
+  `sha256:c28829aa56204db04633546d91b06b938d06f897cd022d2c8147f488415d2742`
+- release: `research-phase1-b3-residual87-scope-v1`
 - corrected performance remains **closed**
 - final resolution contract remains **not created**
 - 2023+ remains **sealed**
 
-See `docs/progress-2026-09-20-b3-residual-multisource-synthesis.md`.
+See `docs/progress-2026-09-20-b3-provider-resolution-residual87.md`.
 
 ## Immediate sequence
 
-1. Freeze the exact 91-row residual continuity scope.
-2. Resolve the 4 provider ambiguities and ticker-change/security-change buckets
-   using pinned performance-blind primary evidence.
-3. Continue through the one-sided and title-change buckets without reading
-   returns.
+1. Preserve the exact 87-row residual continuity scope.
+2. Add bounded primary evidence for ticker-change and one-sided identity
+   buckets without reading returns.
+3. Continue through changed/overlapping security-title buckets with fail-closed
+   rules.
 4. Create the final B3 continuity contract only when every frozen row is
    deterministically classified.
 5. Recompute corrected B3 development performance only after a zero-unresolved
