@@ -11,7 +11,7 @@ This is the operational continuation point for a new ChatGPT/Codex session. Read
 3. Treat the exact-calendar P0 market audit as the authoritative market-data gate. Current tier: **C_EXPLORATORY**.
 4. Treat Phase-1 B0, B1, B2 and B4 development outputs as completed descriptive/research benchmarks, not production evidence.
 5. Treat the B3 P/S history, B3 amendment reconciliation, and B3 definition freeze as completed data/methodology gates.
-6. Current active task: finish the performance-blind B3 security-continuity resolution for the frozen 43-row residual scope. Provider ambiguity, two SPAC-unit waves, one-sided identity, and the first multi-class/reorganization subset are resolved; corrected B3 performance stays closed until the final unresolved count is zero.
+6. Current active task: implement the predeclared B3 continuity-corrected development performance using the immutable 264/264 final continuity contract; corrected performance has not yet been opened.
 7. Keep sealed OOS **2023+ unopened**.
 8. Do **not** change production scoring, weights, thresholds, signal states, alerts, or production methodology unless the owner explicitly asks.
 
@@ -252,45 +252,45 @@ Persistent release: research-phase1-b3-identity-v1.
 Identity asset SHA-256:
 be808447f2f76bf34904f1950a0639a4b515a7a241165b4ea6267aaacc2a4d91.
 
-### Current active gate — B3 performance-blind continuity resolution
+### Current active gate — B3 continuity-corrected development performance
 
-B3 development run 35502095184 is complete at coverage tier C_EXPLORATORY.
-Primary 126-session SPY excess mean is +4.09%, median -2.73%, win rate 44.84%.
+B3 uncorrected development run 35502095184 remains the frozen descriptive
+starting point. The uncorrected robustness run 35502779482 remains
+`BLOCK_HAC_AND_OOS` because the 126-session top-1%-removed mean is -0.1974%.
+Do not retune that rule.
 
-The frozen robustness gate is also complete. Latest green run 35502779482
-returns `BLOCK_HAC_AND_OOS` because the 126-session top-1%-removed mean is
-non-positive (-0.1974%). Do not retune this warning after seeing the result.
+The full performance-blind security-continuity program is now complete:
 
-Security-continuity work is therefore a data-validity correction, not a route
-around the robustness block.
+- original frozen unresolved scope: **264 event-horizon rows**;
+- final residual-13 resolution run 35540472056: **13 / 13 resolved**;
+- final continuity-contract run 35540610883: **SUCCESS**;
+- classified rows: **264 / 264**;
+- unresolved rows: **0**;
+- exact classified/frozen-scope key SHA-256:
+  `sha256:6125fe42a9559ce937d385b4f49d1a74d33ce1caad7f5ec8487ce72bf854082b`;
+- final contract release: `research-phase1-b3-final-continuity-contract-v1`;
+- final contract asset SHA-256:
+  `sha256:22e1af6713eb0c0f73604a150787ac9248f044eef63e1f88b70b31697aede163`;
+- final resolution contract created: **true**;
+- corrected performance opened: **false**;
+- 2023+ OOS: **sealed**;
+- production scoring: **unchanged**.
 
-Authoritative continuity state:
+Final continuity classification counts:
 
-- ledger run 35502394856: 264 unresolved event-horizon rows;
-- deterministic candidate run 35502978548: 102 candidates / 162 residual;
-- bounded P/S PIT, successor-action, SEC-title and all-Form345 evidence runs:
-  35503316854 / 35503492411 / 35503698067 / 35504002615;
-- strict multi-source synthesis run 35507255962: **71 new candidates**;
-- residual-91 scope freeze run 35507445541: **91 rows / 35 issuer-tickers**;
-- provider primary-source resolution run 35507604004: **4 / 4 provider ambiguities resolved**;
-- residual-87 scope freeze run 35507696537: **87 rows / 33 issuer-tickers**;
-- SPAC-unit resolution run 35507997799: **4 rows resolved**;
-- one-sided identity resolution run 35508257853: **20 rows resolved**;
-- residual-63 scope freeze run 35508340176: **63 rows / 27 issuer-tickers**;
-- second SPAC-unit resolution run 35508586692: **8 rows resolved**;
-- multi-class/reorganization resolution run 35508859857: **12 rows resolved**;
-- residual-43 scope freeze run 35508922204: **43 rows / 19 issuer-tickers**;
-- deterministic continuity candidates/resolutions: **221 / 264**;
-- residual-43 key SHA-256:
-  `sha256:be82164c63ed8c8528017ff3201d5172e818655e5c7a8fa48bd7576c7cb02cd6`;
-- release: `research-phase1-b3-residual43-scope-v1`;
-- final resolution contract: not created;
-- corrected performance: not opened;
-- 2023+ OOS: sealed;
-- production scoring: unchanged.
+- SAME_SECURITY_CONTINUITY: 180
+- SYMBOL_CHANGED_SAME_SECURITY: 11
+- TRANSFORMED_HOLDER_CONSIDERATION: 71
+- TRANSFORMED_MULTI_COMPONENT_CONSIDERATION: 1
+- DISCONTINUOUS_NO_COMPLETE_VALUATION: 1
 
-Current work must remain performance-blind and resolve/classify the exact
-43-row residual scope before a final overlay can be frozen.
+The next implementation must consume this immutable final contract and preserve
+the frozen exact-XNYS target dates, missing-data policy, cash convention and
+multi-component valuation rules. NBA.U must retain both MIMO common and MIMO WS
+warrant components; incomplete exact-session basket valuation must fail closed.
+
+Corrected development performance may be opened only by a separately frozen
+research gate. Validation, HAC/OOS progression and 2023+ remain closed.
 
 ---
 
@@ -432,7 +432,7 @@ The current frozen/research benchmark family is:
 | **B0** | any qualified open-market purchase | development descriptive run complete |
 | **B1** | canonical CMP-style opportunistic purchase | development run + continuity-corrected robustness/tail/year/temporal-clustering work complete; formal OOS still blocked |
 | **B2** | independent-owner cluster, primary 30 days and >=2 owner CIKs | development run complete |
-| **B3** | company net buying using complete PIT buy/sale history | development + robustness complete; continuity resolution active at 43 frozen residual rows; HAC/OOS blocked |
+| **B3** | company net buying using complete PIT buy/sale history | 264/264 continuity contract complete; corrected development performance is the active next gate; HAC/OOS blocked |
 | **B4** | exact same-issuer + same-XNYS-session intersection of B1 and B2 | development run complete |
 
 Primary horizons remain 21/63/126/252 XNYS sessions, with 126 primary.
@@ -466,24 +466,24 @@ Do not open OOS until transaction eligibility, transforms, benchmark family, fea
 
 ## NEXT EXECUTION SEQUENCE
 
-1. Preserve the exact **43-row B3 residual continuity scope**.
-2. Split remaining cases into target-specific SPAC/unit life-cycle cases and
-   ordinary-share title-normalization/market-gap cases.
-3. Resolve each identity from pinned primary SEC/issuer/exchange evidence only,
-   without reading realized performance.
-4. Do not create the final B3 continuity contract until every frozen residual
-   row is deterministically classified and the unresolved count is zero.
-5. Only after that zero-unresolved gate, recompute corrected B3 development
-   performance with the already frozen 21/63/126/252 horizons and 126 primary.
-6. Reapply the already frozen robustness semantics; do not change warning
-   thresholds after the result.
-7. Keep HAC/OOS blocked while the frozen progression result requires it.
-8. Compare B0/B1/B2/B3/B4 only after B3 data validity is corrected.
-9. Move to the insider feature tournament only after the simple benchmark
-   family is understood.
-10. Test the Turning overlay only after the insider-only model is defensible.
-11. Freeze methodology before 2021-2022 validation.
-12. Keep 2023+ sealed until explicit owner authorization after all prior gates.
+1. Freeze the **B3 continuity-corrected development-performance gate** before
+   reading corrected outcomes.
+2. Consume only `research-phase1-b3-final-continuity-contract-v1`.
+3. Preserve exact 21/63/126/252 XNYS targets, 126 primary, and the existing
+   exact-session no-substitution missing-data rule.
+4. Apply same-security/symbol-change/holder-transformation terms exactly from
+   the final contract.
+5. For multi-component consideration, require exact target-session values for
+   every component or mark the row incomplete; do not impute or discard a
+   component.
+6. Compute corrected 2016-2020 development results only, with data bounded
+   through 2022-12-31.
+7. Reapply the already frozen B3 robustness semantics without retuning.
+8. Keep HAC/OOS blocked unless those frozen corrected robustness rules permit
+   progression.
+9. Compare B0/B1/B2/B3/B4 only after corrected B3 data validity is complete.
+10. Keep 2023+ sealed until explicit owner authorization after all prior gates.
+
 
 ---
 
