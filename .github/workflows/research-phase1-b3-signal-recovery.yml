@@ -1,0 +1,115 @@
+name: Recover Phase-1 B3 raw signal inputs
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-b3-signal-recovery.yml"
+      - "scripts/research_phase1_b3_signal_build.py"
+      - "tests/test_research_phase1_b3_signal_build.py"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-b3-signal-recovery-v1
+  cancel-in-progress: false
+
+env:
+  RECON_RELEASE: research-phase1-b3-ps-reconciliation-v1
+  DEFINITION_RELEASE: research-phase1-b3-definition-v1
+  SIGNAL_RELEASE: research-phase1-b3-signal-input-v1
+
+jobs:
+  build:
+    name: Build B3 raw development signal inputs from persisted gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+
+      - name: Verify and download persisted reconciliation + frozen definition
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/reconciliation-assets work/reconciliation work/definition
+
+          gh release view "$RECON_RELEASE" --repo "$GITHUB_REPOSITORY" --json assets > work/recon-assets.json
+          gh release view "$DEFINITION_RELEASE" --repo "$GITHUB_REPOSITORY" --json assets > work/definition-assets.json
+
+          python - <<'PY'
+          import json
+          recon={x["name"] for x in json.load(open("work/recon-assets.json"))["assets"]}
+          definition={x["name"] for x in json.load(open("work/definition-assets.json"))["assets"]}
+          assert "b3-ps-reconciliation-2013-2022.tar.gz" in recon
+          assert "summary.json" in recon
+          assert "b3-company-net-buying-v1-frozen.json" in definition
+          PY
+
+          gh release download "$RECON_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern 'b3-ps-reconciliation-2013-2022.tar.gz'             --dir work/reconciliation-assets
+          tar -xzf work/reconciliation-assets/b3-ps-reconciliation-2013-2022.tar.gz             -C work/reconciliation
+
+          gh release download "$DEFINITION_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern 'b3-company-net-buying-v1-frozen.json'             --dir work/definition
+
+          python - <<'PY'
+          import json
+          recon=json.load(open("work/reconciliation/summary.json"))
+          definition=json.load(open("work/definition/b3-company-net-buying-v1-frozen.json"))
+          assert recon["status"]=="B3_PS_AMENDMENT_RECONCILIATION_PASS"
+          assert recon["amendmentsReconciledForPsUniverse"] is True
+          assert recon["oosOpened"] is False
+          assert definition["b3DefinitionFrozen"] is True
+          assert definition["developmentPerformanceComputed"] is False
+          assert definition["oosOpened"] is False
+          PY
+
+      - name: Build performance-blind B3 raw candidates
+        run: >-
+          uv run python scripts/research_phase1_b3_signal_build.py
+          --revisions work/reconciliation/reconciled-ps-revisions.jsonl
+          --definition work/definition/b3-company-net-buying-v1-frozen.json
+          --output work/signals
+
+      - name: Assert performance remains unopened
+        run: |
+          python - <<'PY'
+          import json
+          s=json.load(open("work/signals/summary.json"))
+          assert s["developmentPeriod"]=="2016-2020"
+          assert s["rawCandidateCount"] > 0
+          assert s["marketDataJoined"] is False
+          assert s["returnsRead"] is False
+          assert s["developmentPerformanceComputed"] is False
+          assert s["validationPerformanceComputed"] is False
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          print(json.dumps(s, indent=2, sort_keys=True))
+          PY
+
+      - name: Persist raw signal inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$SIGNAL_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$SIGNAL_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 B3 raw development signal inputs v1"               --notes "Performance-blind B3 raw candidates for 2016-2020. No market outcomes or 2023+ data read."               --prerelease
+          fi
+          tar -C work/signals -czf work/b3-raw-signal-inputs-2016-2020.tar.gz             summary.json b3-raw-signal-candidates.jsonl
+          gh release upload "$SIGNAL_RELEASE"             work/b3-raw-signal-inputs-2016-2020.tar.gz             work/signals/summary.json             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3-raw-signal-inputs-${{ github.run_id }}
+          path: work/signals
+          retention-days: 90
