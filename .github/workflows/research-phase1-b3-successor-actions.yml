@@ -1,0 +1,102 @@
+name: Expand B3 successor corporate-action evidence
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-b3-successor-actions.yml"
+      - "scripts/research_phase1_b3_successor_action_universe.py"
+      - "docs/research-phase1-b3-successor-actions.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-b3-successor-actions-v1
+  cancel-in-progress: false
+
+env:
+  SOURCE_RELEASE: research-phase1-b3-residual-sec-corroboration-v1
+  SOURCE_ASSET: b3-residual-sec-corroboration.json
+  SOURCE_DIGEST: sha256:702784fc368b4e5def9fe4cdeb83c6120920431a4a33e1f9843467c9cd599e0e
+  RESULT_RELEASE: research-phase1-b3-successor-actions-v1
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY_ID }}
+      ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+
+      - name: Verify frozen corroboration source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ALPACA_API_KEY_ID"
+          test -n "$ALPACA_API_SECRET_KEY"
+          mkdir -p work/source work/universe work/actions
+          gh release view "$SOURCE_RELEASE" --repo "$GITHUB_REPOSITORY" --json assets > work/assets.json
+          python - <<'PY'
+          import json, os
+          assets={x["name"]:x for x in json.load(open("work/assets.json"))["assets"]}
+          assert assets[os.environ["SOURCE_ASSET"]].get("digest")==os.environ["SOURCE_DIGEST"]
+          PY
+          gh release download "$SOURCE_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$SOURCE_ASSET" --dir work/source
+
+      - name: Build frozen successor ticker universe
+        run: >-
+          uv run python scripts/research_phase1_b3_successor_action_universe.py
+          --corroboration work/source/b3-residual-sec-corroboration.json
+          --output work/universe/events.csv
+
+      - name: Query bounded corporate-action evidence
+        run: >-
+          uv run python scripts/research_market_corporate_action_inventory.py
+          --events work/universe/events.csv
+          --output-dir work/actions
+
+      - name: Assert evidence-only boundaries
+        run: |
+          python - <<'PY'
+          import json
+          s=json.load(open("work/actions/summary.json"))
+          assert s["period"]==["2016-01-01","2022-12-31"]
+          assert s["performanceRead"] is False
+          assert s["researchOnly"] is True
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          print(json.dumps(s,indent=2,sort_keys=True))
+          PY
+
+      - name: Persist successor action evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 B3 successor corporate-action evidence v1"               --notes "Bounded 2016-2022 corporate-action evidence for SEC-observed historical successor tickers. Evidence-only; performance and OOS remain closed."               --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE"             work/universe/events.csv             work/actions/corporate-actions.json             work/actions/summary.json             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3-successor-actions-${{ github.run_id }}
+          path: |
+            work/universe/events.csv
+            work/actions/corporate-actions.json
+            work/actions/summary.json
+          retention-days: 90
