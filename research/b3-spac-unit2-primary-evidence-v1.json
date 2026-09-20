@@ -1,0 +1,117 @@
+{
+  "schemaVersion": "1.0.0",
+  "contractId": "phase1-b3-spac-unit2-primary-evidence-v1",
+  "frozenAt": "2026-09-20",
+  "researchOnly": true,
+  "performanceRead": false,
+  "priceFieldsRead": [],
+  "oosOpened": false,
+  "productionScoringChanged": false,
+  "scopeRelease": "research-phase1-b3-residual63-scope-v1",
+  "scopeResidualKeySha256": "sha256:ed13976872da6522da2973a450a1f1c39e22cc19e2ffcc8367b9cc1a1b016b50",
+  "expectedResolutionRows": 8,
+  "expectedResolutionKeySha256": "sha256:fae1020ef5d77cd93b885da6bc4e5c8b4a83ec1ded373f9ccc2148bf90add999",
+  "identities": [
+    {
+      "issuerCik": "0001719893",
+      "unitSymbol": "MTECU",
+      "componentCommonSymbol": "MTEC",
+      "expectedRows": 4,
+      "targetExitMax": "2019-03-12",
+      "evidence": [
+        {
+          "accession": "0001615774-18-001293",
+          "evidenceDate": "2018-02-16",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1719893/000161577418001293/s109105_8k.htm",
+          "fact": "Unseparated units continue MTECU while MTEC common and MTECW warrants trade separately."
+        },
+        {
+          "accession": "0001615774-19-004058",
+          "evidenceDate": "2019-03-13",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1719893/000161577419004058/s116641_10k.htm",
+          "fact": "MTECU, MTEC and MTECW remain concurrently traded; unit holders of record reported as of 2019-03-13."
+        }
+      ],
+      "unitSecurityKind": "SPAC_UNIT",
+      "primaryConclusion": "ORIGINAL_UNIT_REMAINED_LISTED_UNDER_SAME_SYMBOL",
+      "resolutionDecision": "SAME_SECURITY_CONTINUITY",
+      "transformationKind": "",
+      "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+      "successorSymbol": "MTECU",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0
+    },
+    {
+      "issuerCik": "0001768910",
+      "unitSymbol": "GRCYU",
+      "componentCommonSymbol": "GRCY",
+      "expectedRows": 2,
+      "targetExitMax": "2021-09-01",
+      "evidence": [
+        {
+          "accession": "0001410578-21-000285",
+          "evidenceDate": "2021-09-30",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1768910/000141057821000285/grcyu-20210930x10q.htm",
+          "fact": "Form 10-Q concurrently registers GRCYU units and GRCY ordinary shares through 2021-09-30; no business combination completed."
+        }
+      ],
+      "unitSecurityKind": "SPAC_UNIT",
+      "primaryConclusion": "ORIGINAL_UNIT_REMAINED_LISTED_UNDER_SAME_SYMBOL",
+      "resolutionDecision": "SAME_SECURITY_CONTINUITY",
+      "transformationKind": "",
+      "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+      "successorSymbol": "GRCYU",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0
+    },
+    {
+      "issuerCik": "0001777393",
+      "unitSymbol": "SBE.U",
+      "componentCommonSymbol": "SBE",
+      "expectedRows": 1,
+      "targetExitMax": "2020-03-04",
+      "evidence": [
+        {
+          "accession": "0001213900-20-008001",
+          "evidenceDate": "2020-03-27",
+          "filingDate": "2020-03-30",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1777393/000121390020008001/f10k2019_switchbackenergy.htm",
+          "fact": "Form 10-K registers SBE.U units and SBE common concurrently, states unseparated units continue SBE.U, and reports unit holder of record after the scoped target."
+        }
+      ],
+      "unitSecurityKind": "SPAC_UNIT",
+      "primaryConclusion": "ORIGINAL_UNIT_REMAINED_LISTED_UNDER_SAME_SYMBOL",
+      "resolutionDecision": "SAME_SECURITY_CONTINUITY",
+      "transformationKind": "",
+      "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+      "successorSymbol": "SBE.U",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0
+    },
+    {
+      "issuerCik": "0001785424",
+      "unitSymbol": "FSRVU",
+      "componentCommonSymbol": "FSRV",
+      "expectedRows": 1,
+      "targetExitMax": "2020-11-10",
+      "evidence": [
+        {
+          "accession": "0001213900-20-036532",
+          "evidenceDate": "2020-11-12",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1785424/000121390020036532/f10q0920_finservacq.htm",
+          "fact": "Form 10-Q concurrently registers FSRVU units and FSRV common and reports shares outstanding as of 2020-11-12, after the scoped target."
+        }
+      ],
+      "unitSecurityKind": "SPAC_UNIT",
+      "primaryConclusion": "ORIGINAL_UNIT_REMAINED_LISTED_UNDER_SAME_SYMBOL",
+      "resolutionDecision": "SAME_SECURITY_CONTINUITY",
+      "transformationKind": "",
+      "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+      "successorSymbol": "FSRVU",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0
+    }
+  ],
+  "finalResolutionContractCreated": false,
+  "correctedPerformanceOpened": false
+}
