@@ -18,7 +18,10 @@ from insider_turning_engine.ingestion.sec.checkpoint import (
     restore_checkpoint,
     validate_checkpoint,
 )
-from insider_turning_engine.ingestion.sec.daily_history import ingest_day
+from insider_turning_engine.ingestion.sec.daily_history import (
+    PREVIOUS_PARSER_VERSION,
+    ingest_day,
+)
 from insider_turning_engine.ingestion.sec.daily_index import SECDailyIndexSource
 from insider_turning_engine.ingestion.sec.historical import RequestPacer
 from insider_turning_engine.ingestion.sec.release_store import ReleaseCheckpointStore
@@ -312,6 +315,19 @@ def test_release_persist_verifies_readback_and_is_idempotent(tmp_path: Path) -> 
     store.files[first["tag"]] += b"x"
     with pytest.raises(ValueError, match="size"):
         store.latest(DAY)
+
+
+def test_release_store_reads_supported_previous_v2_checkpoint(tmp_path: Path) -> None:
+    store = FakeReleases()
+    value = checkpoint(tmp_path)
+    value["parserVersion"] = PREVIOUS_PARSER_VERSION
+    for filing in value["filings"]:
+        filing["parserVersion"] = PREVIOUS_PARSER_VERSION
+
+    receipt = store.persist(value)
+
+    assert receipt["tag"].startswith(f"sec-day-v2-{DAY.isoformat()}-")
+    assert store.latest(DAY) == value
 
 
 def test_cli_preview_never_contacts_sec_or_github(monkeypatch: Any, tmp_path: Path) -> None:

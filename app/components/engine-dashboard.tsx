@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Activity, BellRing, Radar, ShieldAlert } from 'lucide-react';
-import type { DashboardData } from '@/lib/dashboard-data';
-import type { PublicationManifest, SettingsStatus } from '@/lib/operations-data';
 import { loadPublication } from '@/lib/load-publication';
 import { companyCatalog, instant, scoreLabel, controlClass } from '@/lib/research';
 import { isCikList, isTimezone, resetPreferences, usePreference } from '@/lib/local-preferences';
@@ -15,6 +13,11 @@ const groups = [
   { label: 'Operations', views: [['system-health', 'System Health'], ['data-coverage', 'Data Coverage'], ['alert-center', 'Alert Center'], ['settings', 'Settings']] },
 ];
 const views = groups.flatMap((group) => group.views);
+const researchViews = new Set([
+  'radar', 'market-pulse', 'live-sec-tape', 'turning-stocks', 'divergence',
+  'smart-buys', 'clusters', 'cost-basis', 'company-lab', 'system-health',
+  'data-coverage', 'alert-center', 'settings',
+]);
 const descriptions: Record<string, string> = {
   radar: 'Explore the companies in this snapshot. Missing scores do not hide SEC activity.',
   'market-pulse': 'Observed activity in the exported population — not a census of the US market.',
@@ -39,7 +42,7 @@ function readRoute() {
 
 export function EngineDashboard() {
   const [route, setRoute] = useState(readRoute);
-  const [publication, setPublication] = useState<{ data: DashboardData; manifest: PublicationManifest; settings: SettingsStatus } | null>(null);
+  const [publication, setPublication] = useState<Awaited<ReturnType<typeof loadPublication>> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [watchlist, setWatchlist] = usePreference('watchlist', [], isCikList);
   const [timezone, setTimezone] = usePreference('timezone', 'Europe/Zagreb', isTimezone);
@@ -55,12 +58,35 @@ export function EngineDashboard() {
   useEffect(() => {
     const controller = new AbortController();
     loadPublication(controller.signal).then((value) => {
-      setPublication(value); document.documentElement.dataset.hydrated = 'true';
+      setPublication(value);
+      document.documentElement.dataset.research = value.researchAvailable ? 'pending' : 'unavailable';
+      document.documentElement.dataset.hydrated = 'true';
     }).catch((reason: unknown) => {
       if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : 'Snapshot unavailable');
     });
     return () => controller.abort();
   }, []);
+  useEffect(() => {
+    if (!publication?.researchAvailable || publication.data.research ||
+        !researchViews.has(route.view) || error) {
+      document.documentElement.dataset.research = publication?.data.research
+        ? 'ready'
+        : publication?.researchAvailable ? (error ? 'error' : 'pending') : 'unavailable';
+      return;
+    }
+    const controller = new AbortController();
+    document.documentElement.dataset.research = 'loading';
+    publication.loadResearch(controller.signal).then((data) => {
+      setPublication((current) => current ? { ...current, data } : current);
+      document.documentElement.dataset.research = 'ready';
+    }).catch((reason: unknown) => {
+      if (!controller.signal.aborted) {
+        document.documentElement.dataset.research = 'error';
+        setError(reason instanceof Error ? reason.message : 'Detailed research snapshot unavailable');
+      }
+    });
+    return () => controller.abort();
+  }, [publication, route.view, error]);
 
   function navigate(view: string, ticker?: string) {
     const company = catalog.find((item) => item.ticker === ticker);
@@ -110,6 +136,7 @@ export function EngineDashboard() {
           <span className="text-amber-200">{scoreLabel}</span><span>{data.scoreVersion}</span><span>Score snapshot: {instant(manifest.asOf, timezone)}</span><span>Market through: {manifest.watermarks.marketSessionThrough ?? 'unavailable'}</span>
           {data.status === 'STALE' && <output className="text-rose-300">Source reports stale data. Check System Health.</output>}
         </div>
+        {publication.researchAvailable && !data.research && researchViews.has(view) && <output className="block rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-4 text-sm text-emerald-100">Loading and verifying detailed SEC research… The compact dashboard is already available.</output>}
         {view === 'radar' && <CompanyTable {...tableProps} mode="radar" />}
         {view === 'turning-stocks' && <CompanyTable key="turning" {...tableProps} mode="turning" />}
         {view === 'divergence' && <CompanyTable key="divergence" {...tableProps} mode="divergence" />}

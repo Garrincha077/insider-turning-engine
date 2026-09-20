@@ -10,4 +10,5 @@ export async function section(page: Page, label: string) {
 export async function ready(page: Page) {
   await page.goto('/');
   await expect(page.locator('html')).toHaveAttribute('data-hydrated', 'true', { timeout: 20_000 });
+  await expect(page.locator('html')).not.toHaveAttribute('data-research', /^(pending|loading)$/, { timeout: 20_000 });
 }

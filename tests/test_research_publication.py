@@ -35,6 +35,12 @@ def test_factual_policy_and_ui_restore_preserve_v2_without_predictive_permission
     with httpx.Client(transport=httpx.MockTransport(fetch)) as client:
         restore_publication(output, client)
     assert (output / "research-v2.json").read_bytes() == (source / "research-v2.json").read_bytes()
+    assert gzip.decompress((source / "research-v2.json.gz").read_bytes()) == (
+        source / "research-v2.json"
+    ).read_bytes()
+    assert gzip.decompress((output / "research-v2.json.gz").read_bytes()) == (
+        output / "research-v2.json"
+    ).read_bytes()
     assert validate_publication(output).startswith("DAILY_RESEARCH")
     (output / "research-v2.json").write_text("{}")
     with pytest.raises(ValueError, match="size mismatch|hash mismatch"):

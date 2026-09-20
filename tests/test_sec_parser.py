@@ -1,7 +1,7 @@
 """Contract tests for the deterministic SEC ownership XML parser."""
 
 import hashlib
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from insider_turning_engine.domain.models import (
@@ -43,6 +43,22 @@ def test_non_derivative_rows_are_normalized_and_stable() -> None:
     assert first.records[0].source.content_hash.startswith("sha256:")
     expected = hashlib.sha256(b"0001234567-26-000001|0001999101|NON_DERIVATIVE|1").hexdigest()
     assert first.records[0].transaction_id == f"txn_{expected}"
+
+
+def test_transaction_date_accepts_xsd_timezone_without_shifting_calendar_day() -> None:
+    payload = (FIXTURES / "form4_non_derivative.xml").read_bytes().replace(
+        b"2026-08-20", b"2026-08-20-05:00", 1
+    )
+    result = parse_sec_xml(payload, METADATA)
+    assert not result.quarantines
+    assert result.records[0].transaction.transaction_date == date(2026, 8, 20)
+
+
+def test_transaction_date_rejects_datetime_or_invalid_xsd_timezone() -> None:
+    original = (FIXTURES / "form4_non_derivative.xml").read_bytes()
+    for invalid in (b"2026-08-20T00:00:00Z", b"2026-08-20-15:00"):
+        result = parse_sec_xml(original.replace(b"2026-08-20", invalid, 1), METADATA)
+        assert result.quarantines[0].reason_code == "INVALID_TRANSACTION"
 
 
 def test_canonical_serialization_has_only_canonical_schema_fields() -> None:

@@ -55,7 +55,7 @@ def restore_publication(output: Path, client: httpx.Client) -> None:
             or not isinstance(size, int)
             or not 0 < size <= (
                 MAX_PUBLIC_RESEARCH_BYTES
-                if path == "research-v2.json"
+                if path in {"research-v2.json", "research-v2.json.gz"}
                 else MAX_PUBLIC_FILE_BYTES
             )
         ):

@@ -46,6 +46,9 @@ _MAX_XML_BYTES = 10 * 1024 * 1024
 _MAX_XML_DEPTH = 100
 _MAX_TRANSACTION_ROWS = 50_000
 _ACCESSION_RE = re.compile(r"^\d{10}-\d{2}-\d{6}$")
+_XSD_DATE_RE = re.compile(
+    r"^(?P<day>\d{4}-\d{2}-\d{2})(?:Z|[+-](?:(?:0\d|1[0-3]):[0-5]\d|14:00))?$"
+)
 _TEN_B5_RE = re.compile(r"\brule\s*10b5[\s-]*1\b", re.IGNORECASE)
 _CEO_RE = re.compile(r"\b(?:chief\s+executive\s+officer|ceo)\b", re.IGNORECASE)
 _CFO_RE = re.compile(r"\b(?:chief\s+financial\s+officer|cfo)\b", re.IGNORECASE)
@@ -157,6 +160,15 @@ def _decimal(value: str | None) -> Decimal | None:
     if not number.is_finite() or number < 0:
         return None
     return number
+
+
+def _xsd_date(value: str) -> date:
+    """Parse an XML Schema ``date`` without shifting its stated calendar day."""
+
+    match = _XSD_DATE_RE.fullmatch(value.strip())
+    if match is None:
+        raise ValueError("transaction date must be an XML Schema date")
+    return date.fromisoformat(match.group("day"))
 
 
 def _bool(value: str | None) -> bool:
@@ -685,7 +697,7 @@ def parse_sec_ownership_document(
                     or not acquired
                 ):
                     raise ValueError("security title, transaction date, code, and A/D are required")
-                tx_date = date.fromisoformat(tx_date_text)
+                tx_date = _xsd_date(tx_date_text)
                 shares = _decimal(shares_text)
                 reported_value = None
                 if shares is None:
