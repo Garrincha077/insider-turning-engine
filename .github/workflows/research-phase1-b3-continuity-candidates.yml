@@ -1,0 +1,128 @@
+name: Generate Phase-1 B3 continuity resolution candidates
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-b3-continuity-candidates.yml"
+      - "scripts/research_phase1_b3_continuity_resolution_candidates.py"
+      - "tests/test_research_phase1_b3_continuity_resolution_candidates.py"
+      - "docs/research-phase1-b3-continuity-resolution-candidates.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-b3-continuity-candidates-v1
+  cancel-in-progress: false
+
+env:
+  SCOPE_RELEASE: research-phase1-b3-continuity-scope-v1
+  SCOPE_ASSET: b3-unresolved-continuity-scope.json
+  SCOPE_DIGEST: sha256:454bd35a08d9b103043d1cbfa04f5f2bdc3687485fdd6355fc439779a51aa420
+  SCOPE_KEY_DIGEST: sha256:6125fe42a9559ce937d385b4f49d1a74d33ce1caad7f5ec8487ce72bf854082b
+  LEDGER_RELEASE: research-phase1-b3-continuity-ledger-v1
+  LEDGER_ASSET: b3-security-continuity-ledger.tar.gz
+  LEDGER_DIGEST: sha256:34b2a8bd2b0244b5bca8767b88623ca51d7b5a37f10f57f44a9d513445f6a95f
+  RESULT_RELEASE: research-phase1-b3-continuity-candidates-v1
+
+jobs:
+  candidates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+
+      - name: Run frozen candidate tests
+        run: >-
+          uv run pytest -q
+          tests/test_research_phase1_b3_continuity_resolution_candidates.py
+
+      - name: Verify and download frozen evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/scope work/source work/output
+
+          gh release view "$SCOPE_RELEASE" --repo "$GITHUB_REPOSITORY" --json assets > work/scope-assets.json
+          gh release view "$LEDGER_RELEASE" --repo "$GITHUB_REPOSITORY" --json assets > work/ledger-assets.json
+          python - <<'PY'
+          import json, os
+          scope={x["name"]:x for x in json.load(open("work/scope-assets.json"))["assets"]}
+          ledger={x["name"]:x for x in json.load(open("work/ledger-assets.json"))["assets"]}
+          assert scope[os.environ["SCOPE_ASSET"]].get("digest")==os.environ["SCOPE_DIGEST"]
+          assert ledger[os.environ["LEDGER_ASSET"]].get("digest")==os.environ["LEDGER_DIGEST"]
+          PY
+
+          gh release download "$SCOPE_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$SCOPE_ASSET" --dir work/scope
+          gh release download "$LEDGER_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$LEDGER_ASSET" --dir work/source
+          tar -xzf "work/source/$LEDGER_ASSET" -C work/source ca/corporate-actions.json
+
+          python - <<'PY'
+          import json, os
+          s=json.load(open("work/scope/b3-unresolved-continuity-scope.json"))
+          assert s["status"]=="B3_UNRESOLVED_CONTINUITY_SCOPE_FROZEN"
+          assert s["frozenScope"]["expectedSourceUnresolvedRows"]==264
+          assert s["frozenScope"]["unresolvedRowKeySha256"]==os.environ["SCOPE_KEY_DIGEST"]
+          assert s["performanceRead"] is False
+          assert s["oosOpened"] is False
+          PY
+
+      - name: Generate performance-blind candidate resolutions
+        run: >-
+          uv run python scripts/research_phase1_b3_continuity_resolution_candidates.py
+          --scope work/scope/b3-unresolved-continuity-scope.json
+          --corporate-actions work/source/ca/corporate-actions.json
+          --b1-contract research/b1-security-continuity-resolution-v1.json
+          --output work/output/b3-continuity-resolution-candidates.json
+
+      - name: Assert candidate stage boundaries
+        run: |
+          python - <<'PY'
+          import json, os
+          s=json.load(open("work/output/b3-continuity-resolution-candidates.json"))
+          assert s["status"]=="B3_CONTINUITY_RESOLUTION_CANDIDATES_COMPLETE"
+          assert s["sourceUnresolvedRows"]==264
+          assert s["frozenScopeKeySha256"]==os.environ["SCOPE_KEY_DIGEST"]
+          assert s["candidateResolutionRows"] > 0
+          assert s["candidateResolutionRows"] + s["residualUnresolvedRows"] == 264
+          assert s["performanceRead"] is False
+          assert s["priceFieldsRead"]==[]
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["finalResolutionContractCreated"] is False
+          assert s["correctedPerformanceOpened"] is False
+          print(json.dumps({
+            "candidateResolutionRows":s["candidateResolutionRows"],
+            "residualUnresolvedRows":s["residualUnresolvedRows"],
+            "candidateEvidenceClasses":s["candidateEvidenceClasses"],
+            "reasonCounts":s["reasonCounts"],
+          },indent=2,sort_keys=True))
+          PY
+
+      - name: Persist candidate evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 B3 continuity resolution candidates v1"               --notes "Performance-blind candidate resolutions from direct provider terms and prior frozen B1 continuity evidence. Residual rows remain unresolved; corrected performance stays closed."               --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE"             work/output/b3-continuity-resolution-candidates.json             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3-continuity-candidates-${{ github.run_id }}
+          path: work/output/b3-continuity-resolution-candidates.json
+          retention-days: 90
