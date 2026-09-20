@@ -189,7 +189,10 @@ def resolve(*, scope_path: Path, evidence_path: Path, output_path: Path) -> dict
         "correctedPerformanceOpened": False,
     }
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    output_path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
     return payload
 
 
