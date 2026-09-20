@@ -2,6 +2,6 @@
   "schemaVersion": "1.0.0",
   "enabled": true,
   "channel": "telegram",
-  "minimumPurchaseUsd": 250000,
-  "maximumItems": 5
+  "minimumPurchaseUsd": 100000,
+  "maximumItems": 10
 }

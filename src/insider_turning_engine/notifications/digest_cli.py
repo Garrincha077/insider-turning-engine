@@ -35,8 +35,8 @@ def main() -> None:
         raise ValueError("canonical v2 publication required")
     snapshot = ResearchSnapshot.model_validate_json(
         (args.directory / "research-v2.json").read_bytes())
-    draft = preview_digest(snapshot)
     policy = load_digest_policy(args.policy)
+    draft = preview_digest(snapshot, policy)
     report = draft.model_dump(mode="json")
     report["policyEnabled"] = policy.enabled
     report["status"] = "PREVIEW" if not draft.reasons else "BLOCKED"

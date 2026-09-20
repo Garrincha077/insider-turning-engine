@@ -61,6 +61,17 @@ def test_preview_boundaries_sort_joint_owners_no_scores():
     assert len(preview_digest(snapshot()).event_ids) == 1
 
 
+def test_versioned_policy_controls_threshold_and_daily_item_limit():
+    policy = DigestPolicy(schemaVersion="1.0.0", enabled=True, channel="telegram",
+                          minimumPurchaseUsd=100000, maximumItems=10)
+    data = snapshot(value=100000, count=12)
+    draft = preview_digest(data, policy)
+    assert len(draft.event_ids) == 10
+    assert draft.text.count("Transaction:") == 10
+    assert "≥ $100,000; largest 10" in draft.text
+    assert not preview_digest(snapshot(value=99999), policy).event_ids
+
+
 def test_incomplete_latest_day_does_not_fall_back_or_assert_empty():
     data = snapshot(complete=False)
     draft = preview_digest(data)
