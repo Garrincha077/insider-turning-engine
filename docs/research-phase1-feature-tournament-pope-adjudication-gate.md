@@ -46,17 +46,21 @@ POPE therefore resolves as:
 - $0 cash;
 - `PASSIVE_HOLDER_STOCK_MERGER`.
 
-## Provenance note
+## Provenance
 
-The first POPE conflict-diagnostic asset accidentally serialized the literal
-string `$SOURCE_DIGEST` in one provenance field. The released diagnostic
-asset itself is immutable with SHA-256
-`4a510d67a691e8b74ab268c4610ec83356fef3544a2c56d1160610cba8f8bd1d`.
+The POPE conflict diagnostic was regenerated after correcting its provenance
+field and republished at the same frozen diagnostic release before
+adjudication. The adjudication pins the corrected whole-file SHA-256:
 
-The adjudication verifies that whole-file digest and records the independently
-frozen residual-scope digest
-`bba0f3fd8c46c04e0ccd27a6b6a2a6ac0f8fcf074d89fee7239d5477f0574e01`,
-so it never trusts the malformed field.
+`cb6cea59cb91c7ff580c2216d4c9f022f6ab3a35cbf7a2a5ad26e57d943de49a`.
+
+The corrected diagnostic itself binds the independently frozen residual-scope
+asset SHA-256:
+
+`bba0f3fd8c46c04e0ccd27a6b6a2a6ac0f8fcf074d89fee7239d5477f0574e01`.
+
+The adjudicator verifies both values before applying the primary-evidence
+resolution.
 
 ## Correct partition
 
