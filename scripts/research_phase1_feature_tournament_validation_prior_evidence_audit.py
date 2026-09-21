@@ -80,8 +80,6 @@ def _fingerprint(row: dict[str, Any]) -> tuple[Any, ...]:
     }:
         quantity = 1
     return (
-        str(row.get("resolutionDecision") or ""),
-        str(row.get("transformationKind") or ""),
         state,
         str(row.get("successorSymbol") or "").upper(),
         _number(quantity),
@@ -298,6 +296,15 @@ def _provider_evidence(
             example.get("evidenceClass")
             or example.get("classificationSource")
             or ""
+        ),
+        "schemaLabels": sorted(
+            {
+                (
+                    str(item.get("resolutionDecision") or ""),
+                    str(item.get("transformationKind") or ""),
+                )
+                for item in matches
+            }
         ),
     }
 
