@@ -1,0 +1,119 @@
+name: Freeze F2 validation residual-27 continuity scope
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-validation-residual27-scope.yml"
+      - "scripts/research_phase1_feature_tournament_validation_residual27_scope.py"
+      - "tests/test_research_phase1_feature_tournament_validation_residual27_scope.py"
+      - "docs/research-phase1-feature-tournament-validation-residual27-scope-gate.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-feature-tournament-validation-residual27-scope-v1
+  cancel-in-progress: true
+
+env:
+  SOURCE_RELEASE: research-phase1-insider-feature-tournament-validation-residual32-scope-v1
+  SOURCE_ASSET: validation-residual32-scope.json
+  SOURCE_DIGEST: sha256:17129c2aded50c6e97d55e4af5ea9c469cb33ec5ff9171731f8b309d6f0ae06a
+  RESOLUTION_RELEASE: research-phase1-insider-feature-tournament-validation-stock-dividend-resolution-v1
+  RESOLUTION_ASSET: validation-stock-dividend-primary-resolution.json
+  RESOLUTION_DIGEST: sha256:fcac9796cb768fda95f0b2c1fdffc083379f3140500fca68c48a39bd5b007ba9
+  RESULT_RELEASE: research-phase1-insider-feature-tournament-validation-residual27-scope-v1
+  RESULT_ASSET: validation-residual27-scope.json
+
+jobs:
+  freeze:
+    name: Freeze exact 27-row validation continuity residual
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+
+      - name: Lint and test residual-27 scope freezer
+        run: |
+          uv run ruff check scripts/research_phase1_feature_tournament_validation_residual27_scope.py tests/test_research_phase1_feature_tournament_validation_residual27_scope.py
+          uv run pytest -q tests/test_research_phase1_feature_tournament_validation_residual27_scope.py
+
+      - name: Download and verify immutable inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/input work/output
+          gh release download "$SOURCE_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$SOURCE_ASSET" --dir work/input
+          test "sha256:$(sha256sum "work/input/$SOURCE_ASSET" | cut -d' ' -f1)" = "$SOURCE_DIGEST"
+
+          gh release download "$RESOLUTION_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$RESOLUTION_ASSET" --dir work/input
+          test "sha256:$(sha256sum "work/input/$RESOLUTION_ASSET" | cut -d' ' -f1)" = "$RESOLUTION_DIGEST"
+
+      - name: Freeze exact residual-27 scope
+        run: >-
+          uv run python
+          scripts/research_phase1_feature_tournament_validation_residual27_scope.py
+          --source "work/input/$SOURCE_ASSET"
+          --resolution "work/input/$RESOLUTION_ASSET"
+          --output "work/output/$RESULT_ASSET"
+
+      - name: Assert frozen residual-27 partition
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=json.loads(Path("work/output/validation-residual27-scope.json").read_text())
+          assert p["status"]=="PHASE1_FEATURE_TOURNAMENT_VALIDATION_RESIDUAL27_SCOPE_FROZEN"
+          assert p["sourceResidualRows"]==32
+          assert p["subtractedStockDividendRows"]==5
+          assert p["residualRows"]==27
+          assert p["scopeKeySha256"]=="sha256:683086e2a4ba61f734b45a22a24371f3f2a5ffa0f1fd74e7e9576275ab32da9f"
+          assert p["categoryCounts"]=={
+              "LONG_GAP_NEW_PRIMARY_EVIDENCE_REQUIRED":10,
+              "PROVIDER_NEW_PRIMARY_EVIDENCE_REQUIRED":17,
+          }
+          assert p["waveCounts"]=={
+              "incompleteStockMergerRows":8,
+              "nameChangeStockMergerRows":8,
+              "standaloneNameChangeRows":1,
+              "longGapRows":10,
+          }
+          assert len(p["rows"])==27
+          assert p["performanceRead"] is False
+          assert p["priceFieldsRead"]==[]
+          assert p["featureOutcomesRead"] is False
+          assert p["validationOpened"] is False
+          assert p["validationPerformanceOpened"] is False
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          PY
+
+      - name: Publish immutable residual-27 scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 F2 validation residual-27 continuity scope v1"               --notes "Performance-blind subtraction of five stock-dividend primary resolutions from residual-32. 27 rows remain in frozen merger/name-change/long-gap waves; validation performance and 2023+ OOS remain closed."               --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE" "work/output/$RESULT_ASSET"             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase1-insider-feature-tournament-validation-residual27-scope-${{ github.run_id }}
+          path: work/output
+          retention-days: 90
