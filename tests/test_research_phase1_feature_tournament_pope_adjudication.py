@@ -128,6 +128,7 @@ def test_adjudicates_to_passive_holder_stock_only(
         conflict_path=_write(tmp_path, "conflict.json", _conflict()),
         evidence_path=_write(tmp_path, "evidence.json", _evidence()),
         output_path=tmp_path / "out.json",
+        verify_frozen_asset=False,
     )
 
     assert result["adjudicated"] is True
@@ -166,4 +167,5 @@ def test_rejects_combined_full_stock_and_cash_terms(
                 evidence,
             ),
             output_path=tmp_path / "out.json",
+            verify_frozen_asset=False,
         )
