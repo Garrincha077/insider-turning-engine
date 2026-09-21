@@ -202,7 +202,7 @@ def run(
         "validationOpened": False,
         "oosOpened": False,
         "productionScoringChanged": False,
-        "sourceResidualScopeSha256": source_digest,
+        "sourceResidualScopeSha256": EXPECTED_RESIDUAL_SCOPE_SHA256,
         "sourceConflictAssetSha256": EXPECTED_CONFLICT_ASSET_SHA256,
         "sourceConflictRowSha256": str(conflict["conflictRowSha256"]),
         "safePriorEvidenceRows": 175,
