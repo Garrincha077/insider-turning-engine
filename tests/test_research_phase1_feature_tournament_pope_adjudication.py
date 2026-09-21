@@ -87,7 +87,8 @@ def _evidence() -> dict[str, object]:
         "primarySource": {
             "form": "8-K",
             "accession": "0000052827-20-000138",
-            "document": "https://www.sec.gov/example",
+            "document": ("https://www.sec.gov/Archives/edgar/data/52827/"
+            "000005282720000138/ryn-20200507.htm"),
         },
         "passiveHolderPolicy": {
             "policy": "NO_VALID_ELECTION_DEFAULT",
