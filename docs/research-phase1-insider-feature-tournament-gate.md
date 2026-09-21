@@ -67,6 +67,30 @@ For two-dimensional holdings size, use discovery-period quintiles and define
 `HIGH_HIGH` as both component variables in Q4 or Q5. This definition is
 frozen before outcomes.
 
+## B0 evaluation-session boundary correction — frozen before Stage A output
+
+A key-only audit of the frozen B0 artifact found two canonical B0 exact-entry
+events whose filing knowledge year is 2020 but whose first eligible XNYS
+evaluation session is **2021-01-04**:
+
+- CIK 0001708176 / HOFV;
+- CIK 0001641631 / XAIR.
+
+The tournament split is explicitly based on **evaluation session**, and
+2021-2022 is reserved from feature selection/tuning. These two boundary
+spillovers are therefore excluded from the tournament event scope without
+reading their forward outcomes.
+
+The strict Stage-A scope is:
+
+- **24,190 exact-entry events**;
+- **4,729 distinct issuers**;
+- evaluation sessions **2016-01-01 through 2020-12-31**.
+
+The historical B0 artifact remains unchanged as audit evidence. This
+boundary correction applies to the feature tournament only and is frozen before
+Stage-A coverage/cutpoint output is observed.
+
 ## Security-continuity precondition before Stage B outcomes
 
 The B0 event universe is the neutral feature-tournament reference, but its
