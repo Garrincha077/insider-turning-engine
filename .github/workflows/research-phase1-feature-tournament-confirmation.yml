@@ -35,6 +35,10 @@ env:
   FINAL_CONTINUITY_ASSET: stage-b-final-continuity.json
   FINAL_CONTINUITY_DIGEST: sha256:24947122c8fa776dc6f5e8f628c5b45cdbec6551cf15df334421b405439b4518
 
+  PROVIDER_AMENDMENT_RELEASE: research-phase1-feature-tournament-provider-completeness-amendment-v1
+  PROVIDER_AMENDMENT_ASSET: provider-completeness-amendment.json
+  PROVIDER_AMENDMENT_DIGEST: sha256:faf787e918b953dcffbcc2b714c34873d6228031e25a09e509ee58e1a067fbb2
+
   MARKET_RELEASE: research-market-alpaca-v1
 
   BASELINE_RELEASE: research-phase1-baselines-v1
@@ -113,6 +117,9 @@ jobs:
           gh release download "$FINAL_CONTINUITY_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$FINAL_CONTINUITY_ASSET" --dir work/continuity
           test "sha256:$(sha256sum "work/continuity/$FINAL_CONTINUITY_ASSET" | cut -d' ' -f1)" = "$FINAL_CONTINUITY_DIGEST"
 
+          gh release download "$PROVIDER_AMENDMENT_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$PROVIDER_AMENDMENT_ASSET" --dir work/continuity
+          test "sha256:$(sha256sum "work/continuity/$PROVIDER_AMENDMENT_ASSET" | cut -d' ' -f1)" = "$PROVIDER_AMENDMENT_DIGEST"
+
       - name: Download and verify frozen 2016-2022 market data
         env:
           GH_TOKEN: ${{ github.token }}
@@ -181,6 +188,7 @@ jobs:
           uv run python scripts/research_phase1_feature_tournament_confirmation.py
           --stage-a-dir work/stage-a
           --discovery-results work/discovery/discovery-results.json
+          --provider-amendment work/continuity/provider-completeness-amendment.json
           --ledger work/continuity/ledger/continuity-ledger.csv
           --corporate-actions work/continuity/ca/corporate-actions.json
           --final-contract work/continuity/stage-b-final-continuity.json
@@ -202,6 +210,8 @@ jobs:
           assert p["status"]=="PHASE1_INSIDER_FEATURE_TOURNAMENT_CONFIRMATION_COMPLETE"
           assert p["confirmationEvents"]==9850
           assert p["sourceDiscoveryFamilyCandidates"]==3
+          assert p["providerCompletenessAmendmentApplied"] is True
+          assert p["providerCompletenessAmendmentRows"]==13
           assert len(p["candidateResults"])==3
           assert 0 <= p["confirmedCandidateCount"] <= 3
           assert p["noReselection"] is True
