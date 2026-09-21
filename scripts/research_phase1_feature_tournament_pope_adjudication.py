@@ -16,7 +16,7 @@ EXPECTED_EVIDENCE_CONTRACT = (
     "phase1-feature-tournament-pope-primary-evidence-v1"
 )
 EXPECTED_CONFLICT_ASSET_SHA256 = (
-    "sha256:4a510d67a691e8b74ab268c4610ec83356fef3544a2c56d1160610cba8f8bd1d"
+    "sha256:cb6cea59cb91c7ff580c2216d4c9f022f6ab3a35cbf7a2a5ad26e57d943de49a"
 )
 EXPECTED_RESIDUAL_SCOPE_SHA256 = (
     "sha256:bba0f3fd8c46c04e0ccd27a6b6a2a6ac0f8fcf074d89fee7239d5477f0574e01"
@@ -83,10 +83,6 @@ def run(
     if conflict.get("adjudicated") is not False:
         raise ValueError("POPE conflict was already adjudicated")
 
-    # Diagnostic v1 accidentally serialized the shell token "$SOURCE_DIGEST"
-    # instead of expanding it. Its whole-file release digest is immutable and
-    # verified above, so provenance is repaired here with the independently
-    # frozen residual-scope asset digest rather than trusting that bad field.
     row = conflict.get("row")
     subject = evidence.get("subject")
     if not isinstance(row, dict) or not isinstance(subject, dict):
@@ -206,7 +202,7 @@ def run(
         "validationOpened": False,
         "oosOpened": False,
         "productionScoringChanged": False,
-        "sourceResidualScopeSha256": EXPECTED_RESIDUAL_SCOPE_SHA256,
+        "sourceResidualScopeSha256": source_digest,
         "sourceConflictAssetSha256": EXPECTED_CONFLICT_ASSET_SHA256,
         "sourceConflictRowSha256": str(conflict["conflictRowSha256"]),
         "safePriorEvidenceRows": 175,
