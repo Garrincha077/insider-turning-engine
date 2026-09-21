@@ -1,0 +1,116 @@
+name: Freeze feature tournament residual34 continuity scope
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-residual34-scope.yml"
+      - "scripts/research_phase1_feature_tournament_residual34_scope.py"
+      - "tests/test_research_phase1_feature_tournament_residual34_scope.py"
+      - "docs/research-phase1-feature-tournament-residual34-scope-gate.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-feature-tournament-residual34-scope-v1
+  cancel-in-progress: false
+
+env:
+  RESIDUAL35_RELEASE: research-phase1-feature-tournament-residual-continuity-scope-v1
+  RESIDUAL35_ASSET: residual-continuity-scope.json
+  RESIDUAL35_DIGEST: sha256:bba0f3fd8c46c04e0ccd27a6b6a2a6ac0f8fcf074d89fee7239d5477f0574e01
+  POPE_RELEASE: research-phase1-feature-tournament-pope-adjudication-v1
+  POPE_ASSET: pope-adjudication.json
+  POPE_DIGEST: sha256:8c87c27a3689c1aa10c5d8881cf91de0bb078e97d6133968f1c7d0528afd18a4
+  RESULT_RELEASE: research-phase1-feature-tournament-residual34-scope-v1
+
+jobs:
+  freeze:
+    name: Freeze exact 34-row residual scope
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+
+      - name: Lint and test residual34 semantics
+        run: |
+          uv run ruff check scripts/research_phase1_feature_tournament_residual34_scope.py tests/test_research_phase1_feature_tournament_residual34_scope.py
+          uv run pytest -q tests/test_research_phase1_feature_tournament_residual34_scope.py
+
+      - name: Download and verify frozen inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/input work/output
+          gh release download "$RESIDUAL35_RELEASE" --repo "$GITHUB_REPOSITORY" --pattern "$RESIDUAL35_ASSET" --dir work/input
+          test "sha256:$(sha256sum "work/input/$RESIDUAL35_ASSET" | cut -d' ' -f1)" = "$RESIDUAL35_DIGEST"
+          gh release download "$POPE_RELEASE" --repo "$GITHUB_REPOSITORY" --pattern "$POPE_ASSET" --dir work/input
+          test "sha256:$(sha256sum "work/input/$POPE_ASSET" | cut -d' ' -f1)" = "$POPE_DIGEST"
+
+      - name: Freeze residual34
+        run: >-
+          uv run python scripts/research_phase1_feature_tournament_residual34_scope.py
+          --residual35 "work/input/$RESIDUAL35_ASSET"
+          --pope-adjudication "work/input/$POPE_ASSET"
+          --output work/output/residual34-scope.json
+
+      - name: Assert exact residual34 boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          p=json.load(open("work/output/residual34-scope.json"))
+          assert p["status"]=="PHASE1_FEATURE_TOURNAMENT_RESIDUAL34_SCOPE_FROZEN"
+          assert p["sourceResidual35Rows"]==35
+          assert p["safePriorEvidenceRows"]==175
+          assert p["popeAdjudicatedRows"]==1
+          assert p["residualRows"]==34
+          assert p["residualUniqueEvents"]==19
+          assert p["residualUniqueIssuers"]==14
+          assert p["residualUniqueTickers"]==14
+          assert p["rowsByHorizon"]=={"21":1,"63":6,"126":8,"252":19}
+          assert p["rowsByCurrentResolutionSource"]=={"long_internal_gap":17,"provider":17}
+          assert p["performanceRead"] is False
+          assert p["featureOutcomesRead"] is False
+          assert p["validationOpened"] is False
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          print(json.dumps({k:p[k] for k in (
+            "residualRows","residualUniqueEvents","residualUniqueIssuers",
+            "residualUniqueTickers","rowsByHorizon",
+            "rowsByCurrentResolutionSource","residualSemanticKeySha256"
+          )},indent=2,sort_keys=True))
+          PY
+
+      - name: Publish immutable residual34 scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" \
+              --title "Phase-1 feature tournament residual34 continuity scope v1" \
+              --notes "Exact 34-row performance-blind continuity research scope after 175 conflict-free prior matches and the separate POPE primary-evidence adjudication." \
+              --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE" work/output/residual34-scope.json \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: feature-tournament-residual34-scope-${{ github.run_id }}
+          path: work/output/residual34-scope.json
+          retention-days: 90
