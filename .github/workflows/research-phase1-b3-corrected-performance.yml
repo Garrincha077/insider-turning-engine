@@ -1,0 +1,229 @@
+name: Run B3 continuity-corrected development performance
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/b3-ps-pit-history
+    paths:
+      - "docs/research-phase1-b3-continuity-corrected-performance-gate.md"
+      - "research/b3-continuity-corrected-development-v1.json"
+      - "scripts/research_phase1_b3_corrected_performance.py"
+      - "tests/test_research_phase1_b3_corrected_performance.py"
+      - ".github/workflows/research-phase1-b3-corrected-performance.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-b3-continuity-corrected-development-v1
+  cancel-in-progress: false
+
+env:
+  SOURCE_RELEASE: research-phase1-b3-development-v1
+  SOURCE_ASSET: b3-development-descriptive-2016-2020.tar.gz
+  SOURCE_ASSET_DIGEST: sha256:d90a2f08483d6710bb2f2715fa9049b64fd27a3979e7e63e5fb792f3c0274ae7
+  CONTRACT_RELEASE: research-phase1-b3-final-continuity-contract-v1
+  CONTRACT_ASSET: b3-final-continuity-contract.json
+  CONTRACT_ASSET_DIGEST: sha256:22e1af6713eb0c0f73604a150787ac9248f044eef63e1f88b70b31697aede163
+  MARKET_RELEASE: research-market-alpaca-v1
+  RESULT_RELEASE: research-phase1-b3-continuity-corrected-development-v1
+
+jobs:
+  corrected-development:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync frozen environment
+        run: uv sync --all-groups --frozen
+
+      - name: Lint corrected-performance implementation
+        run: >-
+          uv run ruff check
+          scripts/research_phase1_b3_corrected_performance.py
+          tests/test_research_phase1_b3_corrected_performance.py
+
+      - name: Test frozen corrected valuation rules
+        run: >-
+          uv run pytest -q
+          tests/test_research_phase1_b3_corrected_performance.py
+
+      - name: Verify immutable release inputs before performance read
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/source work/contract work/downloads work/market work/output
+
+          gh release view "$SOURCE_RELEASE" --repo "$GITHUB_REPOSITORY" --json assets > work/source-assets.json
+          gh release view "$CONTRACT_RELEASE" --repo "$GITHUB_REPOSITORY" --json assets > work/contract-assets.json
+          gh release view "$MARKET_RELEASE" --repo "$GITHUB_REPOSITORY" --json assets > work/market-assets.json
+
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          definition = json.loads(
+              Path("research/b3-continuity-corrected-development-v1.json").read_text()
+          )
+          source = {
+              item["name"]: item
+              for item in json.loads(Path("work/source-assets.json").read_text())["assets"]
+          }
+          contract = {
+              item["name"]: item
+              for item in json.loads(Path("work/contract-assets.json").read_text())["assets"]
+          }
+          market = {
+              item["name"]: item
+              for item in json.loads(Path("work/market-assets.json").read_text())["assets"]
+          }
+
+          assert definition["status"] == "PREDECLARED_BEFORE_CORRECTED_OUTCOMES"
+          assert definition["correctedPerformanceOpened"] is False
+          assert definition["oosOpened"] is False
+          assert source[os.environ["SOURCE_ASSET"]]["digest"] == os.environ["SOURCE_ASSET_DIGEST"]
+          assert contract[os.environ["CONTRACT_ASSET"]]["digest"] == os.environ["CONTRACT_ASSET_DIGEST"]
+
+          for name, digest in definition["marketAssets"].items():
+              assert market[name]["digest"] == digest, (name, market[name]["digest"], digest)
+          PY
+
+      - name: Download canonical B3 development and final continuity contract
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release download "$SOURCE_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$SOURCE_ASSET" --dir work/source
+          tar -xzf "work/source/$SOURCE_ASSET" -C work/source             summary.json b3-development-events.csv b3-development-performance-v1.json
+
+          gh release download "$CONTRACT_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$CONTRACT_ASSET" --dir work/contract
+
+          test -s work/source/summary.json
+          test -s work/source/b3-development-events.csv
+          test -s "work/contract/$CONTRACT_ASSET"
+
+      - name: Download frozen 2016-2022 adjusted market evidence only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release download "$MARKET_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern 'alpaca-market-20*.tar.gz' --dir work/downloads
+
+          for year in 2016 2017 2018 2019 2020 2021 2022; do
+            mkdir -p "work/market/$year"
+            tar -xzf "work/downloads/alpaca-market-$year.tar.gz" -C "work/market/$year"
+            test -s "work/market/$year/canonical-market-$year.csv"
+          done
+
+          test ! -e work/market/2023
+          test ! -e work/downloads/alpaca-market-2023.tar.gz
+
+      - name: Assert zero-unresolved contract immediately before performance read
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          c = json.loads(
+              Path("work/contract/b3-final-continuity-contract.json").read_text()
+          )
+          assert c["status"] == "B3_FINAL_CONTINUITY_CONTRACT_COMPLETE"
+          assert c["classifiedRows"] == 264
+          assert c["unresolvedRows"] == 0
+          assert c["classifiedKeySha256"] == (
+              "sha256:6125fe42a9559ce937d385b4f49d1a74d33ce1caad7f5ec8487ce72bf854082b"
+          )
+          assert c["performanceRead"] is False
+          assert c["priceFieldsRead"] == []
+          assert c["correctedPerformanceOpened"] is False
+          assert c["oosOpened"] is False
+          assert c["productionScoringChanged"] is False
+          PY
+
+      - name: Compute continuity-corrected B3 development performance
+        run: >-
+          uv run python scripts/research_phase1_b3_corrected_performance.py
+          --events work/source/b3-development-events.csv
+          --source-summary work/source/summary.json
+          --contract "work/contract/$CONTRACT_ASSET"
+          --definition research/b3-continuity-corrected-development-v1.json
+          --market-root work/market
+          --output work/output
+
+      - name: Assert corrected research boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          s = json.loads(Path("work/output/summary.json").read_text())
+          assert s["status"] == "PHASE1_B3_CONTINUITY_CORRECTED_DEVELOPMENT_COMPLETE"
+          assert s["benchmark"] == "B3_COMPANY_NET_BUYING_V1"
+          assert s["resultClass"] == "research/descriptive"
+          assert s["formalAlphaClaimed"] is False
+          assert s["period"] == "2016-2020 XNYS evaluation-session cohort"
+          assert s["outcomeMarketBoundary"] == "2016-2022 only"
+          assert s["horizonsSessions"] == [21, 63, 126, 252]
+          assert s["primaryHorizonSessions"] == 126
+          assert s["scope"]["events"] == 29930
+          assert s["scope"]["eventHorizonRows"] == 119720
+          assert s["scope"]["contractAppliedRows"] == 264
+          assert s["scope"]["adjustedStockDividendRowsNormalizedToMarketQuantityOne"] == 50
+          assert s["continuityContract"]["classifiedRows"] == 264
+          assert s["continuityContract"]["unresolvedRows"] == 0
+          assert s["maeRecomputed"] is False
+          assert s["continuityCorrectionComplete"] is True
+          assert s["dependenceAwareRobustnessComplete"] is False
+          assert s["calendarTimeRobustnessComplete"] is False
+          assert s["hacRobustnessComplete"] is False
+          assert s["validationPerformanceComputed"] is False
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["b3DefinitionChanged"] is False
+          assert s["eventConstructionChanged"] is False
+          assert s["identityDefinitionChanged"] is False
+          print(json.dumps(s, indent=2, sort_keys=True))
+          PY
+
+      - name: Persist immutable corrected development evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp research/b3-continuity-corrected-development-v1.json work/output/
+          cp docs/research-phase1-b3-continuity-corrected-performance-gate.md work/output/
+
+          tar -C work/output -czf work/b3-continuity-corrected-development-2016-2020.tar.gz             summary.json             b3-continuity-corrected-events.csv             b3-corrected-event-horizons.csv             b3-continuity-corrected-development-v1.json             research-phase1-b3-continuity-corrected-performance-gate.md
+
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 B3 continuity-corrected development v1"               --notes "Development-only B3 continuity-corrected descriptive evidence under the predeclared zero-unresolved gate. Robustness must be reapplied unchanged; validation and 2023+ OOS remain sealed."               --prerelease
+          fi
+
+          gh release upload "$RESULT_RELEASE"             work/b3-continuity-corrected-development-2016-2020.tar.gz             work/output/summary.json             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3-continuity-corrected-development-${{ github.run_id }}
+          path: work/output
+          retention-days: 90
