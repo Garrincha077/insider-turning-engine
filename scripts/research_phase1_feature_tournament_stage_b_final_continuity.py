@@ -325,7 +325,6 @@ def run(
     for label, payload in (
         ("scope", scope),
         ("overlap", overlap),
-        ("B1", b1),
         ("B3", b3),
         ("POPE", pope),
         ("provider17", provider),
@@ -333,6 +332,15 @@ def run(
         ("final10", final10),
     ):
         _assert_boundary(payload, label=label)
+
+    if b1.get("researchOnly") is not True:
+        raise ValueError("B1 contract is not research-only")
+    if b1.get("performanceRead") is not False:
+        raise ValueError("B1 contract opened performance")
+    if b1.get("oosOpened") is not False:
+        raise ValueError("B1 contract opened OOS")
+    if b1.get("productionScoringChanged") is not False:
+        raise ValueError("B1 contract changed production scoring")
 
     if scope.get("status") != (
         "PHASE1_FEATURE_TOURNAMENT_STAGE_B_UNRESOLVED_SCOPE_FROZEN"
