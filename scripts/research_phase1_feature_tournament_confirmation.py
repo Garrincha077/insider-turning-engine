@@ -154,6 +154,64 @@ def _terms_for_confirmation(
         ) from exc
 
 
+def _audit_incomplete_provider_stock_mergers(
+    confirmation: list[dict[str, str]],
+    ledger_by_base: dict[
+        tuple[str, str, str, str],
+        list[dict[str, str]],
+    ],
+    actions: dict[str, dict[str, Any]],
+) -> None:
+    findings: dict[str, dict[str, Any]] = {}
+    for event in confirmation:
+        for ledger_row in ledger_by_base.get(discovery._base_key(event), []):
+            action_types = {
+                item
+                for item in str(
+                    ledger_row.get("candidateActionTypes") or ""
+                ).split(";")
+                if item
+            }
+            if (
+                ledger_row.get("state")
+                != "TRANSFORMED_HOLDER_CONSIDERATION"
+                or ledger_row.get("successorSymbol")
+                or not action_types.intersection(
+                    {"stock_mergers", "stock_and_cash_mergers"}
+                )
+            ):
+                continue
+            for action_id in discovery._action_ids(ledger_row):
+                finding = findings.setdefault(
+                    action_id,
+                    {
+                        "action": actions.get(action_id),
+                        "tickers": set(),
+                        "eventNumbers": set(),
+                        "horizons": set(),
+                    },
+                )
+                finding["tickers"].add(str(ledger_row["ticker"]))
+                finding["eventNumbers"].add(
+                    int(ledger_row["eventNumber"])
+                )
+                finding["horizons"].add(int(ledger_row["horizon"]))
+
+    if findings:
+        serializable = {}
+        for action_id, finding in sorted(findings.items()):
+            serializable[action_id] = {
+                "action": finding["action"],
+                "tickers": sorted(finding["tickers"]),
+                "eventNumbers": sorted(finding["eventNumbers"]),
+                "horizons": sorted(finding["horizons"]),
+            }
+        raise ValueError(
+            "incomplete frozen provider stock-merger semantics: "
+            + json.dumps(serializable, sort_keys=True)
+        )
+
+
 def _value_confirmation_outcomes(
     matrix: list[dict[str, str]],
     ledger: list[dict[str, str]],
@@ -183,6 +241,12 @@ def _value_confirmation_outcomes(
         discovery._horizon_key(row): row
         for row in final_rows
     }
+
+    _audit_incomplete_provider_stock_mergers(
+        confirmation,
+        ledger_by_base,
+        actions,
+    )
     unresolved_keys = {
         discovery._horizon_key(row)
         for row in ledger
