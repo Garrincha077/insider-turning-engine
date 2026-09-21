@@ -1,0 +1,56 @@
+name: Validate feature tournament Stage A implementation
+
+on:
+  push:
+    branches:
+      - research/b3-ps-pit-history
+    paths:
+      - "scripts/research_phase1_feature_tournament_stage_a.py"
+      - "tests/test_research_phase1_feature_tournament_stage_a.py"
+      - ".github/workflows/research-phase1-feature-tournament-stage-a.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Lint Stage A implementation
+        run: >-
+          uv run ruff check
+          scripts/research_phase1_feature_tournament_stage_a.py
+          tests/test_research_phase1_feature_tournament_stage_a.py
+      - name: Test Stage A PIT and cutpoint rules
+        run: >-
+          uv run pytest -q
+          tests/test_research_phase1_feature_tournament_stage_a.py
+      - name: Assert outcome-blind source contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path(
+              "scripts/research_phase1_feature_tournament_stage_a.py"
+          ).read_text()
+          forbidden_runtime_sources = (
+              "b0/events.csv",
+              "raw_126",
+              "excess_126",
+              "mae_126",
+          )
+          for token in forbidden_runtime_sources:
+              assert token not in source, token
+          PY
