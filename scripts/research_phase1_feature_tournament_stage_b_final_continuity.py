@@ -245,7 +245,7 @@ def _prior_resolution(
             default="0",
         ),
         "sourceActionIds": list(source_row.get("sourceActionIds") or []),
-        "basket": _canonical_basket(source_row.get("basket")),
+        "basket": [dict(item) for item in (source_row.get("basket") or [])],
         "classificationSource": "SAFE_PRIOR_EVIDENCE_REUSE",
         "priorEvidenceSource": source,
         "priorEvidenceEventNumber": prior_event,
