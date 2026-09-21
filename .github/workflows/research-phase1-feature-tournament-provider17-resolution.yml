@@ -1,0 +1,148 @@
+name: Resolve feature tournament provider17 continuity rows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-provider17-resolution.yml"
+      - "scripts/research_phase1_feature_tournament_provider17_resolver.py"
+      - "tests/test_research_phase1_feature_tournament_provider17_resolver.py"
+      - "docs/research-phase1-feature-tournament-provider17-resolution-gate.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-feature-tournament-provider17-resolution-v1
+  cancel-in-progress: false
+
+env:
+  AUDIT_RELEASE: research-phase1-feature-tournament-residual-evidence-audit-v1
+  AUDIT_ASSET: residual-evidence-audit.json
+  AUDIT_DIGEST: sha256:e17e7bc3a103be988a99b50a9080003c50b7acf8db84d2d80a91cedb40db56cd
+  RESULT_RELEASE: research-phase1-feature-tournament-provider17-resolution-v1
+
+jobs:
+  resolve:
+    name: Exact provider-action continuity resolution
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --all-groups --frozen
+
+      - name: Lint and test provider17 semantics
+        run: |
+          uv run ruff check scripts/research_phase1_feature_tournament_provider17_resolver.py tests/test_research_phase1_feature_tournament_provider17_resolver.py
+          uv run pytest -q tests/test_research_phase1_feature_tournament_provider17_resolver.py
+
+      - name: Download and verify frozen residual evidence audit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/input work/output
+          gh release download "$AUDIT_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$AUDIT_ASSET" --dir work/input
+          test "sha256:$(sha256sum "work/input/$AUDIT_ASSET" | cut -d' ' -f1)" = "$AUDIT_DIGEST"
+
+      - name: Resolve exact provider actions and freeze long-gap17
+        run: >-
+          uv run python scripts/research_phase1_feature_tournament_provider17_resolver.py
+          --audit "work/input/$AUDIT_ASSET"
+          --resolution-output work/output/provider17-resolution.json
+          --residual-output work/output/long-gap17-scope.json
+
+      - name: Assert provider17 resolution boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+
+          p=json.load(open("work/output/provider17-resolution.json"))
+          r=json.load(open("work/output/long-gap17-scope.json"))
+
+          assert p["status"]=="PHASE1_FEATURE_TOURNAMENT_PROVIDER17_RESOLVED"
+          assert p["sourceResidualRows"]==34
+          assert p["resolvedProviderRows"]==17
+          assert p["remainingLongGapRows"]==17
+          assert p["reuseCategoryCounts"]=={
+              "PROVIDER_ACTION_REUSE_B1_STOCK_DIVIDEND":1,
+              "PROVIDER_ACTION_REUSE_B3":16,
+          }
+          assert p["transformationCounts"]=={
+              "STOCK_AND_CASH_MERGER":4,
+              "STOCK_DIVIDEND_QUANTITY":13,
+          }
+
+          fg=[x for x in p["rows"] if x["ticker"]=="FG"]
+          assert len(fg)==4
+          assert {x["horizon"] for x in fg}=={21,63,126,252}
+          assert {x["successorSymbol"] for x in fg}=={"FNF"}
+          assert {x["successorSharesPerEntryShare"] for x in fg}=={"0.2558"}
+          assert {x["cashPerEntryShare"] for x in fg}=={"12.5"}
+
+          b1=[x for x in p["rows"] if x["reuseCategory"]=="PROVIDER_ACTION_REUSE_B1_STOCK_DIVIDEND"]
+          assert len(b1)==1
+          assert b1[0]["ticker"]=="LARK"
+          assert b1[0]["eventNumber"]==10614
+          assert b1[0]["successorSharesPerEntryShare"]=="1.05"
+          assert b1[0]["cashPerEntryShare"]=="0"
+
+          assert r["status"]=="PHASE1_FEATURE_TOURNAMENT_LONG_GAP17_SCOPE_FROZEN"
+          assert r["providerRowsResolved"]==17
+          assert r["residualRows"]==17
+          assert r["priorSecurityCandidateRows"]==7
+          assert r["newPrimaryEvidenceRows"]==10
+          assert r["categoryCounts"]=={
+              "LONG_GAP_NEW_PRIMARY_EVIDENCE_REQUIRED":10,
+              "LONG_GAP_PRIOR_SECURITY_CANDIDATE":7,
+          }
+
+          for payload in (p,r):
+              assert payload["performanceRead"] is False
+              assert payload["priceFieldsRead"]==[]
+              assert payload["featureOutcomesRead"] is False
+              assert payload["featureDiscoveryOutcomesOpened"] is False
+              assert payload["validationOpened"] is False
+              assert payload["oosOpened"] is False
+              assert payload["productionScoringChanged"] is False
+
+          print(json.dumps({
+              "resolvedProviderRows":p["resolvedProviderRows"],
+              "resolutionKeySha256":p["resolutionKeySha256"],
+              "remainingLongGapRows":r["residualRows"],
+              "priorSecurityCandidateRows":r["priorSecurityCandidateRows"],
+              "newPrimaryEvidenceRows":r["newPrimaryEvidenceRows"],
+          },indent=2,sort_keys=True))
+          PY
+
+      - name: Publish immutable provider17 resolution
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 feature tournament provider17 resolution v1"               --notes "Exact performance-blind corporate-action reuse resolves all 17 provider rows and freezes the remaining 17 long-gap rows. Feature outcomes, validation and 2023+ OOS remain closed."               --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE"             work/output/provider17-resolution.json             work/output/long-gap17-scope.json             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: feature-tournament-provider17-resolution-${{ github.run_id }}
+          path: |
+            work/output/provider17-resolution.json
+            work/output/long-gap17-scope.json
+          retention-days: 90
