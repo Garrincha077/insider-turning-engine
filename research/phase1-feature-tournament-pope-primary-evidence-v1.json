@@ -1,0 +1,55 @@
+{
+  "schemaVersion": "1.0.0",
+  "contractId": "phase1-feature-tournament-pope-primary-evidence-v1",
+  "frozenAt": "2026-09-21",
+  "researchOnly": true,
+  "performanceRead": false,
+  "priceFieldsRead": [],
+  "featureOutcomesRead": false,
+  "validationOpened": false,
+  "oosOpened": false,
+  "productionScoringChanged": false,
+  "subject": {
+    "issuerCik": "0000784011",
+    "historicalTicker": "POPE",
+    "evaluationSession": "2019-06-24",
+    "entrySession": "2019-06-25",
+    "horizon": 252,
+    "targetExitSession": "2020-06-24",
+    "effectiveDate": "2020-05-08"
+  },
+  "primarySource": {
+    "issuer": "Rayonier Inc.",
+    "form": "8-K",
+    "reportDate": "2020-05-07",
+    "accession": "0000052827-20-000138",
+    "document": "https://www.sec.gov/Archives/edgar/data/52827/000005282720000138/ryn-20200507.htm",
+    "relevantItem": "Item 2.01 - Completion of Acquisition or Disposition of Assets"
+  },
+  "primaryFacts": [
+    "The Pope merger closed on 2020-05-08.",
+    "Each Pope unit was entitled, at the holder's election and subject to proration, to one of three alternatives: $125 cash, 3.929 Rayonier common shares, or 3.929 Rayonier L.P. units.",
+    "The $125 cash and 3.929 Rayonier-share terms were alternative election consideration, not a cumulative package.",
+    "Cash elections were oversubscribed; a valid cash election ultimately received $47.42 cash plus 2.439 Rayonier shares or Opco units depending on the holder's proration election.",
+    "Valid stock elections received 3.929 Rayonier common shares per Pope unit.",
+    "Pope units with no valid election were treated as stock elections and received 3.929 Rayonier common shares per Pope unit."
+  ],
+  "passiveHolderPolicy": {
+    "policy": "NO_VALID_ELECTION_DEFAULT",
+    "reason": "The research continuity contract follows the passive public-market holder when no affirmative corporate-action election is modeled.",
+    "result": {
+      "resolutionDecision": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "transformationKind": "PASSIVE_HOLDER_STOCK_MERGER",
+      "resultState": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "successorSymbol": "RYN",
+      "successorSharesPerEntryShare": 3.929,
+      "cashPerEntryShare": 0
+    }
+  },
+  "conflictAdjudication": {
+    "b1EconomicSemantics": "SUPPORTED_BY_PRIMARY_SOURCE",
+    "b3EconomicSemantics": "REJECTED_FOR_THIS_PASSIVE_HOLDER_POLICY",
+    "reason": "The B3 fingerprint combined full stock-election consideration with full cash-election consideration. The primary source states those were alternatives. Final election results state that non-electing holders received 3.929 RYN shares and no cash.",
+    "authoritativeResolution": "B1_PASSIVE_HOLDER_STOCK_ONLY"
+  }
+}
