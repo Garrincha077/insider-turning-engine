@@ -534,6 +534,12 @@ def _value_outcomes(
     ledger_by_key = {_horizon_key(row): row for row in ledger}
     if len(ledger_by_key) != len(ledger):
         raise ValueError("duplicate Stage-B ledger key")
+    ledger_by_base: dict[
+        tuple[str, str, str, str],
+        list[dict[str, str]],
+    ] = defaultdict(list)
+    for ledger_row in ledger:
+        ledger_by_base[_base_key(ledger_row)].append(ledger_row)
     final_by_key = {_horizon_key(row): row for row in final_rows}
     if len(final_by_key) != len(final_rows):
         raise ValueError("duplicate final continuity key")
@@ -553,11 +559,7 @@ def _value_outcomes(
     needed_tickers = {str(row["ticker"]).upper() for row in discovery}
     for row in discovery:
         base = _base_key(row)
-        matches = [
-            item
-            for item in ledger
-            if _base_key(item) == base
-        ]
+        matches = ledger_by_base.get(base, [])
         if len(matches) != len(HORIZONS):
             raise ValueError("Stage A discovery event does not map to four ledger rows")
         for ledger_row in matches:
@@ -593,9 +595,8 @@ def _value_outcomes(
             for horizon in HORIZONS:
                 candidates = [
                     item
-                    for item in ledger
-                    if _base_key(item) == _base_key(row)
-                    and int(item["horizon"]) == horizon
+                    for item in ledger_by_base.get(_base_key(row), [])
+                    if int(item["horizon"]) == horizon
                 ]
                 if len(candidates) != 1:
                     raise ValueError("discovery event/horizon ledger mapping changed")
