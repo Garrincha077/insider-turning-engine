@@ -304,5 +304,25 @@
     "rawLeg": "research-market-alpaca-raw-feature-context-v1, 2016-2020 only; earliest-2016 trailing history may be missing and is handled by frozen coverage rules",
     "pitMarketCap": "PIT_BLOCKED_PENDING_RAW_PRICE_AND_PIT_SHARES",
     "currentMarketCapSubstitutionAllowed": false
+  },
+  "b0BoundaryCorrection": {
+    "basis": "evaluationSession, not filing knowledge year",
+    "excludedCanonicalB0Events": [
+      {
+        "issuerCik": "0001708176",
+        "ticker": "HOFV",
+        "evaluationSession": "2021-01-04",
+        "entrySession": "2021-01-05"
+      },
+      {
+        "issuerCik": "0001641631",
+        "ticker": "XAIR",
+        "evaluationSession": "2021-01-04",
+        "entrySession": "2021-01-05"
+      }
+    ],
+    "forwardOutcomesRead": false,
+    "strictStageAExactEntryEvents": 24190,
+    "strictStageADistinctIssuers": 4729
   }
 }
