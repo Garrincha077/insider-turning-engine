@@ -8,7 +8,7 @@ test('every view works without errors on desktop and mobile', async ({ page }) =
   await ready(page);
   await expect(page).toHaveTitle(/Insider Turning Engine/);
   await expect(page.getByText('Experimental score — not historically validated')).toBeVisible();
-  for (const label of ['Market Pulse', 'Turning Stocks', 'Divergence', 'Insider Buys', 'Clusters', 'Cost Basis', 'Live SEC Tape', 'Company Lab', 'Methodology & Validation', 'System Health', 'Data Coverage', 'Settings']) {
+  for (const label of ['Market Pulse', 'Insider Ratio', 'Turning Stocks', 'Divergence', 'Insider Buys', 'Clusters', 'Cost Basis', 'Live SEC Tape', 'Company Lab', 'Methodology & Validation', 'System Health', 'Data Coverage', 'Settings']) {
     await section(page, label);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   }

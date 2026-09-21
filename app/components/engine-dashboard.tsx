@@ -5,22 +5,23 @@ import { companyCatalog, instant, scoreLabel, controlClass } from '@/lib/researc
 import { isCikList, isTimezone, resetPreferences, usePreference } from '@/lib/local-preferences';
 import { AlertCenterView, DataCoverageView, SettingsView, SystemHealthView } from './operations-views';
 import { CompanyLab, CompanyTable, CostBasisView, ClusterView, MethodologyView, PulseView, TapeView, Panel, EmptyState } from './research-views';
-import { ActivityV2, BasisV2, ClustersV2, CoverageV2 } from './v2-views';
+import { ActivityV2, BasisV2, ClustersV2, CoverageV2, InsiderRatioV2 } from './v2-views';
 
 const groups = [
-  { label: 'Overview', views: [['radar', 'Radar'], ['market-pulse', 'Market Pulse'], ['live-sec-tape', 'Live SEC Tape']] },
+  { label: 'Overview', views: [['radar', 'Radar'], ['market-pulse', 'Market Pulse'], ['insider-ratio', 'Insider Ratio'], ['live-sec-tape', 'Live SEC Tape']] },
   { label: 'Research', views: [['turning-stocks', 'Turning Stocks'], ['divergence', 'Divergence'], ['smart-buys', 'Insider Buys'], ['clusters', 'Clusters'], ['cost-basis', 'Cost Basis'], ['company-lab', 'Company Lab'], ['backtest-lab', 'Methodology & Validation']] },
   { label: 'Operations', views: [['system-health', 'System Health'], ['data-coverage', 'Data Coverage'], ['alert-center', 'Alert Center'], ['settings', 'Settings']] },
 ];
 const views = groups.flatMap((group) => group.views);
 const researchViews = new Set([
-  'radar', 'market-pulse', 'live-sec-tape', 'turning-stocks', 'divergence',
+  'radar', 'market-pulse', 'insider-ratio', 'live-sec-tape', 'turning-stocks', 'divergence',
   'smart-buys', 'clusters', 'cost-basis', 'company-lab', 'system-health',
   'data-coverage', 'alert-center', 'settings',
 ]);
 const descriptions: Record<string, string> = {
   radar: 'Explore the companies in this snapshot. Missing scores do not hide SEC activity.',
   'market-pulse': 'Observed activity in the exported population — not a census of the US market.',
+  'insider-ratio': 'Daily-refreshed SEC purchase/sale event ratio, modeled on the familiar monthly market barometer without a three-month publication delay.',
   'live-sec-tape': 'Source-linked SEC records, including companies without complete research scores.',
   'turning-stocks': 'Recorded accumulation, base and turn states. These are research classifications, not trade recommendations.',
   divergence: 'Adjust the visible screening thresholds without changing the score methodology.',
@@ -141,6 +142,7 @@ export function EngineDashboard() {
         {view === 'turning-stocks' && <CompanyTable key="turning" {...tableProps} mode="turning" />}
         {view === 'divergence' && <CompanyTable key="divergence" {...tableProps} mode="divergence" />}
         {view === 'market-pulse' && (data.research ? <ActivityV2 data={data.research} /> : <PulseView data={data} />)}
+        {view === 'insider-ratio' && (data.research ? <InsiderRatioV2 data={data.research} /> : <EmptyState title="Detailed SEC research is unavailable" detail="This ratio requires the verified economic-event snapshot; no sample or inferred series is substituted." />)}
         {view === 'smart-buys' && <TapeView key="buys" data={data} openCompany={openCompany} timezone={timezone} buysOnly />}
         {view === 'live-sec-tape' && <TapeView key="tape" data={data} openCompany={openCompany} timezone={timezone} />}
         {view === 'clusters' && (data.research ? <ClustersV2 data={data.research} openCompany={openCompany} /> : <ClusterView />)}
