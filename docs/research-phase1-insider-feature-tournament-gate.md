@@ -207,6 +207,31 @@ quintiles, frozen without outcomes.
 A feature effect concentrated only in the bottom dollar-ADV quintile cannot
 advance as a general feature.
 
+## PIT market-cap availability amendment — frozen before Stage A output
+
+The frozen Alpaca 2016-2022 market archive uses `adjustment=all`. Historical
+shares outstanding multiplied by these adjusted historical prices would not
+produce a valid contemporaneous market capitalization across corporate
+actions.
+
+Therefore:
+
+- PIT market-cap context is explicitly
+  `PIT_BLOCKED_PENDING_RAW_PRICE` in Stage A;
+- current market cap, current shares outstanding, or backfilled future shares
+  may not be substituted;
+- Stage A coverage/cutpoint freeze for F1-F4 may proceed without market-cap
+  strata because market cap is a mandatory diagnostic context variable, not a
+  feature-advancement criterion;
+- dollar-ADV and stock-price strata remain mandatory and available from the
+  frozen market archive;
+- any later market-cap diagnostic requires a separate raw-price/PIT-shares
+  input frozen before use;
+- the Stage B outcome runner must report market-cap strata as unavailable
+  rather than infer or impute them unless that later input is frozen first.
+
+This amendment is frozen before any feature-tournament outcome is read.
+
 ## Coverage classes
 
 Coverage is measured on frozen B0 exact-entry events in each relevant period.
