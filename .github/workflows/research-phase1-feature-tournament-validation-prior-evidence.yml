@@ -1,0 +1,161 @@
+name: Audit F2 validation prior continuity evidence
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-validation-prior-evidence.yml"
+      - "scripts/research_phase1_feature_tournament_validation_prior_evidence_audit.py"
+      - "tests/test_research_phase1_feature_tournament_validation_prior_evidence_audit.py"
+      - "docs/research-phase1-feature-tournament-validation-prior-evidence-audit-gate.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-feature-tournament-validation-prior-evidence-v1
+  cancel-in-progress: true
+
+env:
+  AUDIT_RELEASE: research-phase1-insider-feature-tournament-validation-continuity-audit-v1
+  AUDIT_ARCHIVE: phase1-insider-feature-tournament-validation-continuity-audit-v1.tar.gz
+  AUDIT_ARCHIVE_DIGEST: sha256:e1e34180cbd8e115412d88e75abc39711b1645515396b4f6bb52b19a6d7716d5
+  AUDIT_SUMMARY: summary.json
+  AUDIT_SUMMARY_DIGEST: sha256:28fee890338376b1024184cb6ecf3c5bb6a19519b86287a0c294f012c1ffcac1
+
+  B1_PATH: research/b1-security-continuity-resolution-v1.json
+  B1_DIGEST: sha256:88325d71dd9da1f18bdc2c2695933860e087addd586def8b4271ed768d121430
+
+  B3_RELEASE: research-phase1-b3-final-continuity-contract-v1
+  B3_ASSET: b3-final-continuity-contract.json
+  B3_DIGEST: sha256:22e1af6713eb0c0f73604a150787ac9248f044eef63e1f88b70b31697aede163
+
+  STAGE_B_RELEASE: research-phase1-feature-tournament-stage-b-final-continuity-v1
+  STAGE_B_ASSET: stage-b-final-continuity.json
+  STAGE_B_DIGEST: sha256:24947122c8fa776dc6f5e8f628c5b45cdbec6551cf15df334421b405439b4518
+
+  AMENDMENT_RELEASE: research-phase1-feature-tournament-provider-completeness-amendment-v1
+  AMENDMENT_ASSET: provider-completeness-amendment.json
+  AMENDMENT_DIGEST: sha256:faf787e918b953dcffbcc2b714c34873d6228031e25a09e509ee58e1a067fbb2
+
+  RESULT_RELEASE: research-phase1-insider-feature-tournament-validation-prior-evidence-v1
+
+jobs:
+  audit:
+    name: Performance-blind validation prior-evidence partition
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --all-groups --frozen
+
+      - name: Lint and test reuse semantics
+        run: |
+          uv run ruff check scripts/research_phase1_feature_tournament_validation_prior_evidence_audit.py tests/test_research_phase1_feature_tournament_validation_prior_evidence_audit.py
+          uv run pytest -q tests/test_research_phase1_feature_tournament_validation_prior_evidence_audit.py
+
+      - name: Verify frozen B1 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "sha256:$(sha256sum "$B1_PATH" | cut -d' ' -f1)" = "$B1_DIGEST"
+
+      - name: Download and verify frozen continuity evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/audit work/download work/prior work/output
+
+          gh release download "$AUDIT_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$AUDIT_SUMMARY" --dir work/audit
+          test "sha256:$(sha256sum "work/audit/$AUDIT_SUMMARY" | cut -d' ' -f1)" = "$AUDIT_SUMMARY_DIGEST"
+
+          gh release download "$AUDIT_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$AUDIT_ARCHIVE" --dir work/download
+          test "sha256:$(sha256sum "work/download/$AUDIT_ARCHIVE" | cut -d' ' -f1)" = "$AUDIT_ARCHIVE_DIGEST"
+          tar -xzf "work/download/$AUDIT_ARCHIVE" -C work/audit             validation-continuity-audit.csv
+          test -s work/audit/validation-continuity-audit.csv
+
+          download_verify() {
+            local release="$1"
+            local asset="$2"
+            local digest="$3"
+            gh release download "$release" --repo "$GITHUB_REPOSITORY"               --pattern "$asset" --dir work/prior
+            test "sha256:$(sha256sum "work/prior/$asset" | cut -d' ' -f1)" = "$digest"
+          }
+
+          download_verify "$B3_RELEASE" "$B3_ASSET" "$B3_DIGEST"
+          download_verify "$STAGE_B_RELEASE" "$STAGE_B_ASSET" "$STAGE_B_DIGEST"
+          download_verify "$AMENDMENT_RELEASE" "$AMENDMENT_ASSET" "$AMENDMENT_DIGEST"
+
+      - name: Partition all 41 residual rows by frozen prior evidence
+        run: >-
+          uv run python scripts/research_phase1_feature_tournament_validation_prior_evidence_audit.py
+          --audit-csv work/audit/validation-continuity-audit.csv
+          --audit-summary "work/audit/$AUDIT_SUMMARY"
+          --b1-contract "$B1_PATH"
+          --b3-contract "work/prior/$B3_ASSET"
+          --stage-b-contract "work/prior/$STAGE_B_ASSET"
+          --provider-amendment "work/prior/$AMENDMENT_ASSET"
+          --output work/output/validation-prior-evidence-audit.json
+
+      - name: Assert audit-only boundary and complete partition
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+
+          p=json.load(open("work/output/validation-prior-evidence-audit.json"))
+          assert p["status"]=="PHASE1_FEATURE_TOURNAMENT_VALIDATION_PRIOR_EVIDENCE_AUDIT_COMPLETE"
+          assert p["sourceAuditRows"]==7493
+          assert p["sourceUnresolvedRows"]==41
+          assert p["auditedRows"]==41
+          assert sum(p["categoryCounts"].values())==41
+          assert p["resolutionSourceCounts"]=={
+              "long_internal_gap":11,
+              "provider":22,
+              "provider_incomplete_terms":8,
+          }
+          assert p["auditOnly"] is True
+          assert p["resolutionApplied"] is False
+          assert p["performanceRead"] is False
+          assert p["priceFieldsRead"]==[]
+          assert p["featureOutcomesRead"] is False
+          assert p["validationOpened"] is False
+          assert p["validationPerformanceOpened"] is False
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          print(json.dumps({
+              "categoryCounts":p["categoryCounts"],
+              "newPrimaryEvidenceTickerCounts":p["newPrimaryEvidenceTickerCounts"],
+          },indent=2,sort_keys=True))
+          PY
+
+      - name: Publish immutable prior-evidence audit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp docs/research-phase1-feature-tournament-validation-prior-evidence-audit-gate.md work/output/
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 F2 validation prior-evidence audit v1"               --notes "Performance-blind partition of all 41 validation continuity residual rows against frozen B1, B3, Stage-B and provider-amendment evidence. Validation performance and 2023+ OOS remain closed."               --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE"             work/output/validation-prior-evidence-audit.json             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase1-insider-feature-tournament-validation-prior-evidence-${{ github.run_id }}
+          path: work/output
+          retention-days: 90
