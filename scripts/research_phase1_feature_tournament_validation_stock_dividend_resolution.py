@@ -247,10 +247,16 @@ def run(
     if _key_digest(targets) != EXPECTED_TARGET_DIGEST:
         raise ValueError("stock-dividend target key digest changed")
 
-    resolutions = [
-        _resolution(row, evidence[str(row["candidateActionIds"][0])], provider[str(row["candidateActionIds"][0])])
-        for row in targets
-    ]
+    resolutions = []
+    for row in targets:
+        action_id = str(row["candidateActionIds"][0])
+        resolutions.append(
+            _resolution(
+                row,
+                evidence[action_id],
+                provider[action_id],
+            )
+        )
     resolutions.sort(key=lambda row: (int(row["eventNumber"]), int(row["horizon"])))
 
     result = {
