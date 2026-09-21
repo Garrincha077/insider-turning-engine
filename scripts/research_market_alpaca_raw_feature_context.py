@@ -5,7 +5,7 @@ coherent. It does not compute forward returns or open validation/OOS.
 
 The canonical 2016-2022 research market release uses adjustment=all and is
 preserved unchanged. This parallel context uses adjustment=raw, asof="-", and
-only 2016-2020. Earliest-2016 trailing context may therefore be missing and is measured by Stage A coverage.
+only 2016-2020. Earliest-2016 trailing context may therefore be missing and\nis measured by Stage A coverage.
 """
 
 from __future__ import annotations
