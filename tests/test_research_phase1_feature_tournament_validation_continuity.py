@@ -98,3 +98,28 @@ def test_load_actions_requires_performance_blind_source(
     )
     with pytest.raises(ValueError, match="not performance-blind"):
         mod._load_actions(path)
+
+
+def test_provider_terms_completeness_requires_usable_rates() -> None:
+    assert mod._provider_terms_complete(
+        [
+            {
+                "bucket": "stock_and_cash_mergers",
+                "acquiree_rate": 2,
+                "acquirer_rate": 1,
+                "cash_rate": 4,
+                "acquirer_symbol": "NEW",
+            }
+        ]
+    )
+    assert not mod._provider_terms_complete(
+        [
+            {
+                "bucket": "stock_and_cash_mergers",
+                "acquiree_rate": 2,
+                "acquirer_rate": None,
+                "cash_rate": 4,
+                "acquirer_symbol": "NEW",
+            }
+        ]
+    )
