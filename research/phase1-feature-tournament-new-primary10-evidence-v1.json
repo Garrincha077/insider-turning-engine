@@ -1,0 +1,256 @@
+{
+  "schemaVersion": "1.0.0",
+  "contractId": "phase1-feature-tournament-new-primary10-evidence-v1",
+  "frozenAt": "2026-09-21",
+  "researchOnly": true,
+  "performanceRead": false,
+  "priceFieldsRead": [],
+  "featureOutcomesRead": false,
+  "validationOpened": false,
+  "oosOpened": false,
+  "productionScoringChanged": false,
+  "sourceScope": {
+    "release": "research-phase1-feature-tournament-long-gap7-resolution-v1",
+    "asset": "new-primary10-scope.json",
+    "sha256": "sha256:b508811617035eb569d359ee9f5cad97f403f8bd0e51e2413150eaf44630a936",
+    "rows": 10,
+    "tickerCounts": {
+      "AVGR": 3,
+      "HMG": 2,
+      "OAS": 3,
+      "SNES": 2
+    }
+  },
+  "identities": [
+    {
+      "issuerCik": "0001506928",
+      "ticker": "AVGR",
+      "evidenceClass": "PRIMARY_SEC_SAME_COMMON_SECURITY",
+      "resolutionDecision": "SAME_SECURITY_CONTINUITY",
+      "transformationKind": "",
+      "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+      "successorIssuerCik": "0001506928",
+      "successorSymbol": "AVGR",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "effectiveDatePolicy": "NEXT_OBSERVED_SESSION_AFTER_FROZEN_GAP",
+      "primaryEvidence": [
+        {
+          "form": "10-Q",
+          "period": "2016-03-31",
+          "accession": "0001104659-16-119209",
+          "document": "https://www.sec.gov/Archives/edgar/data/1506928/000110465916119209/a16-6659_110q.htm",
+          "facts": [
+            "same SEC registrant CIK 0001506928",
+            "same Avinger Inc. reporting company immediately before the frozen gap"
+          ]
+        },
+        {
+          "form": "8-K",
+          "eventDate": "2016-06-06",
+          "accession": "0001104659-16-125911",
+          "document": "https://www.sec.gov/Archives/edgar/data/1506928/000110465916125911/a16-12972_18k.htm",
+          "facts": [
+            "same Avinger Inc. registrant after the frozen gap",
+            "annual meeting represented holders of the company's common stock",
+            "no holder exchange, cancellation, merger or successor security described"
+          ]
+        },
+        {
+          "form": "10-Q",
+          "period": "2016-06-30",
+          "accession": "0001104659-16-137123",
+          "document": "https://www.sec.gov/Archives/edgar/data/1506928/000110465916137123/a16-11571_110q.htm",
+          "facts": [
+            "same SEC registrant and common-stock capital structure through June 30 2016",
+            "12,836,144 common shares issued and outstanding at June 30 2016",
+            "125,214 common shares sold under the at-the-market program during the quarter",
+            "no common-stock reverse split or reorganization in the frozen gap interval"
+          ]
+        }
+      ]
+    },
+    {
+      "issuerCik": "0001680378",
+      "ticker": "SNES",
+      "evidenceClass": "PRIMARY_SEC_SAME_COMMON_SECURITY",
+      "resolutionDecision": "SAME_SECURITY_CONTINUITY",
+      "transformationKind": "",
+      "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+      "successorIssuerCik": "0001680378",
+      "successorSymbol": "SNES",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "effectiveDatePolicy": "NEXT_OBSERVED_SESSION_AFTER_FROZEN_GAP",
+      "primaryEvidence": [
+        {
+          "form": "10-K",
+          "period": "2017-12-31",
+          "accession": "0001615774-18-002215",
+          "document": "https://www.sec.gov/Archives/edgar/data/1680378/000161577418002215/s109468_10k.htm",
+          "facts": [
+            "same SenesTech Inc. CIK 0001680378",
+            "common stock registered on Nasdaq Capital Market before the frozen gap"
+          ]
+        },
+        {
+          "form": "DEF 14A",
+          "filed": "2018-04-30",
+          "accession": "0001615774-18-003065",
+          "document": "https://www.sec.gov/Archives/edgar/data/1680378/000161577418003065/s109842_def14a.htm",
+          "facts": [
+            "common stock was currently listed on Nasdaq Capital Market under SNES during the frozen gap",
+            "reverse stock split was a proposed compliance option and was not described as already effective"
+          ]
+        },
+        {
+          "form": "10-K/A",
+          "period": "2017-12-31",
+          "filed": "2018-05-21",
+          "accession": "0001615774-18-004225",
+          "document": "https://www.sec.gov/Archives/edgar/data/1680378/000161577418004225/s110312_10-ka.htm",
+          "facts": [
+            "same SenesTech common-stock class after the frozen gap",
+            "16,537,710 common shares outstanding as of May 21 2018",
+            "same Nasdaq Capital Market registration"
+          ]
+        },
+        {
+          "form": "10-Q",
+          "period": "2018-06-30",
+          "accession": "0001615774-18-008053",
+          "document": "https://www.sec.gov/Archives/edgar/data/1680378/000161577418008053/s111989_10q.htm",
+          "facts": [
+            "same SenesTech Inc. registrant and common stock after the gap",
+            "23,425,287 common shares outstanding as of August 13 2018"
+          ]
+        }
+      ]
+    },
+    {
+      "issuerCik": "0000311817",
+      "ticker": "HMG",
+      "evidenceClass": "PRIMARY_SEC_SAME_COMMON_SECURITY",
+      "resolutionDecision": "SAME_SECURITY_CONTINUITY",
+      "transformationKind": "",
+      "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+      "successorIssuerCik": "0000311817",
+      "successorSymbol": "HMG",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "effectiveDatePolicy": "NEXT_OBSERVED_SESSION_AFTER_EACH_FROZEN_GAP",
+      "primaryEvidence": [
+        {
+          "form": "10-Q",
+          "period": "2020-06-30",
+          "accession": "0001575872-20-000224",
+          "document": "https://www.sec.gov/Archives/edgar/data/311817/000157587220000224/hmg14_10q.htm",
+          "facts": [
+            "common stock par value $1.00 traded as HMG",
+            "same HMG/Courtland Properties Inc. registrant before the September-October 2020 gap"
+          ]
+        },
+        {
+          "form": "10-Q",
+          "period": "2020-09-30",
+          "accession": "0001575872-20-000302",
+          "document": "https://www.sec.gov/Archives/edgar/data/311817/000157587220000302/hmg16_10q.htm",
+          "facts": [
+            "same common stock par value $1.00 and ticker HMG after the September-October 2020 gap",
+            "1,007,248 common shares outstanding as of November 13 2020"
+          ]
+        },
+        {
+          "form": "10-Q",
+          "period": "2021-03-31",
+          "accession": "0001575872-21-000083",
+          "document": "https://www.sec.gov/Archives/edgar/data/311817/000157587221000083/hmg20_10q.htm",
+          "facts": [
+            "same common stock par value $1.00 and ticker HMG before the May-June 2021 gap",
+            "1,007,248 common shares outstanding as of May 7 2021"
+          ]
+        },
+        {
+          "form": "10-Q",
+          "period": "2021-06-30",
+          "accession": "0001575872-21-000191",
+          "document": "https://www.sec.gov/Archives/edgar/data/311817/000157587221000191/hmg-20210630.htm",
+          "facts": [
+            "same common stock par value $1.00 and ticker HMG after the May-June 2021 gap",
+            "1,016,848 common shares outstanding as of August 13 2021",
+            "common-stock roll-forward shows ordinary option exercise and treasury-share retirement, not a security replacement"
+          ]
+        }
+      ]
+    },
+    {
+      "issuerCik": "0001486159",
+      "ticker": "OAS",
+      "evidenceClass": "PRIMARY_SEC_BANKRUPTCY_REORG_UNVALUED_WARRANT",
+      "resolutionDecision": "DISCONTINUOUS_NO_COMPLETE_VALUATION",
+      "transformationKind": "BANKRUPTCY_REORG_UNVALUED_WARRANT",
+      "resultState": "DISCONTINUOUS_NO_COMPLETE_VALUATION",
+      "successorIssuerCik": "0001486159",
+      "successorSymbol": "",
+      "successorSharesPerEntryShare": 0,
+      "cashPerEntryShare": 0,
+      "effectiveDate": "2020-11-19",
+      "primaryEvidence": [
+        {
+          "form": "10-Q",
+          "period": "2020-09-30",
+          "accession": "0001486159-20-000089",
+          "document": "https://www.sec.gov/Archives/edgar/data/1486159/000148615920000089/oas-20200930.htm",
+          "facts": [
+            "Chapter 11 petition date was September 30 2020",
+            "plan provided old Oasis equity holders a pro rata share of four-year warrants rather than successor common stock"
+          ]
+        },
+        {
+          "form": "8-K",
+          "eventDate": "2020-11-19",
+          "accession": "0001486159-20-000115",
+          "document": "https://www.sec.gov/Archives/edgar/data/1486159/000148615920000115/oas-20201119.htm",
+          "facts": [
+            "all Legacy Oasis existing equity interests were cancelled on the effective date",
+            "20,000,000 shares of New Common Stock were issued to allowed notes claim holders",
+            "1,621,622 warrants were issued pro rata to former holders of existing common stock",
+            "new common stock began as a distinct successor equity capitalization"
+          ]
+        },
+        {
+          "form": "EX-10.2 Warrant Agreement",
+          "date": "2020-11-19",
+          "accession": "0001486159-20-000115",
+          "document": "https://www.sec.gov/Archives/edgar/data/1486159/000148615920000115/oasis-ex102xwarrantagr.htm",
+          "facts": [
+            "aggregate 1,621,622 warrants issued under the plan",
+            "each warrant initially exercisable for one share of successor common stock",
+            "initial exercise price $94.57",
+            "warrants expire November 19 2024"
+          ]
+        },
+        {
+          "form": "10-K",
+          "period": "2020-12-31",
+          "accession": "0001486159-21-000017",
+          "document": "https://www.sec.gov/Archives/edgar/data/1486159/000148615921000017/oas-20201231.htm",
+          "facts": [
+            "predecessor common stock was cancelled at emergence",
+            "predecessor common holders received warrants, not successor common stock",
+            "successor financial reporting explicitly distinguishes predecessor and successor periods",
+            "emergence-date accounting estimated warrant fair value but the frozen daily-stock corpus does not provide a complete warrant valuation path through later horizon exits"
+          ]
+        }
+      ],
+      "valuationPolicy": {
+        "reason": "Holder consideration is a warrant security outside the frozen daily common-stock valuation corpus. The successor OAS common stock is not the old holder's successor security; it was issued to noteholders. A complete mark-to-market holder return cannot be reconstructed from the authorized stock-price corpus.",
+        "precedent": {
+          "b3ResultState": "DISCONTINUOUS_NO_COMPLETE_VALUATION",
+          "b3TransformationKind": "MULTI_LEG_UNIT_SEPARATION_UNVALUED_WARRANT",
+          "principle": "An unvalued warrant leg blocks complete holder-consideration valuation rather than being silently discarded or mapped to successor common stock."
+        }
+      }
+    }
+  ]
+}
