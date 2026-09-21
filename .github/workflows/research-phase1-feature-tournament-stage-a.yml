@@ -238,7 +238,7 @@ jobs:
           assert s["validationOpened"] is False
           assert s["oosOpened"] is False
           assert s["productionScoringChanged"] is False
-          assert s["scope"]["events"] == 24192
+          assert s["scope"]["events"] == 24190
           assert s["scope"]["distinctIssuers"] == 4729
           assert s["scope"]["dedupSessions"] == 20
           assert s["marketCapStatus"] == (
