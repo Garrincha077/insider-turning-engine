@@ -122,20 +122,89 @@ def _confirmation_market_maps(
     return maps, db_path
 
 
+def _load_provider_amendment(
+    path: Path,
+) -> dict[tuple[str, str, str, str, int, str], dict[str, Any]]:
+    payload = discovery._read_json(path)
+    required = {
+        "status": (
+            "PHASE1_FEATURE_TOURNAMENT_PROVIDER_COMPLETENESS_"
+            "AMENDMENT_COMPLETE"
+        ),
+        "researchOnly": True,
+        "performanceRead": False,
+        "priceFieldsRead": [],
+        "featureOutcomesRead": False,
+        "confirmationOutcomesOpened": False,
+        "validationOpened": False,
+        "oosOpened": False,
+        "productionScoringChanged": False,
+        "sourceLedgerRows": 96760,
+        "amendedRows": 13,
+        "amendedEvents": 7,
+        "amendedActions": 4,
+        "discoveryOverlapRows": 0,
+        "validationEventRows": 0,
+        "finalStageB210ContractMutated": False,
+        "overlayRequiredForPerformanceValuation": True,
+    }
+    for key, expected in required.items():
+        if payload.get(key) != expected:
+            raise ValueError(f"provider amendment mismatch: {key}")
+
+    rows = payload.get("resolutionRows")
+    if not isinstance(rows, list) or len(rows) != 13:
+        raise ValueError("provider amendment row count changed")
+    result = {
+        discovery._horizon_key(row): row
+        for row in rows
+    }
+    if len(result) != 13:
+        raise ValueError("duplicate provider amendment key")
+    return result
+
+
+def _amendment_terms(row: dict[str, Any]) -> dict[str, Any]:
+    if row.get("resolutionDecision") != "TRANSFORMED_HOLDER_CONSIDERATION":
+        raise ValueError("unsupported provider amendment decision")
+    quantity = float(row.get("successorSharesPerEntryShare") or 0.0)
+    cash = float(row.get("cashPerEntryShare") or 0.0)
+    successor = str(row.get("successorSymbol") or "").upper()
+    if quantity > 0 and not successor:
+        raise ValueError("provider amendment stock value lacks successor")
+    if quantity == 0 and cash <= 0:
+        raise ValueError("provider amendment cash value missing")
+    return {
+        "decision": "TRANSFORMED_HOLDER_CONSIDERATION",
+        "kind": str(row["transformationKind"]),
+        "terminalTicker": successor,
+        "marketQuantity": quantity,
+        "legalQuantity": quantity,
+        "cash": cash,
+        "basket": [],
+    }
+
+
 def _terms_for_confirmation(
     ledger_row: dict[str, Any],
     final_row: dict[str, Any] | None,
+    amendment_row: dict[str, Any] | None,
     actions: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
+    if amendment_row is not None:
+        if ledger_row.get("state") != "TRANSFORMED_HOLDER_CONSIDERATION":
+            raise ValueError("provider amendment overlays wrong initial state")
+        if ledger_row.get("successorSymbol"):
+            raise ValueError("provider amendment overlays complete successor")
+        if amendment_row.get("sourceActionIds") != discovery._action_ids(
+            ledger_row
+        ):
+            raise ValueError("provider amendment action identity changed")
+        return _amendment_terms(amendment_row)
+
     try:
         return discovery._terms_for(ledger_row, final_row, actions)
     except ValueError as exc:
-        action_ids = discovery._action_ids(ledger_row)
-        action_rows = [
-            actions[action_id]
-            for action_id in action_ids
-            if action_id in actions
-        ]
         detail = {
             "eventNumber": ledger_row.get("eventNumber"),
             "issuerCik": ledger_row.get("issuerCik"),
@@ -145,8 +214,7 @@ def _terms_for_confirmation(
             "targetExitSession": ledger_row.get("targetExitSession"),
             "state": ledger_row.get("state"),
             "successorSymbol": ledger_row.get("successorSymbol"),
-            "candidateActionIds": action_ids,
-            "actions": action_rows,
+            "candidateActionIds": discovery._action_ids(ledger_row),
         }
         raise ValueError(
             f"confirmation continuity adapter failed: {exc}; "
@@ -154,15 +222,21 @@ def _terms_for_confirmation(
         ) from exc
 
 
-def _audit_incomplete_provider_stock_mergers(
+def _audit_provider_amendment_coverage(
     confirmation: list[dict[str, str]],
     ledger_by_base: dict[
         tuple[str, str, str, str],
         list[dict[str, str]],
     ],
-    actions: dict[str, dict[str, Any]],
+    amendment: dict[
+        tuple[str, str, str, str, int, str],
+        dict[str, Any],
+    ],
 ) -> None:
-    findings: dict[str, dict[str, Any]] = {}
+    incomplete: dict[
+        tuple[str, str, str, str, int, str],
+        dict[str, str],
+    ] = {}
     for event in confirmation:
         for ledger_row in ledger_by_base.get(discovery._base_key(event), []):
             action_types = {
@@ -174,48 +248,38 @@ def _audit_incomplete_provider_stock_mergers(
             }
             if (
                 ledger_row.get("state")
-                != "TRANSFORMED_HOLDER_CONSIDERATION"
-                or ledger_row.get("successorSymbol")
-                or not action_types.intersection(
+                == "TRANSFORMED_HOLDER_CONSIDERATION"
+                and not ledger_row.get("successorSymbol")
+                and action_types.intersection(
                     {"stock_mergers", "stock_and_cash_mergers"}
                 )
             ):
-                continue
-            for action_id in discovery._action_ids(ledger_row):
-                finding = findings.setdefault(
-                    action_id,
-                    {
-                        "action": actions.get(action_id),
-                        "tickers": set(),
-                        "eventNumbers": set(),
-                        "horizons": set(),
-                    },
-                )
-                finding["tickers"].add(str(ledger_row["ticker"]))
-                finding["eventNumbers"].add(
-                    int(ledger_row["eventNumber"])
-                )
-                finding["horizons"].add(int(ledger_row["horizon"]))
+                incomplete[discovery._horizon_key(ledger_row)] = ledger_row
 
-    if findings:
-        serializable = {}
-        for action_id, finding in sorted(findings.items()):
-            serializable[action_id] = {
-                "action": finding["action"],
-                "tickers": sorted(finding["tickers"]),
-                "eventNumbers": sorted(finding["eventNumbers"]),
-                "horizons": sorted(finding["horizons"]),
-            }
+    if len(incomplete) != 13:
+        raise ValueError("incomplete provider merger scope changed")
+    if set(incomplete) != set(amendment):
+        missing = sorted(set(incomplete) - set(amendment))
+        extra = sorted(set(amendment) - set(incomplete))
         raise ValueError(
-            "incomplete frozen provider stock-merger semantics: "
-            + json.dumps(serializable, sort_keys=True)
+            "provider amendment key coverage changed: "
+            f"missing={missing} extra={extra}"
         )
+
+    for key, ledger_row in incomplete.items():
+        source_ids = discovery._action_ids(ledger_row)
+        if amendment[key].get("sourceActionIds") != source_ids:
+            raise ValueError("provider amendment source action mismatch")
 
 
 def _value_confirmation_outcomes(
     matrix: list[dict[str, str]],
     ledger: list[dict[str, str]],
     final_rows: list[dict[str, Any]],
+    provider_amendment: dict[
+        tuple[str, str, str, str, int, str],
+        dict[str, Any],
+    ],
     actions: dict[str, dict[str, Any]],
     market_root: Path,
     output: Path,
@@ -242,10 +306,10 @@ def _value_confirmation_outcomes(
         for row in final_rows
     }
 
-    _audit_incomplete_provider_stock_mergers(
+    _audit_provider_amendment_coverage(
         confirmation,
         ledger_by_base,
-        actions,
+        provider_amendment,
     )
     unresolved_keys = {
         discovery._horizon_key(row)
@@ -272,6 +336,7 @@ def _value_confirmation_outcomes(
             terms = _terms_for_confirmation(
                 ledger_row,
                 final_by_key.get(key),
+                provider_amendment.get(key),
                 actions,
             )
             terms_by_key[key] = terms
@@ -584,6 +649,7 @@ def run(
     *,
     stage_a_dir: Path,
     discovery_results_path: Path,
+    provider_amendment_path: Path,
     ledger_path: Path,
     corporate_actions_path: Path,
     final_contract_path: Path,
@@ -597,6 +663,9 @@ def run(
     output.mkdir(parents=True, exist_ok=True)
 
     discovery_result = _read_discovery(discovery_results_path)
+    provider_amendment = _load_provider_amendment(
+        provider_amendment_path
+    )
     stage_a_summary, cutpoints, matrix = discovery._load_stage_a(
         stage_a_dir
     )
@@ -608,6 +677,7 @@ def run(
         matrix,
         ledger,
         final_rows,
+        provider_amendment,
         actions,
         market_root,
         output,
@@ -747,6 +817,11 @@ def main() -> None:
         type=Path,
         required=True,
     )
+    parser.add_argument(
+        "--provider-amendment",
+        type=Path,
+        required=True,
+    )
     parser.add_argument("--ledger", type=Path, required=True)
     parser.add_argument("--corporate-actions", type=Path, required=True)
     parser.add_argument("--final-contract", type=Path, required=True)
@@ -761,6 +836,7 @@ def main() -> None:
     result = run(
         stage_a_dir=args.stage_a_dir,
         discovery_results_path=args.discovery_results,
+        provider_amendment_path=args.provider_amendment,
         ledger_path=args.ledger,
         corporate_actions_path=args.corporate_actions,
         final_contract_path=args.final_contract,
