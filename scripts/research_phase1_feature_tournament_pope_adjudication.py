@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from decimal import Decimal
 from pathlib import Path
@@ -13,6 +14,12 @@ EXPECTED_CONFLICT_STATUS = (
 )
 EXPECTED_EVIDENCE_CONTRACT = (
     "phase1-feature-tournament-pope-primary-evidence-v1"
+)
+EXPECTED_CONFLICT_ASSET_SHA256 = (
+    "sha256:4a510d67a691e8b74ab268c4610ec83356fef3544a2c56d1160610cba8f8bd1d"
+)
+EXPECTED_RESIDUAL_SCOPE_SHA256 = (
+    "sha256:bba0f3fd8c46c04e0ccd27a6b6a2a6ac0f8fcf074d89fee7239d5477f0574e01"
 )
 
 
@@ -35,6 +42,10 @@ def _decimal(value: Any) -> Decimal:
     return Decimal(str(value))
 
 
+def _sha(path: Path) -> str:
+    return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def _prior_match(
     row: dict[str, Any],
     source: str,
@@ -54,7 +65,11 @@ def run(
     conflict_path: Path,
     evidence_path: Path,
     output_path: Path,
+    verify_frozen_asset: bool = True,
 ) -> dict[str, Any]:
+    if verify_frozen_asset and _sha(conflict_path) != EXPECTED_CONFLICT_ASSET_SHA256:
+        raise ValueError("POPE conflict diagnostic asset digest changed")
+
     conflict = json.loads(conflict_path.read_text(encoding="utf-8"))
     evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
 
@@ -67,17 +82,18 @@ def run(
         raise ValueError("POPE conflict row count changed")
     if conflict.get("adjudicated") is not False:
         raise ValueError("POPE conflict was already adjudicated")
-    source_digest = str(conflict.get("sourceResidualScopeSha256") or "")
-    if not source_digest.startswith("sha256:"):
-        raise ValueError("POPE conflict is not bound to residual scope digest")
 
-    if evidence.get("contractId") != EXPECTED_EVIDENCE_CONTRACT:
-        raise ValueError("unexpected POPE primary-evidence contract")
-
+    # Diagnostic v1 accidentally serialized the shell token "$SOURCE_DIGEST"
+    # instead of expanding it. Its whole-file release digest is immutable and
+    # verified above, so provenance is repaired here with the independently
+    # frozen residual-scope asset digest rather than trusting that bad field.
     row = conflict.get("row")
     subject = evidence.get("subject")
     if not isinstance(row, dict) or not isinstance(subject, dict):
         raise ValueError("malformed POPE conflict/evidence subject")
+
+    if evidence.get("contractId") != EXPECTED_EVIDENCE_CONTRACT:
+        raise ValueError("unexpected POPE primary-evidence contract")
 
     exact_pairs = {
         "issuerCik": "issuerCik",
@@ -93,6 +109,8 @@ def run(
                 f"POPE primary evidence does not match {conflict_key}"
             )
 
+    if int(row.get("currentEventNumber")) != 16553:
+        raise ValueError("POPE current event number changed")
     if row.get("matchStatus") != "PRIOR_ECONOMIC_CONFLICT":
         raise ValueError("POPE row is no longer a prior-economic conflict")
     if sorted(row.get("priorSources") or []) != ["B1", "B3"]:
@@ -150,6 +168,12 @@ def run(
         raise ValueError("POPE primary source must be the closing 8-K")
     if primary.get("accession") != "0000052827-20-000138":
         raise ValueError("unexpected POPE primary-source accession")
+    expected_url = (
+        "https://www.sec.gov/Archives/edgar/data/52827/"
+        "000005282720000138/ryn-20200507.htm"
+    )
+    if primary.get("document") != expected_url:
+        raise ValueError("unexpected POPE primary-source document")
 
     resolution = {
         "eventNumber": int(row["currentEventNumber"]),
@@ -164,6 +188,7 @@ def run(
         ),
         "effectiveDate": str(subject["effectiveDate"]),
         **result,
+        "successorIssuerCik": "0000052827",
         "evidenceClass": "PRIMARY_SEC_CLOSING_ELECTION_RESULTS",
         "evidenceContractId": str(evidence["contractId"]),
         "primarySourceAccession": str(primary["accession"]),
@@ -181,11 +206,14 @@ def run(
         "validationOpened": False,
         "oosOpened": False,
         "productionScoringChanged": False,
-        "sourceResidualScopeSha256": source_digest,
+        "sourceResidualScopeSha256": EXPECTED_RESIDUAL_SCOPE_SHA256,
+        "sourceConflictAssetSha256": EXPECTED_CONFLICT_ASSET_SHA256,
         "sourceConflictRowSha256": str(conflict["conflictRowSha256"]),
+        "safePriorEvidenceRows": 175,
         "conflictRows": 1,
         "adjudicatedRows": 1,
         "remainingPOPEConflictRows": 0,
+        "remainingPrimaryEvidenceRows": 34,
         "resolution": resolution,
         "adjudicated": True,
         "resolutionCompleteForPOPE": True,
