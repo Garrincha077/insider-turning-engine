@@ -1,0 +1,182 @@
+name: Reuse feature tournament Stage B prior continuity evidence
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-stage-b-prior-evidence-reuse.yml"
+      - "scripts/research_phase1_feature_tournament_stage_b_prior_evidence_reuse.py"
+      - "tests/test_research_phase1_feature_tournament_stage_b_prior_evidence_reuse.py"
+      - "docs/research-phase1-feature-tournament-stage-b-prior-evidence-reuse-gate.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-feature-tournament-stage-b-prior-evidence-reuse-v1
+  cancel-in-progress: false
+
+env:
+  SCOPE_RELEASE: research-phase1-feature-tournament-stage-b-unresolved-scope-v1
+  SCOPE_ASSET: stage-b-unresolved-scope.json
+  SCOPE_DIGEST: sha256:4882e009646ea117d123b5f95ae41ea700203dd470d3b24be2cd1592eebe9afd
+  B3_RELEASE: research-phase1-b3-final-continuity-contract-v1
+  B3_ASSET: b3-final-continuity-contract.json
+  B3_DIGEST: sha256:22e1af6713eb0c0f73604a150787ac9248f044eef63e1f88b70b31697aede163
+  B1_PATH: research/b1-security-continuity-resolution-v1.json
+  B1_GIT_BLOB: f56e88f1d1ec3b8c90f005bf7b7805b7ad25ade3
+  RESULT_RELEASE: research-phase1-feature-tournament-stage-b-prior-evidence-reuse-v1
+
+jobs:
+  reuse:
+    name: Performance-blind prior continuity evidence reuse
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --all-groups --frozen
+
+      - name: Test exact-key reuse semantics
+        run: >-
+          uv run pytest -q
+          tests/test_research_phase1_feature_tournament_stage_b_prior_evidence_reuse.py
+
+      - name: Verify frozen B1 repository contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$B1_PATH"
+          actual="$(git hash-object "$B1_PATH")"
+          test "$actual" = "$B1_GIT_BLOB"
+          python - <<'PY'
+          import json, os
+          p=json.load(open(os.environ["B1_PATH"]))
+          assert p["contractId"]=="phase1-b1-security-continuity-resolution-v1"
+          assert p["performanceRead"] is False
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          assert p["frozenScope"]["expectedSourceUnresolvedRows"]==54
+          assert len(p["resolutions"])==54
+          PY
+
+      - name: Download and verify frozen source contracts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/source work/output
+
+          gh release view "$SCOPE_RELEASE" --repo "$GITHUB_REPOSITORY" --json assets > work/scope-assets.json
+          gh release view "$B3_RELEASE" --repo "$GITHUB_REPOSITORY" --json assets > work/b3-assets.json
+
+          python - <<'PY'
+          import json, os
+          for manifest, name_env, digest_env in [
+              ("work/scope-assets.json", "SCOPE_ASSET", "SCOPE_DIGEST"),
+              ("work/b3-assets.json", "B3_ASSET", "B3_DIGEST"),
+          ]:
+              assets={x["name"]:x for x in json.load(open(manifest))["assets"]}
+              name=os.environ[name_env]
+              assert assets[name].get("digest")==os.environ[digest_env], assets[name]
+          PY
+
+          gh release download "$SCOPE_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$SCOPE_ASSET" --dir work/source
+          gh release download "$B3_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$B3_ASSET" --dir work/source
+
+          test -s "work/source/$SCOPE_ASSET"
+          test -s "work/source/$B3_ASSET"
+
+      - name: Reuse only exact prior evidence and freeze residual
+        run: >-
+          uv run python scripts/research_phase1_feature_tournament_stage_b_prior_evidence_reuse.py
+          --scope "work/source/$SCOPE_ASSET"
+          --b3-contract "work/source/$B3_ASSET"
+          --b1-contract "$B1_PATH"
+          --reuse-output work/output/stage-b-prior-evidence-reuse.json
+          --residual-output work/output/stage-b-residual-primary-evidence-scope.json
+
+      - name: Assert performance-blind reuse boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          reuse=json.load(open("work/output/stage-b-prior-evidence-reuse.json"))
+          residual=json.load(open("work/output/stage-b-residual-primary-evidence-scope.json"))
+
+          assert reuse["status"]=="PHASE1_FEATURE_TOURNAMENT_STAGE_B_PRIOR_EVIDENCE_REUSE_COMPLETE"
+          assert reuse["sourceUnresolvedRows"]==210
+          assert reuse["b3ExactMatches"]==168
+          assert reuse["b1OnlyExactMatches"]==8
+          assert reuse["reusedRows"]==176
+          assert reuse["residualRows"]==34
+          assert reuse["performanceRead"] is False
+          assert reuse["priceFieldsRead"]==[]
+          assert reuse["featureOutcomesRead"] is False
+          assert reuse["featureDiscoveryOutcomesOpened"] is False
+          assert reuse["validationOpened"] is False
+          assert reuse["oosOpened"] is False
+          assert reuse["productionScoringChanged"] is False
+
+          assert residual["status"]=="PHASE1_FEATURE_TOURNAMENT_STAGE_B_RESIDUAL_PRIMARY_EVIDENCE_SCOPE_FROZEN"
+          assert residual["sourceUnresolvedRows"]==210
+          assert residual["priorEvidenceReusedRows"]==176
+          assert residual["residualRows"]==34
+          assert residual["residualUniqueEvents"]==19
+          assert residual["residualUniqueIssuers"]==14
+          assert residual["residualUniqueTickers"]==14
+          assert residual["rowsByResolutionSource"]=={
+              "long_internal_gap":17,
+              "provider":17,
+          }
+          assert residual["rowsByHorizon"]=={
+              "126":8,
+              "21":1,
+              "252":19,
+              "63":6,
+          }
+          assert residual["performanceRead"] is False
+          assert residual["priceFieldsRead"]==[]
+          assert residual["featureOutcomesRead"] is False
+          assert residual["featureDiscoveryOutcomesOpened"] is False
+          assert residual["validationOpened"] is False
+          assert residual["oosOpened"] is False
+          assert residual["productionScoringChanged"] is False
+
+          print(json.dumps({
+              "reuseKeySha256":reuse["reuseKeySha256"],
+              "resolutionDecisionCounts":reuse["resolutionDecisionCounts"],
+              "residualScopeKeySha256":residual["residualScopeKeySha256"],
+              "residualRows":residual["residualRows"],
+          },indent=2,sort_keys=True))
+          PY
+
+      - name: Publish immutable reuse and residual scopes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 feature tournament Stage B prior-evidence reuse v1"               --notes "Performance-blind exact-key reuse of frozen B1/B3 continuity evidence: 176/210 rows reused, leaving a frozen 34-row primary-evidence residual. No feature outcomes, validation or 2023+ OOS opened."               --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE"             work/output/stage-b-prior-evidence-reuse.json             work/output/stage-b-residual-primary-evidence-scope.json             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: feature-tournament-stage-b-prior-evidence-reuse-${{ github.run_id }}
+          path: |
+            work/output/stage-b-prior-evidence-reuse.json
+            work/output/stage-b-residual-primary-evidence-scope.json
+          retention-days: 90
