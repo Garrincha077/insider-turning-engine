@@ -21,7 +21,7 @@ concurrency:
 env:
   CONFLICT_RELEASE: research-phase1-feature-tournament-pope-conflict-diagnostic-v1
   CONFLICT_ASSET: pope-conflict.json
-  CONFLICT_DIGEST: sha256:4a510d67a691e8b74ab268c4610ec83356fef3544a2c56d1160610cba8f8bd1d
+  CONFLICT_DIGEST: sha256:cb6cea59cb91c7ff580c2216d4c9f022f6ab3a35cbf7a2a5ad26e57d943de49a
   RESULT_RELEASE: research-phase1-feature-tournament-pope-adjudication-v1
 
 jobs:
