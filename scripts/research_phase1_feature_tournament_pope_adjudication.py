@@ -82,6 +82,9 @@ def run(
         raise ValueError("POPE conflict row count changed")
     if conflict.get("adjudicated") is not False:
         raise ValueError("POPE conflict was already adjudicated")
+    source_digest = str(conflict.get("sourceResidualScopeSha256") or "")
+    if source_digest != EXPECTED_RESIDUAL_SCOPE_SHA256:
+        raise ValueError("POPE conflict residual-scope provenance changed")
 
     row = conflict.get("row")
     subject = evidence.get("subject")
