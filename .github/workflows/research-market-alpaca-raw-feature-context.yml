@@ -1,0 +1,206 @@
+name: Backfill raw Alpaca feature-formation context 2015-2020
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/b3-ps-pit-history
+    paths:
+      - "scripts/research_market_alpaca_raw_feature_context.py"
+      - "tests/test_research_market_alpaca_raw_feature_context.py"
+      - ".github/workflows/research-market-alpaca-raw-feature-context.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-market-alpaca-raw-feature-context-v1
+  cancel-in-progress: false
+
+env:
+  SEC_RELEASE_TAG: research-sec-amendments-v1
+  SEC_ASSET: sec-amendment-reconciliation-2013-2022.tar.gz
+  SEC_ASSET_DIGEST: sha256:fc4acf047f2705573e7511f4c96295788b09405029be2c18dcb8e28546f2022f
+  RESULT_RELEASE: research-market-alpaca-raw-feature-context-v1
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Lint raw feature context
+        run: >-
+          uv run ruff check
+          scripts/research_market_alpaca_raw_feature_context.py
+          tests/test_research_market_alpaca_raw_feature_context.py
+      - name: Test raw feature context scope
+        run: >-
+          uv run pytest -q
+          tests/test_research_market_alpaca_raw_feature_context.py
+
+  backfill:
+    needs: lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        year: [2015, 2016, 2017, 2018, 2019, 2020]
+    env:
+      ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY_ID }}
+      ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+
+      - name: Require Alpaca credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ALPACA_API_KEY_ID"
+          test -n "$ALPACA_API_SECRET_KEY"
+
+      - name: Download pinned SEC reconciliation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/sec work/download
+          gh release download "$SEC_RELEASE_TAG" --repo "$GITHUB_REPOSITORY"             --pattern "$SEC_ASSET" --dir work/download
+          digest="sha256:$(sha256sum "work/download/$SEC_ASSET" | cut -d' ' -f1)"
+          test "$digest" = "$SEC_ASSET_DIGEST"
+          tar -xzf "work/download/$SEC_ASSET"             -C work/sec effective-end-2022.jsonl
+
+      - name: Fetch raw SIP feature context
+        run: >-
+          uv run python scripts/research_market_alpaca_raw_feature_context.py
+          --source work/sec/effective-end-2022.jsonl
+          --year ${{ matrix.year }}
+          --output work/raw-${{ matrix.year }}
+
+      - name: Assert outcome-blind research boundary
+        env:
+          MATRIX_YEAR: ${{ matrix.year }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          year = int(os.environ["MATRIX_YEAR"])
+          s = json.loads(Path(f"work/raw-{year}/summary.json").read_text())
+          assert s["status"] == "ALPACA_RAW_FEATURE_CONTEXT_PASS"
+          assert s["year"] == year
+          assert s["feed"] == "sip"
+          assert s["adjustment"] == "raw"
+          assert s["symbolMapping"] == "disabled-with-asof-dash"
+          assert s["featureContextOnly"] is True
+          assert s["forwardReturnsComputed"] is False
+          assert s["marketDataJoinedToOutcomes"] is False
+          assert s["validationOpened"] is False
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert not s["requestFailures"]
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: raw-feature-market-${{ matrix.year }}-${{ github.run_id }}
+          path: work/raw-${{ matrix.year }}
+          retention-days: 90
+
+  persist:
+    needs: backfill
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: raw-feature-market-*-${{ github.run_id }}
+          path: work/years
+
+      - name: Build immutable raw feature-context release
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/release
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path("work/years")
+          summaries = []
+          for year in range(2015, 2021):
+              matches = list(root.glob(f"raw-feature-market-{year}-*/summary.json"))
+              if len(matches) != 1:
+                  raise SystemExit(
+                      f"expected one raw feature-context summary for {year}, "
+                      f"got {len(matches)}"
+                  )
+              summary = json.loads(matches[0].read_text())
+              assert summary["status"] == "ALPACA_RAW_FEATURE_CONTEXT_PASS"
+              assert summary["forwardReturnsComputed"] is False
+              assert summary["oosOpened"] is False
+              summaries.append(summary)
+
+          index = {
+              "schemaVersion": "1.0.0",
+              "dataset": "Alpaca SIP raw feature-formation market context",
+              "period": "2015-2020",
+              "adjustment": "raw",
+              "feed": "sip",
+              "symbolMapping": "disabled-with-asof-dash",
+              "years": summaries,
+              "featureContextOnly": True,
+              "forwardReturnsComputed": False,
+              "validationOpened": False,
+              "oosOpened": False,
+              "productionScoringChanged": False,
+              "nextGate": "Phase-1 Stage A feature coverage and cutpoint freeze",
+          }
+          Path("work/release/raw-feature-market-2015-2020-index.json").write_text(
+              json.dumps(index, indent=2, sort_keys=True) + "\n"
+          )
+          PY
+
+          for year in 2015 2016 2017 2018 2019 2020; do
+            dir=$(find work/years -maxdepth 1 -type d               -name "raw-feature-market-${year}-*" | head -n 1)
+            test -n "$dir"
+            tar -C "$dir" -czf               "work/release/raw-feature-market-${year}.tar.gz"               "raw-feature-market-${year}.csv"               summary.json request-failures.json symbol-quarantines.json
+          done
+          sha256sum work/release/*
+
+      - name: Publish immutable raw feature-context release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE"             --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE"               --repo "$GITHUB_REPOSITORY"               --title "Research raw feature-formation market context v1"               --notes "Outcome-blind Alpaca SIP adjustment=raw context for 2015-2020 feature formation. No forward returns; validation and 2023+ OOS remain closed."               --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE" work/release/*             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: raw-feature-market-index-${{ github.run_id }}
+          path: work/release/raw-feature-market-2015-2020-index.json
+          retention-days: 90
