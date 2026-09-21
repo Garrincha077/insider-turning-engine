@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0.0",
   "manifestId": "PHASE1_FEATURE_TOURNAMENT_STAGE_A_INPUTS_V1",
-  "status": "PARTIALLY_PINNED_AWAITING_RAW_CONTEXT_RELEASE",
+  "status": "FULLY_PINNED_BEFORE_STAGE_A",
   "frozenAt": "2026-09-21",
   "researchOnly": true,
   "forwardReturnsRead": false,
@@ -37,8 +37,20 @@
     "period": "2016-2020",
     "adjustment": "raw",
     "symbolMapping": "disabled-with-asof-dash",
-    "assets": null,
-    "role": "nominal stock price, dollar ADV, F4 basis/reclaim"
+    "assets": {
+      "raw-feature-market-2016.tar.gz": "sha256:b1172994bf1cf8a5ebd0470fde60b42bc4cbed22163eabcd33739c58e219375e",
+      "raw-feature-market-2017.tar.gz": "sha256:1491295b365bfe28e0e560a1d3352c1ffccd44966e83a2cd38aba637db70e68d",
+      "raw-feature-market-2018.tar.gz": "sha256:ad5000614692eb0dc4487bff3353b83ca4a47f7d32885ed1dcdbe4f9f984a340",
+      "raw-feature-market-2019.tar.gz": "sha256:68164dd34b198ff46bc78f8402a2ca48d155f9691267fd86163674c49fdf92c9",
+      "raw-feature-market-2020.tar.gz": "sha256:5fb7d5fecc473660adf995d58787ab8e6e2240a4a203eea3a4c97688a73b4103"
+    },
+    "role": "nominal stock price, dollar ADV, F4 basis/reclaim",
+    "indexAsset": {
+      "name": "raw-feature-market-2015-2020-index.json",
+      "digest": "sha256:0be507070c7ee7a212d5a28bbe4c3bc643624a28ea0575b9f4885862f6559e9f",
+      "note": "Filename is legacy/cosmetic; frozen index content period is 2016-2020. Annual tar assets are the Stage A data inputs."
+    },
+    "workflowRunId": "35640566525"
   },
   "expectedScope": {
     "benchmark": "B0_ANY_QUALIFIED_PURCHASE",
@@ -50,5 +62,5 @@
     "confirmationPeriod": "2019-2020"
   },
   "marketCapStatus": "PIT_BLOCKED_PENDING_RAW_PRICE_AND_PIT_SHARES",
-  "stageARunAllowed": false
+  "stageARunAllowed": true
 }
