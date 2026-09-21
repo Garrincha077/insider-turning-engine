@@ -1,0 +1,118 @@
+{
+  "schemaVersion": "1.0.0",
+  "contractId": "phase1-f2-validation-hsdt-primary-evidence-v1",
+  "frozenAt": "2026-09-21",
+  "researchOnly": true,
+  "performanceRead": false,
+  "priceFieldsRead": [],
+  "featureOutcomesRead": false,
+  "validationOpened": false,
+  "validationPerformanceOpened": false,
+  "oosOpened": false,
+  "productionScoringChanged": false,
+  "sourceGapDiagnostic": {
+    "release": "research-phase1-insider-feature-tournament-validation-hsdt-gap-interval-v1",
+    "asset": "validation-hsdt-gap-interval.json",
+    "digest": "sha256:ba5f63caad37bf476bbafff156182118b37d965d5a1406c93b7e45b5985707a2"
+  },
+  "row": {
+    "eventNumber": 3657,
+    "issuerCik": "0001610853",
+    "ticker": "HSDT",
+    "evaluationSession": "2021-11-15",
+    "entrySession": "2021-11-16",
+    "horizon": 126,
+    "targetExitSession": "2022-05-18",
+    "semanticKeySha256": "sha256:2dec9e57b3e6927b9c387764e2bcbfe0955cb450e9a546dfb900bcd9c8e92827",
+    "candidateActionIds": [],
+    "candidateActionTypes": []
+  },
+  "gap": {
+    "previousObservedSession": "2022-02-03",
+    "firstMissingSession": "2022-02-04",
+    "lastMissingSession": "2022-03-17",
+    "nextObservedSession": "2022-03-18",
+    "maxInternalGapSessions": 29
+  },
+  "primaryEvidence": [
+    {
+      "filingDate": "2022-01-26",
+      "form": "8-K",
+      "accession": "0001564590-22-002491",
+      "url": "https://www.sec.gov/Archives/edgar/data/1610853/000156459022002491/hsdt-8k_20220126.htm",
+      "issuerCik": "0001610853",
+      "issuerName": "Helius Medical Technologies, Inc.",
+      "registeredSecurityTitle": "Common Stock",
+      "tradingSymbol": "HSDT",
+      "exchange": "The Nasdaq Stock Market LLC",
+      "relationToGap": "BEFORE_GAP"
+    },
+    {
+      "filingDate": "2022-02-16",
+      "form": "8-K",
+      "accession": "0001564590-22-005702",
+      "url": "https://www.sec.gov/Archives/edgar/data/1610853/000156459022005702/hsdt-8k_20220216.htm",
+      "issuerCik": "0001610853",
+      "issuerName": "Helius Medical Technologies, Inc.",
+      "registeredSecurityTitle": "Common Stock",
+      "tradingSymbol": "HSDT",
+      "exchange": "The Nasdaq Stock Market LLC",
+      "relationToGap": "INSIDE_GAP",
+      "titleNormalizationEvidence": "The filing describes the company's Class A Common Stock as the “Common Stock” in the 2022 Equity Incentive Plan disclosure."
+    },
+    {
+      "filingDate": "2022-03-08",
+      "form": "8-K",
+      "accession": "0001564590-22-009857",
+      "url": "https://www.sec.gov/Archives/edgar/data/1610853/000156459022009857/hsdt-8k_20220308.htm",
+      "issuerCik": "0001610853",
+      "issuerName": "Helius Medical Technologies, Inc.",
+      "registeredSecurityTitle": "Class A Common Stock, $0.001",
+      "tradingSymbol": "HSDT",
+      "exchange": "The Nasdaq Stock Market LLC",
+      "relationToGap": "INSIDE_GAP"
+    },
+    {
+      "filingDate": "2022-03-14",
+      "form": "8-K",
+      "accession": "0001564590-22-010081",
+      "url": "https://www.sec.gov/Archives/edgar/data/1610853/000156459022010081/hsdt-8k_20220314.htm",
+      "issuerCik": "0001610853",
+      "issuerName": "Helius Medical Technologies, Inc.",
+      "registeredSecurityTitle": "Common Stock",
+      "tradingSymbol": "HSDT",
+      "exchange": "The Nasdaq Stock Market LLC",
+      "relationToGap": "INSIDE_GAP"
+    },
+    {
+      "filingDate": "2022-04-01",
+      "form": "8-K",
+      "accession": "0001564590-22-013230",
+      "url": "https://www.sec.gov/Archives/edgar/data/1610853/000156459022013230/hsdt-8k_20220401.htm",
+      "issuerCik": "0001610853",
+      "issuerName": "Helius Medical Technologies, Inc.",
+      "registeredSecurityTitle": "Common Stock",
+      "tradingSymbol": "HSDT",
+      "exchange": "The Nasdaq Stock Market LLC",
+      "relationToGap": "AFTER_GAP"
+    }
+  ],
+  "interpretation": {
+    "sameIssuerAcrossEvidence": true,
+    "sameTradingSymbolAcrossEvidence": true,
+    "sameExchangeAcrossEvidence": true,
+    "commonVsClassATitleNormalizationSupported": true,
+    "frozenProviderCorporateActionCandidates": 0,
+    "holderTransformationEvidenceFound": false,
+    "decision": "SAME_SECURITY_CONTINUITY",
+    "transformationKind": "",
+    "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+    "successorSymbol": "HSDT",
+    "successorSharesPerEntryShare": "1",
+    "cashPerEntryShare": "0",
+    "effectiveDate": "2022-03-18",
+    "evidenceClass": "SEC_PRIMARY_EXACT_GAP_BRACKETING_SAME_SECURITY",
+    "classificationSource": "VALIDATION_HSDT_PRIMARY_GAP_BRACKETING"
+  },
+  "resolutionApplied": false
+}
