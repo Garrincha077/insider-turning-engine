@@ -11,7 +11,7 @@ This is the operational continuation point for a new ChatGPT/Codex session. Read
 3. Treat the exact-calendar P0 market audit as the authoritative market-data gate. Current tier: **C_EXPLORATORY**.
 4. Treat Phase-1 B0, B1, B2 and B4 development outputs as completed descriptive/research benchmarks, not production evidence.
 5. Treat the B3 P/S history, B3 amendment reconciliation, and B3 definition freeze as completed data/methodology gates.
-6. Current active task: synthesize the completed B0/B1/B2/B3/B4 development benchmark family and freeze the insider-only feature-tournament design. B3 continuity-corrected development and corrected robustness are complete; corrected progression remains BLOCK_HAC_AND_OOS.
+6. Current active task: complete the pinned 2016-2020 raw formation-context release, freeze outcome-blind Stage A feature coverage/cutpoints on the exact B0 event scope, then complete a zero-unresolved performance-blind continuity audit before any feature outcome is opened.
 7. Keep sealed OOS **2023+ unopened**.
 8. Do **not** change production scoring, weights, thresholds, signal states, alerts, or production methodology unless the owner explicitly asks.
 
@@ -502,23 +502,27 @@ Do not open OOS until transaction eligibility, transforms, benchmark family, fea
 
 ## NEXT EXECUTION SEQUENCE
 
-1. Treat B0/B1/B2/B3/B4 as a completed **development benchmark family** and
-   write a compact benchmark-family synthesis using the corrected B3 result.
-2. Preserve the existing robustness caveats: B1 and B3 are tail-sensitive and
-   neither may be promoted to formal-alpha evidence.
-3. Before any new feature performance is read, freeze the **insider-only
-   feature-tournament candidate set**, transforms, missingness rules,
-   comparison metric, multiple-testing control and selection/stability rules.
-4. Keep the feature tournament development-only. Do not use 2021-2022 to tune
-   feature definitions or weights.
-5. Require candidate features to beat transparent simple insider benchmarks in
-   a stability-aware way rather than merely improve event-weighted arithmetic
-   mean.
-6. Only after the insider-only feature set is frozen and defensible, test the
-   Turning/technical-confirmation overlay as a separate incremental layer.
-7. HAC remains closed while the frozen B1/B3 progression rules block it.
-8. Keep 2023+ sealed until methodology and the later validation stage are
-   explicitly authorized and frozen.
+1. Complete and immutably publish the Alpaca SIP `adjustment=raw` 2016-2020
+   formation-context release. Do not introduce a replacement provider for the
+   unavailable 2015 raw probe.
+2. Pin every raw annual asset SHA-256 in
+   `research/phase1-feature-tournament-stage-a-inputs-v1.json` and only then
+   set `stageARunAllowed=true`.
+3. Run Stage A on the exact reproduced B0 scope: **24,192 exact-entry events /
+   4,729 issuers**. Stage A may read PIT SEC revisions and formation-market
+   context only; forward returns/MAE/robustness remain unread.
+4. Freeze 2016-2018 discovery quintile cutpoints and feature coverage classes;
+   apply those cutpoints unchanged later.
+5. Freeze the exact Stage-B event-horizon scope from the Stage A event matrix.
+6. Run a performance-blind security-continuity audit on that exact scope and
+   require **zero unresolved rows** before any feature outcome is opened.
+7. Only then compute 2016-2018 discovery feature outcomes under the already
+   frozen tournament advancement rules.
+8. Freeze at most one candidate per feature family; apply it unchanged to
+   2019-2020 confirmation with no reselection.
+9. Keep 2021-2022 untouched by feature selection/tuning and keep 2023+ sealed.
+10. HAC remains closed while the frozen benchmark progression rules block it;
+    Turning/technical confirmation remains a later separate layer.
 
 
 ---
