@@ -67,6 +67,29 @@ For two-dimensional holdings size, use discovery-period quintiles and define
 `HIGH_HIGH` as both component variables in Q4 or Q5. This definition is
 frozen before outcomes.
 
+## Security-continuity precondition before Stage B outcomes
+
+The B0 event universe is the neutral feature-tournament reference, but its
+canonical descriptive return file has **not** received the same complete
+scope-specific security-continuity program as corrected B1 and corrected B3.
+
+Therefore:
+
+- Stage A coverage/cutpoint work may proceed because it reads no outcomes;
+- before Stage B discovery returns are computed, freeze the exact
+  feature-tournament event/horizon scope;
+- run a performance-blind security-continuity audit on that exact scope using
+  the already-frozen B1/B3 continuity semantics/evidence wherever applicable;
+- classify every affected row deterministically;
+- require **zero unresolved rows** before tournament outcomes are opened;
+- do not use canonical B0 return values to decide a continuity classification;
+- the feature-tournament performance runner must consume the frozen corrected
+  holder-outcome contract, not silently fall back to a later same-ticker bar.
+
+This scope-specific continuity step may reuse already frozen B1/B3 evidence and
+resolution rules, but may not change those rules after feature performance is
+seen.
+
 ## Event unit
 
 The tournament retains the frozen B0 issuer-event/execution clock and its
