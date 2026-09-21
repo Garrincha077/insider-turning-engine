@@ -1,0 +1,129 @@
+name: Resolve F2 validation HSDT primary continuity
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-validation-hsdt-primary-resolution.yml"
+      - "scripts/research_phase1_feature_tournament_validation_hsdt_primary_resolution.py"
+      - "tests/test_research_phase1_feature_tournament_validation_hsdt_primary_resolution.py"
+      - "research/validation-hsdt-primary-evidence-v1.json"
+      - "docs/research-phase1-feature-tournament-validation-hsdt-primary-resolution-gate.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-feature-tournament-validation-hsdt-primary-resolution-v1
+  cancel-in-progress: true
+
+env:
+  SCOPE_RELEASE: research-phase1-insider-feature-tournament-validation-residual33-scope-v1
+  SCOPE_ASSET: validation-residual33-scope.json
+  SCOPE_DIGEST: sha256:0dab36d7553ec3ceb0838c79cf7ad70a85fa240686d7493930de160c55adb946
+  EVIDENCE_FILE: research/validation-hsdt-primary-evidence-v1.json
+  EVIDENCE_GIT_BLOB: b430e5430ee25986de51874682ac5d15519ae8f1
+  RESULT_RELEASE: research-phase1-insider-feature-tournament-validation-hsdt-primary-resolution-v1
+  RESULT_ASSET: validation-hsdt-primary-resolution.json
+
+jobs:
+  resolve:
+    name: Resolve HSDT validation long-gap continuity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --all-groups --frozen
+
+      - name: Lint and test HSDT primary resolver
+        run: |
+          uv run ruff check scripts/research_phase1_feature_tournament_validation_hsdt_primary_resolution.py tests/test_research_phase1_feature_tournament_validation_hsdt_primary_resolution.py
+          uv run pytest -q tests/test_research_phase1_feature_tournament_validation_hsdt_primary_resolution.py
+
+      - name: Assert frozen evidence blob
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object "$EVIDENCE_FILE")" = "$EVIDENCE_GIT_BLOB"
+
+      - name: Download and verify residual-33 scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/input work/output
+          gh release download "$SCOPE_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$SCOPE_ASSET" --dir work/input
+          test "sha256:$(sha256sum "work/input/$SCOPE_ASSET" | cut -d' ' -f1)" = "$SCOPE_DIGEST"
+
+      - name: Apply frozen HSDT primary continuity resolution
+        run: >-
+          uv run python
+          scripts/research_phase1_feature_tournament_validation_hsdt_primary_resolution.py
+          --scope "work/input/$SCOPE_ASSET"
+          --evidence "$EVIDENCE_FILE"
+          --output "work/output/$RESULT_ASSET"
+
+      - name: Assert one-row resolution and closed validation boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          p=json.loads(Path("work/output/validation-hsdt-primary-resolution.json").read_text())
+          assert p["status"]=="PHASE1_FEATURE_TOURNAMENT_VALIDATION_HSDT_PRIMARY_RESOLUTION_COMPLETE"
+          assert p["sourceResidualRows"]==33
+          assert p["resolvedRows"]==1
+          assert p["remainingUnresolvedRows"]==32
+          assert p["resolvedKeySha256"]=="sha256:2dec9e57b3e6927b9c387764e2bcbfe0955cb450e9a546dfb900bcd9c8e92827"
+          assert len(p["resolutionRows"])==1
+          r=p["resolutionRows"][0]
+          assert r["eventNumber"]==3657
+          assert r["ticker"]=="HSDT"
+          assert r["effectiveDate"]=="2022-03-18"
+          assert r["resolutionDecision"]=="SAME_SECURITY_CONTINUITY"
+          assert r["resultState"]=="PRICE_CONTINUOUS_ADJUSTED"
+          assert r["successorSymbol"]=="HSDT"
+          assert r["successorSharesPerEntryShare"]=="1"
+          assert r["cashPerEntryShare"]=="0"
+          assert r["gapFirstMissingSession"]=="2022-02-04"
+          assert r["gapLastMissingSession"]=="2022-03-17"
+          assert r["classificationSource"]=="VALIDATION_HSDT_PRIMARY_GAP_BRACKETING"
+          assert p["performanceRead"] is False
+          assert p["priceFieldsRead"]==[]
+          assert p["featureOutcomesRead"] is False
+          assert p["validationOpened"] is False
+          assert p["validationPerformanceOpened"] is False
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          PY
+
+      - name: Publish immutable HSDT primary resolution
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp "$EVIDENCE_FILE" work/output/
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 F2 validation HSDT primary continuity v1"               --notes "Performance-blind primary SEC gap-bracketing resolution of the sole HSDT prior-security validation long-gap row. 32 rows remain unresolved; no missing price was invented, validation performance and 2023+ OOS remain closed."               --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE"             "work/output/$RESULT_ASSET"             "work/output/validation-hsdt-primary-evidence-v1.json"             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase1-insider-feature-tournament-validation-hsdt-primary-resolution-${{ github.run_id }}
+          path: work/output
+          retention-days: 90
