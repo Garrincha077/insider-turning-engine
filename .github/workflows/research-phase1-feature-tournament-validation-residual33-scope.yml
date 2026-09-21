@@ -1,0 +1,121 @@
+name: Freeze F2 validation residual-33 continuity scope
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-validation-residual33-scope.yml"
+      - "scripts/research_phase1_feature_tournament_validation_residual33_scope.py"
+      - "tests/test_research_phase1_feature_tournament_validation_residual33_scope.py"
+      - "docs/research-phase1-feature-tournament-validation-residual33-scope-gate.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-feature-tournament-validation-residual33-scope-v1
+  cancel-in-progress: true
+
+env:
+  AUDIT_RELEASE: research-phase1-insider-feature-tournament-validation-prior-evidence-v1
+  AUDIT_ASSET: validation-prior-evidence-audit.json
+  AUDIT_DIGEST: sha256:6d261d773a47b311b18827fece4307105788be17ac6ece16d38daa4b27974361
+  RESOLUTION_RELEASE: research-phase1-insider-feature-tournament-validation-exact-action-resolution-v1
+  RESOLUTION_ASSET: validation-exact-action-prior-resolution.json
+  RESOLUTION_DIGEST: sha256:6e238d29f9e8a31b388b84cb5f11964079f81b68985b44cf28b290e1fbb29bdc
+  RESULT_RELEASE: research-phase1-insider-feature-tournament-validation-residual33-scope-v1
+  RESULT_ASSET: validation-residual33-scope.json
+
+jobs:
+  freeze:
+    name: Freeze exact 33-row validation continuity residual
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --all-groups --frozen
+
+      - name: Lint and test residual scope freezer
+        run: |
+          uv run ruff check scripts/research_phase1_feature_tournament_validation_residual33_scope.py tests/test_research_phase1_feature_tournament_validation_residual33_scope.py
+          uv run pytest -q tests/test_research_phase1_feature_tournament_validation_residual33_scope.py
+
+      - name: Download and verify immutable inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/input work/output
+
+          gh release download "$AUDIT_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$AUDIT_ASSET" --dir work/input
+          test "sha256:$(sha256sum "work/input/$AUDIT_ASSET" | cut -d' ' -f1)" = "$AUDIT_DIGEST"
+
+          gh release download "$RESOLUTION_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$RESOLUTION_ASSET" --dir work/input
+          test "sha256:$(sha256sum "work/input/$RESOLUTION_ASSET" | cut -d' ' -f1)" = "$RESOLUTION_DIGEST"
+
+      - name: Freeze exact residual scope
+        run: >-
+          uv run python
+          scripts/research_phase1_feature_tournament_validation_residual33_scope.py
+          --audit "work/input/$AUDIT_ASSET"
+          --resolution "work/input/$RESOLUTION_ASSET"
+          --output "work/output/$RESULT_ASSET"
+
+      - name: Assert frozen residual partition and closed boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          p=json.loads(Path("work/output/validation-residual33-scope.json").read_text())
+          assert p["status"]=="PHASE1_FEATURE_TOURNAMENT_VALIDATION_RESIDUAL33_SCOPE_FROZEN"
+          assert p["sourceAuditRows"]==41
+          assert p["subtractedResolvedRows"]==8
+          assert p["residualRows"]==33
+          assert p["scopeKeySha256"]=="sha256:9ee5091b18344e67b58fe567b92ce99d3f923e4df2829af935158947bdcae2a2"
+          assert p["categoryCounts"]=={
+              "LONG_GAP_NEW_PRIMARY_EVIDENCE_REQUIRED":10,
+              "LONG_GAP_PRIOR_SECURITY_CANDIDATE":1,
+              "PROVIDER_NEW_PRIMARY_EVIDENCE_REQUIRED":22,
+          }
+          assert p["priorLongGapCandidateRows"]==1
+          assert p["newPrimaryEvidenceRows"]==32
+          assert len(p["rows"])==33
+          assert p["performanceRead"] is False
+          assert p["priceFieldsRead"]==[]
+          assert p["featureOutcomesRead"] is False
+          assert p["validationOpened"] is False
+          assert p["validationPerformanceOpened"] is False
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          PY
+
+      - name: Publish immutable residual-33 scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 F2 validation residual-33 continuity scope v1"               --notes "Performance-blind subtraction of the 8 frozen exact-action prior resolutions from the 41-row validation continuity residual. 33 rows remain; validation performance and 2023+ OOS remain closed."               --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE" "work/output/$RESULT_ASSET"             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase1-insider-feature-tournament-validation-residual33-scope-${{ github.run_id }}
+          path: work/output
+          retention-days: 90
