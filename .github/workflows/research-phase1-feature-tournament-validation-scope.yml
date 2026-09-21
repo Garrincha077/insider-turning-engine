@@ -1,0 +1,164 @@
+name: Freeze insider feature tournament validation scope
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-validation-scope.yml"
+      - "scripts/research_phase1_feature_tournament_validation_scope.py"
+      - "tests/test_research_phase1_feature_tournament_validation_scope.py"
+      - "docs/research-phase1-feature-tournament-validation-gate.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-feature-tournament-validation-scope-v1
+  cancel-in-progress: false
+
+env:
+  CONFIRMATION_RELEASE: research-phase1-insider-feature-tournament-confirmation-v1
+  CONFIRMATION_ASSET: confirmation-results.json
+  CONFIRMATION_DIGEST: sha256:5776b17b452c23aaccf481b1484460c9ab8d860187eb554bef31f6a0387d234f
+
+  SEC_RELEASE: research-sec-amendments-v1
+  SEC_ASSET: sec-amendment-reconciliation-2013-2022.tar.gz
+  SEC_DIGEST: sha256:fc4acf047f2705573e7511f4c96295788b09405029be2c18dcb8e28546f2022f
+
+  MARKET_RELEASE: research-market-alpaca-v1
+  RESULT_RELEASE: research-phase1-insider-feature-tournament-validation-scope-v1
+
+jobs:
+  freeze:
+    name: Outcome-blind 2021-2022 F2 validation scope
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --all-groups --frozen
+
+      - name: Lint and test validation-scope semantics
+        run: |
+          uv run ruff check scripts/research_phase1_feature_tournament_validation_scope.py tests/test_research_phase1_feature_tournament_validation_scope.py
+          uv run pytest -q tests/test_research_phase1_feature_tournament_validation_scope.py
+
+      - name: Download and verify frozen confirmation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/confirmation work/download/sec work/sec work/download/market work/market work/output
+          gh release download "$CONFIRMATION_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$CONFIRMATION_ASSET" --dir work/confirmation
+          test "sha256:$(sha256sum "work/confirmation/$CONFIRMATION_ASSET" | cut -d' ' -f1)" = "$CONFIRMATION_DIGEST"
+
+      - name: Download and verify frozen SEC history
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release download "$SEC_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$SEC_ASSET" --dir work/download/sec
+          test "sha256:$(sha256sum "work/download/sec/$SEC_ASSET" | cut -d' ' -f1)" = "$SEC_DIGEST"
+          tar -xzf "work/download/sec/$SEC_ASSET" -C work/sec             effective-end-2022.jsonl reconciled-all-revisions.jsonl
+          test -s work/sec/effective-end-2022.jsonl
+          test -s work/sec/reconciled-all-revisions.jsonl
+
+      - name: Download and verify frozen pre-2023 market corpus
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          declare -A DIGESTS=(
+            [2016]=df531881b67f9f42e40b2c2fff03f6ca19c0b5f9b13deb6190132b7987fb69ca
+            [2017]=7515a3807249bbead7cf7edc2a2aa1d267b01fc49ddf72885c40746520e762d0
+            [2018]=4a99eafc6cac31ee30d23bf82c1feccb4bbe14919f7c4df2d59e792f8a5b2f54
+            [2019]=c701d559a7d5128fd07ec19e2d5d3b39eb5ae8c0d9bd51a8b278d34c9b6f9238
+            [2020]=5577a548576e81c5e468b9e5027c9a8ec1ba8e1dd14ed38a0f223e797c5358e2
+            [2021]=550ff3456ad16a045692a5d9d567d13ef2b8788283f4c39c3baa5d8aecd7a704
+            [2022]=8a71037090cda77bc3937409ffa9fcb9c463545b5f3a7d9a73995a92759d187a
+          )
+          for year in 2016 2017 2018 2019 2020 2021 2022; do
+            asset="alpaca-market-$year.tar.gz"
+            gh release download "$MARKET_RELEASE" --repo "$GITHUB_REPOSITORY"               --pattern "$asset" --dir work/download/market
+            test "$(sha256sum "work/download/market/$asset" | cut -d' ' -f1)" = "${DIGESTS[$year]}"
+            mkdir -p "work/market/$year"
+            tar -xzf "work/download/market/$asset" -C "work/market/$year"               "canonical-market-$year.csv"
+            test -s "work/market/$year/canonical-market-$year.csv"
+          done
+          test ! -e work/market/2023
+
+      - name: Freeze exact validation event and F2 scope
+        run: >-
+          uv run python scripts/research_phase1_feature_tournament_validation_scope.py
+          --confirmation-results "work/confirmation/$CONFIRMATION_ASSET"
+          --sec-effective work/sec/effective-end-2022.jsonl
+          --sec-revisions work/sec/reconciled-all-revisions.jsonl
+          --market-root work/market
+          --output work/output
+
+      - name: Assert outcome-blind validation boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import csv, json
+
+          s=json.load(open("work/output/summary.json"))
+          assert s["status"]=="PHASE1_FEATURE_TOURNAMENT_VALIDATION_SCOPE_FROZEN"
+          assert s["confirmedCandidate"]=="F2_DIRECT_VS_INDIRECT"
+          assert s["frozenPreferred"]=="INDIRECT_ONLY"
+          assert s["frozenComplement"]=="DIRECT_ONLY"
+          assert s["primaryHorizonSessions"]==126
+          assert s["outcomesRead"] is False
+          assert s["priceOutcomeFieldsRead"]==[]
+          assert s["validationOpened"] is False
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["validationScopeRows"] > 0
+          assert s["f2ObservedRows"] > 0
+
+          with open("work/output/validation-scope.csv", newline="") as f:
+              rows=list(csv.DictReader(f))
+          assert len(rows)==s["validationScopeRows"]
+          assert min(r["evaluationSession"] for r in rows) >= "2021-01-01"
+          assert max(r["evaluationSession"] for r in rows) <= "2022-12-31"
+          assert max(r["targetExitSession"] for r in rows) <= "2022-12-31"
+          assert {r["horizon"] for r in rows}=={"126"}
+          assert set(r["F2_OWNERSHIP_CATEGORY"] for r in rows) <= {
+              "DIRECT_ONLY","INDIRECT_ONLY","MIXED","UNKNOWN"
+          }
+
+          print(json.dumps(s,indent=2,sort_keys=True))
+          PY
+
+      - name: Publish immutable validation scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp docs/research-phase1-feature-tournament-validation-gate.md work/output/
+          tar -C work/output -czf work/phase1-insider-feature-tournament-validation-scope-v1.tar.gz             summary.json validation-scope.csv             research-phase1-feature-tournament-validation-gate.md
+
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 insider feature tournament validation scope v1"               --notes "Outcome-blind 2021-2022 F2 validation scope, cross-period 20-session dedup preserved, 126-session targets capped at 2022-12-31. Validation outcomes and 2023+ OOS remain closed."               --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE"             work/phase1-insider-feature-tournament-validation-scope-v1.tar.gz             work/output/summary.json             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase1-insider-feature-tournament-validation-scope-${{ github.run_id }}
+          path: work/output
+          retention-days: 90
