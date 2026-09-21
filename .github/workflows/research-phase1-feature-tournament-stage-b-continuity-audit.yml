@@ -1,0 +1,176 @@
+name: Audit feature tournament Stage B continuity
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-stage-b-continuity-audit.yml"
+      - "scripts/research_phase1_feature_tournament_stage_b_events.py"
+      - "tests/test_research_phase1_feature_tournament_stage_b_events.py"
+      - "scripts/research_market_corporate_action_inventory.py"
+      - "scripts/research_phase1_security_continuity_ledger.py"
+      - "research/phase1-feature-tournament-continuity-empty-fixtures-v1.json"
+      - "docs/research-phase1-feature-tournament-stage-b-continuity-audit-gate.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-feature-tournament-stage-b-continuity-audit-v1
+  cancel-in-progress: false
+
+env:
+  SOURCE_RELEASE: research-phase1-feature-tournament-stage-b-continuity-scope-v1
+  SOURCE_ASSET: stage-b-continuity-scope.json
+  SOURCE_DIGEST: sha256:db75f751fdfbfe85a715cc0eed00bab4026fce640ce7f81d9b4657820add1ced
+  MARKET_RELEASE: research-market-alpaca-v1
+  RESULT_RELEASE: research-phase1-feature-tournament-stage-b-continuity-audit-v1
+
+jobs:
+  audit:
+    name: Performance-blind feature tournament continuity audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY_ID }}
+      ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+
+      - name: Test frozen continuity adapter and machinery
+        run: >-
+          uv run pytest -q
+          tests/test_research_phase1_feature_tournament_stage_b_events.py
+          tests/test_research_market_corporate_action_inventory.py
+          tests/test_research_phase1_security_continuity_ledger.py
+
+      - name: Verify pinned Stage B scope source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/source work/events work/ca work/downloads work/market work/ledger
+          gh release view "$SOURCE_RELEASE" --repo "$GITHUB_REPOSITORY" --json assets > work/source-assets.json
+          python - <<'PY'
+          import json, os
+          assets = {x["name"]: x for x in json.load(open("work/source-assets.json"))["assets"]}
+          asset = assets[os.environ["SOURCE_ASSET"]]
+          assert asset.get("digest") == os.environ["SOURCE_DIGEST"], asset
+          PY
+          gh release download "$SOURCE_RELEASE" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$SOURCE_ASSET" --dir work/source
+          test -s "work/source/$SOURCE_ASSET"
+
+      - name: Adapt exact Stage B scope to event rows
+        run: >-
+          uv run python scripts/research_phase1_feature_tournament_stage_b_events.py
+          --scope "work/source/$SOURCE_ASSET"
+          --output-csv work/events/stage-b-events.csv
+          --summary work/events/summary.json
+
+      - name: Assert outcome-blind adapter contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          s=json.load(open("work/events/summary.json"))
+          assert s["status"]=="PHASE1_FEATURE_TOURNAMENT_STAGE_B_EVENT_ADAPTER_COMPLETE"
+          assert s["events"]==24190
+          assert s["distinctIssuers"]==4729
+          assert s["eventHorizonRows"]==96760
+          assert s["performanceRead"] is False
+          assert s["priceFieldsRead"]==[]
+          assert s["featureOutcomesRead"] is False
+          assert s["validationOpened"] is False
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          PY
+
+      - name: Build bounded corporate-action inventory
+        run: >-
+          uv run python scripts/research_market_corporate_action_inventory.py
+          --events work/events/stage-b-events.csv
+          --output-dir work/ca
+
+      - name: Download only frozen 2016-2022 market archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for year in 2016 2017 2018 2019 2020 2021 2022; do
+            gh release download "$MARKET_RELEASE" --repo "$GITHUB_REPOSITORY" \
+              --pattern "alpaca-market-$year.tar.gz" --dir work/downloads
+            mkdir -p "work/market/$year"
+            tar -xzf "work/downloads/alpaca-market-$year.tar.gz" -C "work/market/$year"
+          done
+          test ! -e work/market/2023
+
+      - name: Build initial performance-blind continuity ledger
+        run: >-
+          uv run python scripts/research_phase1_security_continuity_ledger.py
+          --events work/events/stage-b-events.csv
+          --corporate-actions work/ca/corporate-actions.json
+          --fixtures research/phase1-feature-tournament-continuity-empty-fixtures-v1.json
+          --market-root work/market
+          --output-dir work/ledger
+
+      - name: Assert audit boundary and exact scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          s=json.load(open("work/ledger/summary.json"))
+          assert s["status"]=="PHASE1_SECURITY_CONTINUITY_LEDGER_COMPLETE"
+          assert s["eventRowsScanned"]==24190
+          assert s["eventHorizonRows"]==96760
+          assert s["gapThresholdSessions"]==10
+          assert s["performanceRead"] is False
+          assert s["researchOnly"] is True
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["performanceStageBlocked"] == (s["unresolvedEventHorizonRows"] > 0)
+          print(json.dumps(s, indent=2, sort_keys=True))
+          PY
+
+      - name: Publish initial continuity audit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C work -czf work/feature-tournament-stage-b-continuity-audit-v1.tar.gz \
+            events/stage-b-events.csv events/summary.json \
+            ca/corporate-actions.json ca/summary.json \
+            ledger/continuity-ledger.csv ledger/summary.json
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" \
+              --title "Phase-1 feature tournament Stage B continuity audit v1" \
+              --notes "Initial performance-blind continuity audit for the frozen 24,190-event / 96,760 event-horizon feature-tournament scope. Unresolved rows, if any, define the next frozen resolution scope. No feature outcomes, validation or 2023+ OOS opened." \
+              --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE" \
+            work/feature-tournament-stage-b-continuity-audit-v1.tar.gz \
+            work/ledger/summary.json \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: feature-tournament-stage-b-continuity-audit-${{ github.run_id }}
+          path: |
+            work/events/summary.json
+            work/ca/summary.json
+            work/ledger/continuity-ledger.csv
+            work/ledger/summary.json
+          retention-days: 90
