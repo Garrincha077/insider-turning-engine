@@ -92,7 +92,6 @@ def _assert_resolution(payload: dict[str, Any]) -> list[dict[str, Any]]:
         "priceFieldsRead": [],
         "featureOutcomesRead": False,
         "validationOpened": False,
-        "validationPerformanceOpened": False,
         "oosOpened": False,
         "productionScoringChanged": False,
         "sourceUnresolvedRows": EXPECTED_AUDIT_ROWS,
@@ -176,7 +175,6 @@ def run(
         "priceFieldsRead": [],
         "featureOutcomesRead": False,
         "validationOpened": False,
-        "validationPerformanceOpened": False,
         "oosOpened": False,
         "productionScoringChanged": False,
         "sourceAuditRows": EXPECTED_AUDIT_ROWS,
@@ -188,7 +186,6 @@ def run(
         "newPrimaryEvidenceRows": 32,
         "rows": residual,
         "resolutionComplete": False,
-        "validationPerformanceOpened": False,
     }
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
