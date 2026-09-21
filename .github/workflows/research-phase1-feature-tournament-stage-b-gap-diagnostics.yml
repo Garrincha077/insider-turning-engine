@@ -1,0 +1,166 @@
+name: Diagnose feature tournament Stage-B exact long gaps
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-stage-b-gap-diagnostics.yml"
+      - "scripts/research_phase1_security_gap_diagnostics.py"
+      - "tests/test_research_phase1_security_gap_diagnostics.py"
+      - "docs/research-phase1-feature-tournament-stage-b-gap-diagnostics-gate.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-feature-tournament-stage-b-gap-diagnostics-v1
+  cancel-in-progress: false
+
+env:
+  AUDIT_RELEASE: research-phase1-feature-tournament-stage-b-continuity-audit-v1
+  AUDIT_ASSET: feature-tournament-stage-b-continuity-audit-v1.tar.gz
+  AUDIT_DIGEST: sha256:77066ec138f53c0572a206559294768c6c898270ba6dcc3b2429ac7ddddab88f
+  MARKET_RELEASE: research-market-alpaca-v1
+  RESULT_RELEASE: research-phase1-feature-tournament-stage-b-gap-diagnostics-v1
+
+jobs:
+  diagnose:
+    name: Performance-blind exact Stage-B gap diagnostics
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --all-groups --frozen
+
+      - name: Lint and test frozen gap diagnostics
+        run: |
+          uv run ruff check scripts/research_phase1_security_gap_diagnostics.py tests/test_research_phase1_security_gap_diagnostics.py
+          uv run pytest -q tests/test_research_phase1_security_gap_diagnostics.py
+
+      - name: Download and verify frozen Stage-B continuity ledger
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/source work/downloads work/market work/gaps
+          gh release download "$AUDIT_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$AUDIT_ASSET" --dir work/source
+          test "sha256:$(sha256sum "work/source/$AUDIT_ASSET" | cut -d' ' -f1)" = "$AUDIT_DIGEST"
+          tar -xzf "work/source/$AUDIT_ASSET" -C work/source             ledger/continuity-ledger.csv ledger/summary.json
+          test -s work/source/ledger/continuity-ledger.csv
+          test -s work/source/ledger/summary.json
+          python - <<'PY'
+          import json
+          s=json.load(open("work/source/ledger/summary.json"))
+          assert s["status"]=="PHASE1_SECURITY_CONTINUITY_LEDGER_COMPLETE"
+          assert s["eventRowsScanned"]==24190
+          assert s["eventHorizonRows"]==96760
+          assert s["unresolvedEventHorizonRows"]==210
+          assert s["gapThresholdSessions"]==10
+          assert s["performanceRead"] is False
+          assert s["oosOpened"] is False
+          PY
+
+      - name: Download and verify frozen 2016-2022 market presence corpus
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          declare -A DIGESTS=(
+            [2016]=df531881b67f9f42e40b2c2fff03f6ca19c0b5f9b13deb6190132b7987fb69ca
+            [2017]=7515a3807249bbead7cf7edc2a2aa1d267b01fc49ddf72885c40746520e762d0
+            [2018]=4a99eafc6cac31ee30d23bf82c1feccb4bbe14919f7c4df2d59e792f8a5b2f54
+            [2019]=c701d559a7d5128fd07ec19e2d5d3b39eb5ae8c0d9bd51a8b278d34c9b6f9238
+            [2020]=5577a548576e81c5e468b9e5027c9a8ec1ba8e1dd14ed38a0f223e797c5358e2
+            [2021]=550ff3456ad16a045692a5d9d567d13ef2b8788283f4c39c3baa5d8aecd7a704
+            [2022]=8a71037090cda77bc3937409ffa9fcb9c463545b5f3a7d9a73995a92759d187a
+          )
+          for year in 2016 2017 2018 2019 2020 2021 2022; do
+            asset="alpaca-market-$year.tar.gz"
+            gh release download "$MARKET_RELEASE" --repo "$GITHUB_REPOSITORY"               --pattern "$asset" --dir work/downloads
+            test "$(sha256sum "work/downloads/$asset" | cut -d' ' -f1)" = "${DIGESTS[$year]}"
+            mkdir -p "work/market/$year"
+            tar -xzf "work/downloads/$asset" -C "work/market/$year"
+            test -s "work/market/$year/canonical-market-$year.csv"
+          done
+          test ! -e work/market/2023
+
+      - name: Recompute exact frozen long-gap intervals
+        run: >-
+          uv run python scripts/research_phase1_security_gap_diagnostics.py
+          --ledger work/source/ledger/continuity-ledger.csv
+          --market-root work/market
+          --output-dir work/gaps
+
+      - name: Assert exact Stage-B gap boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import csv, json
+
+          s=json.load(open("work/gaps/summary.json"))
+          assert s["status"]=="PHASE1_FROZEN_LONG_GAP_DIAGNOSTICS_COMPLETE"
+          assert s["gapThresholdSessions"]==10
+          assert s["gapEventHorizonRows"]==155
+          assert s["allGapsBracketedByObservedBars"] is True
+          assert s["priceFieldsRead"]==[]
+          assert s["performanceRead"] is False
+          assert s["researchOnly"] is True
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+
+          with open("work/gaps/gap-diagnostics.csv", newline="") as f:
+              rows=list(csv.DictReader(f))
+          assert len(rows)==155
+          wanted={
+              ("4257","CKX","252"),
+              ("4603","LOV","252"),
+              ("18535","CMCT","252"),
+              ("18896","NSEC","252"),
+              ("23173","CKX","63"),
+              ("23173","CKX","126"),
+              ("23173","CKX","252"),
+          }
+          observed={(r["eventNumber"],r["ticker"],r["horizon"]) for r in rows}
+          assert wanted <= observed
+          for r in rows:
+              assert r["previousObservedSession"] < r["firstMissingSession"]
+              assert r["firstMissingSession"] <= r["lastMissingSession"]
+              assert r["lastMissingSession"] < r["nextObservedSession"]
+
+          print(json.dumps({
+              "gapEventHorizonRows":s["gapEventHorizonRows"],
+              "gapUniqueEvents":s["gapUniqueEvents"],
+              "gapUniqueTickers":s["gapUniqueTickers"],
+              "maxGapSessions":s["maxGapSessions"],
+          },indent=2,sort_keys=True))
+          PY
+
+      - name: Publish immutable Stage-B exact gap diagnostics
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 feature tournament Stage-B gap diagnostics v1"               --notes "Exact performance-blind XNYS gap intervals for all 155 frozen Stage-B unresolved long-gap rows. Uses only session-presence fields from pinned 2016-2022 market archives; no prices, returns, validation or 2023+ OOS."               --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE"             work/gaps/gap-diagnostics.csv             work/gaps/summary.json             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: feature-tournament-stage-b-gap-diagnostics-${{ github.run_id }}
+          path: work/gaps
+          retention-days: 90
