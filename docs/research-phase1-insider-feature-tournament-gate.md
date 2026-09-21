@@ -187,6 +187,29 @@ until a later Turning-overlay phase.
 
 At most **one** F4 variant may leave discovery as the frozen family candidate.
 
+
+Frozen F4 construction details:
+
+- canonical basis window: **90 calendar days** ending at the evaluation-session
+  knowledge cutoff;
+- basis population: qualified non-derivative open-market purchases known and
+  lifecycle-effective by that cutoff for the issuer;
+- basis weighting: share-weighted transaction price
+  `sum(shares × price) / sum(shares)`;
+- basis is not recomputed with later filings or later purchases;
+- F4 price uses the separate Alpaca SIP `adjustment=raw` formation-context
+  leg so SEC transaction prices and market prices are on the same nominal
+  basis;
+- `TRUE_RECLAIM` requires the immediately prior regular session below the
+  same frozen 90d basis and the evaluation session at/above it;
+- `RECLAIM_PERSIST_2` requires the current and prior regular session
+  at/above basis and the immediately preceding regular session below basis;
+- `RECLAIM_PERSIST_5` analogously requires five consecutive regular sessions
+  at/above basis preceded by a regular session below basis;
+- persistence is backward-looking at evaluation time; no future session is
+  read to label the event.
+
+
 ## Mandatory quality/context strata — not tournament features
 
 These variables are controls/coverage diagnostics and cannot win the feature
