@@ -779,6 +779,8 @@ def run(
         "sourceStageAEvents": stage_a_summary["scope"]["events"],
         "sourceDiscoveryEvents": discovery_result["discoveryEvents"],
         "sourceDiscoveryFamilyCandidates": 3,
+        "providerCompletenessAmendmentApplied": True,
+        "providerCompletenessAmendmentRows": len(provider_amendment),
         "confirmationEvents": len(outcomes),
         "confirmationDistinctIssuers": len(
             {str(row["issuerCik"]) for row in outcomes}
