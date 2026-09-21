@@ -1,0 +1,292 @@
+{
+  "schemaVersion": "1.0.0",
+  "definitionId": "PHASE1_INSIDER_FEATURE_TOURNAMENT_V1",
+  "status": "PREDECLARED_BEFORE_FEATURE_OUTCOMES",
+  "frozenAt": "2026-09-21",
+  "researchOnly": true,
+  "productionScoringChanged": false,
+  "oosOpened": false,
+  "validationOpenedForSelection": false,
+  "genericTurningFeaturesIncluded": false,
+  "benchmarkAnchors": {
+    "primary": "B0_ANY_QUALIFIED_PURCHASE",
+    "contextual": [
+      "B1_OPPORTUNISTIC_CONTINUITY_CORRECTED",
+      "B2_INDEPENDENT_OWNER_CLUSTER",
+      "B3_COMPANY_NET_BUYING_CONTINUITY_CORRECTED",
+      "B4_OPPORTUNISTIC_AND_CLUSTER"
+    ],
+    "primaryHorizonSessions": 126,
+    "secondaryHorizonsSessions": [
+      21,
+      63,
+      252
+    ]
+  },
+  "developmentSplit": {
+    "discoveryStart": "2016-01-01",
+    "discoveryEnd": "2018-12-31",
+    "confirmationStart": "2019-01-01",
+    "confirmationEnd": "2020-12-31",
+    "validationYears": [
+      2021,
+      2022
+    ],
+    "sealedOosStartYear": 2023,
+    "rule": "Confirmation cannot choose feature definitions, cutpoints, direction, transforms or replacement variants."
+  },
+  "stageA": {
+    "name": "COVERAGE_AND_CUTPOINT_FREEZE",
+    "outcomeFieldsReadable": [],
+    "forwardReturnsRead": false,
+    "maeRead": false,
+    "robustnessRead": false,
+    "cutpointSource": "2016-2018 feature values only",
+    "continuousBins": "empirical quintiles",
+    "twoDimensionalHighHigh": "both variables in Q4 or Q5",
+    "freezeBeforeStageB": true
+  },
+  "securityContinuityPrecondition": {
+    "requiredBeforeStageB": true,
+    "referenceUniverse": "frozen B0 exact-entry feature-tournament events",
+    "performanceBlind": true,
+    "zeroUnresolvedRequired": true,
+    "canonicalB0ReturnsMayDriveClassification": false,
+    "reuseFrozenB1B3SemanticsAllowed": true,
+    "correctedHolderOutcomeContractRequired": true
+  },
+  "eventUnit": {
+    "base": "frozen B0 issuer event with existing 20-session issuer deduplication",
+    "transactionPseudoEventsAllowed": false,
+    "eventPurchaseDollars": "sum qualified purchase dollars known at formation",
+    "holdingsFraction": "maximum valid owner-row fraction within event",
+    "ownerHistoryPercentile": "maximum valid owner-row percentile within event",
+    "ownershipCategory": [
+      "DIRECT_ONLY",
+      "INDIRECT_ONLY",
+      "MIXED",
+      "UNKNOWN"
+    ],
+    "multipleOwnerDenominatorsMayBeCombined": false
+  },
+  "featureFamilies": [
+    {
+      "id": "F1",
+      "name": "HOLDINGS_RELATIVE_CONVICTION",
+      "maxConfirmationCandidates": 1,
+      "variants": [
+        {
+          "id": "F1_ABS_DOLLARS",
+          "type": "continuous",
+          "preferred": "Q5",
+          "complement": "Q1-Q4"
+        },
+        {
+          "id": "F1_FRACTION_POST",
+          "type": "continuous",
+          "preferred": "Q5",
+          "complement": "Q1-Q4"
+        },
+        {
+          "id": "F1_FRACTION_PRE",
+          "type": "continuous",
+          "preferred": "Q5",
+          "complement": "Q1-Q4"
+        },
+        {
+          "id": "F1_OWNER_HISTORY_PERCENTILE",
+          "type": "continuous",
+          "preferred": "Q5",
+          "complement": "Q1-Q4"
+        },
+        {
+          "id": "F1_ABS_PLUS_FRACTION_POST",
+          "type": "binary",
+          "preferred": "HIGH_HIGH",
+          "complement": "OTHER_VALID"
+        }
+      ]
+    },
+    {
+      "id": "F2",
+      "name": "DIRECT_VS_INDIRECT_OWNERSHIP",
+      "maxConfirmationCandidates": 1,
+      "variants": [
+        {
+          "id": "F2_DIRECT_VS_INDIRECT",
+          "type": "categorical",
+          "groups": [
+            "DIRECT_ONLY",
+            "INDIRECT_ONLY"
+          ],
+          "orientationChosenInDiscovery": true
+        }
+      ],
+      "descriptiveOnlyGroups": [
+        "MIXED",
+        "UNKNOWN"
+      ]
+    },
+    {
+      "id": "F3",
+      "name": "CONTRARIAN_PRICE_CONTEXT",
+      "maxConfirmationCandidates": 1,
+      "variants": [
+        {
+          "id": "F3_RETURN_21",
+          "type": "continuous",
+          "preferred": "Q1",
+          "complement": "Q2-Q5"
+        },
+        {
+          "id": "F3_RETURN_63",
+          "type": "continuous",
+          "preferred": "Q1",
+          "complement": "Q2-Q5"
+        },
+        {
+          "id": "F3_RETURN_126",
+          "type": "continuous",
+          "preferred": "Q1",
+          "complement": "Q2-Q5"
+        },
+        {
+          "id": "F3_RETURN_252",
+          "type": "continuous",
+          "preferred": "Q1",
+          "complement": "Q2-Q5"
+        },
+        {
+          "id": "F3_DRAWDOWN_252",
+          "type": "continuous",
+          "preferred": "Q5",
+          "complement": "Q1-Q4"
+        },
+        {
+          "id": "F3_NEW_52W_LOW",
+          "type": "binary",
+          "preferred": true,
+          "complement": false
+        }
+      ]
+    },
+    {
+      "id": "F4",
+      "name": "INSIDER_PURCHASE_BASIS_STATE",
+      "maxConfirmationCandidates": 1,
+      "variants": [
+        {
+          "id": "F4_ABOVE_BASIS",
+          "type": "binary",
+          "preferred": true,
+          "complement": false
+        },
+        {
+          "id": "F4_DISTANCE_ABOVE",
+          "type": "continuous",
+          "preferred": "Q5",
+          "complement": "Q1-Q4"
+        },
+        {
+          "id": "F4_DISTANCE_BELOW",
+          "type": "continuous",
+          "preferred": "Q1",
+          "complement": "Q2-Q5"
+        },
+        {
+          "id": "F4_TRUE_RECLAIM",
+          "type": "binary",
+          "preferred": true,
+          "complement": false
+        },
+        {
+          "id": "F4_RECLAIM_PERSIST_2",
+          "type": "binary",
+          "preferred": true,
+          "complement": false
+        },
+        {
+          "id": "F4_RECLAIM_PERSIST_5",
+          "type": "binary",
+          "preferred": true,
+          "complement": false
+        }
+      ]
+    }
+  ],
+  "mandatoryContextStrata": [
+    "PIT_MARKET_CAP",
+    "DOLLAR_ADV_20",
+    "DOLLAR_ADV_60",
+    "STOCK_PRICE",
+    "EXCHANGE_SECURITY_IDENTITY_QUALITY",
+    "AMENDMENT_QUARANTINE_STATE",
+    "POST_TRANSACTION_SHARES_AVAILABILITY",
+    "CALENDAR_YEAR"
+  ],
+  "coverageClasses": {
+    "GENERAL_ELIGIBLE": {
+      "overallMinimum": 0.5,
+      "minimumEachDevelopmentYear": 0.35
+    },
+    "SPECIALTY_ELIGIBLE": {
+      "overallMinimum": 0.15,
+      "minimumEachDevelopmentYear": 0.1
+    },
+    "BELOW_SPECIALTY": "coverage-diagnostic only; no outcome advancement"
+  },
+  "primaryIncrementalEffect": "preferred-group 126d SPY-excess mean minus complement mean within same feature-observed cohort/time window",
+  "discoveryAdvancement": {
+    "minimumPreferredMatureN": 200,
+    "minimumPreferredDistinctIssuers": 100,
+    "requirePositive": [
+      "eventWeightedIncrementalMean",
+      "issuerEqualWeightIncrementalMean",
+      "entrySessionEqualWeightIncrementalMean",
+      "top1PctRemovedIncrementalMean",
+      "incrementalMeanOutsideBottomDollarAdvQuintile"
+    ],
+    "minimumPositiveDiscoveryYears": 2,
+    "discoveryYearCount": 3,
+    "withinFamilyTieBreak": [
+      "top1PctRemovedIncrementalMean DESC",
+      "issuerEqualWeightIncrementalMean DESC",
+      "entrySessionEqualWeightIncrementalMean DESC",
+      "eventWeightedIncrementalMean DESC",
+      "variantId ASC"
+    ],
+    "ifNoVariantPasses": "NO_FAMILY_CANDIDATE"
+  },
+  "confirmation": {
+    "minimumPreferredMatureN": 150,
+    "minimumPreferredDistinctIssuers": 75,
+    "requirePositive": [
+      "pooledEventWeightedIncrementalMean",
+      "pooledIssuerEqualWeightIncrementalMean",
+      "pooledEntrySessionEqualWeightIncrementalMean",
+      "pooledTop1PctRemovedIncrementalMean",
+      "2019IncrementalMean",
+      "2020IncrementalMean",
+      "incrementalMeanOutsideBottomDollarAdvQuintile"
+    ],
+    "noReselection": true,
+    "noAlternateThreshold": true,
+    "passLabel": "CONFIRMED_DEVELOPMENT_CANDIDATE"
+  },
+  "multipleTestingControl": {
+    "iidEventPValuePassCriterion": false,
+    "finiteVariantListFrozen": true,
+    "oneCandidateMaximumPerFamily": true,
+    "chronologicalConfirmation": true,
+    "noCompositeWeightsFitInThisPhase": true,
+    "noNewVariantsAfterDiscovery": true
+  },
+  "progression": {
+    "confirmedCandidateIsFormalAlpha": false,
+    "confirmedCandidateMayEnterLaterFrozenValidation": true,
+    "hacOpened": false,
+    "validationOpened": false,
+    "oosOpened": false,
+    "turningOverlayOpened": false
+  }
+}
