@@ -1,0 +1,168 @@
+{
+  "schemaVersion": "1.0.0",
+  "contractId": "phase1-f2-validation-stock-dividend-primary-evidence-v1",
+  "frozenAt": "2026-09-21",
+  "researchOnly": true,
+  "performanceRead": false,
+  "priceFieldsRead": [],
+  "featureOutcomesRead": false,
+  "validationOpened": false,
+  "validationPerformanceOpened": false,
+  "oosOpened": false,
+  "productionScoringChanged": false,
+  "sourceResidual32": {
+    "release": "research-phase1-insider-feature-tournament-validation-residual32-scope-v1",
+    "asset": "validation-residual32-scope.json",
+    "digest": "sha256:17129c2aded50c6e97d55e4af5ea9c469cb33ec5ff9171731f8b309d6f0ae06a",
+    "scopeKeySha256": "sha256:4b8d0df8ff1d06f018fdcbdf281b9fa2be05f21e77b57682012b36b419049e34"
+  },
+  "providerInventory": {
+    "sourceRelease": "research-phase1-insider-feature-tournament-validation-continuity-audit-v1",
+    "file": "corporate-actions.json",
+    "digest": "sha256:c45e1c5ea5263d2384527359a544f3b81e49fa9f5b64fc9ff792153ad1fb0457"
+  },
+  "targetKeySha256": "sha256:7dd0615edd13ae996379d9c49194a45edbeda6e5bcf418e1b47c948540a562a3",
+  "evidence": [
+    {
+      "eventNumber": 2006,
+      "issuerCik": "0001408534",
+      "ticker": "FGBI",
+      "evaluationSession": "2021-06-30",
+      "entrySession": "2021-07-01",
+      "horizon": 126,
+      "targetExitSession": "2021-12-30",
+      "actionId": "c6d028ca-0983-49a9-aa61-6e21cc586c40",
+      "bucket": "stock_dividends",
+      "exDate": "2021-12-14",
+      "recordDate": "2021-12-15",
+      "payableDate": "2021-12-17",
+      "providerRate": "1.1",
+      "resolutionDecision": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "transformationKind": "STOCK_DIVIDEND_QUANTITY",
+      "resultState": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "successorSymbol": "FGBI",
+      "successorSharesPerEntryShare": "1.1",
+      "cashPerEntryShare": "0",
+      "primaryEvidence": [
+        {
+          "accession": "0001408534-21-000065",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1408534/000140853421000065/fgbi-20211115.htm",
+          "fact": "First Guaranty Form 8-K states a 10 percent common stock dividend, record date 2021-12-15 and payable date 2021-12-17."
+        }
+      ]
+    },
+    {
+      "eventNumber": 2273,
+      "issuerCik": "0001141688",
+      "ticker": "LARK",
+      "evaluationSession": "2021-08-03",
+      "entrySession": "2021-08-04",
+      "horizon": 126,
+      "targetExitSession": "2022-02-02",
+      "actionId": "170e227a-52f7-4979-bc2c-edc87d4188b0",
+      "bucket": "stock_dividends",
+      "exDate": "2021-11-30",
+      "recordDate": "2021-12-01",
+      "payableDate": "2021-12-15",
+      "providerRate": "1.05",
+      "resolutionDecision": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "transformationKind": "STOCK_DIVIDEND_QUANTITY",
+      "resultState": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "successorSymbol": "LARK",
+      "successorSharesPerEntryShare": "1.05",
+      "cashPerEntryShare": "0",
+      "primaryEvidence": [
+        {
+          "accession": "0001493152-21-026542",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1141688/000149315221026542/form8-k.htm",
+          "fact": "Landmark Bancorp Form 8-K states a 5 percent stock dividend issued 2021-12-15 to common stockholders of record 2021-12-01."
+        }
+      ]
+    },
+    {
+      "eventNumber": 6077,
+      "issuerCik": "0001059142",
+      "ticker": "ATAX",
+      "evaluationSession": "2022-04-25",
+      "entrySession": "2022-04-26",
+      "horizon": 126,
+      "targetExitSession": "2022-10-25",
+      "actionId": "855589cc-79ed-4e87-83eb-70812286ff2c",
+      "bucket": "stock_dividends",
+      "exDate": "2022-09-29",
+      "recordDate": "2022-09-30",
+      "payableDate": "2022-10-31",
+      "providerRate": "1.01044",
+      "resolutionDecision": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "transformationKind": "STOCK_DIVIDEND_QUANTITY",
+      "resultState": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "successorSymbol": "ATAX",
+      "successorSharesPerEntryShare": "1.01044",
+      "cashPerEntryShare": "0",
+      "primaryEvidence": [
+        {
+          "accession": "0000950170-22-018459",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1059142/000095017022018459/atax-20220914.htm",
+          "fact": "ATAX Form 8-K states supplemental distribution of 0.01044 BUC per outstanding BUC, record date 2022-09-30, payable 2022-10-31, and ex-distribution 2022-09-29."
+        }
+      ]
+    },
+    {
+      "eventNumber": 6300,
+      "issuerCik": "0000717538",
+      "ticker": "AROW",
+      "evaluationSession": "2022-05-06",
+      "entrySession": "2022-05-09",
+      "horizon": 126,
+      "targetExitSession": "2022-11-07",
+      "actionId": "72776cb8-c85b-44d1-a4ab-be701549e075",
+      "bucket": "stock_dividends",
+      "exDate": "2022-09-16",
+      "recordDate": "2022-09-19",
+      "payableDate": "2022-09-23",
+      "providerRate": "1.03",
+      "resolutionDecision": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "transformationKind": "STOCK_DIVIDEND_QUANTITY",
+      "resultState": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "successorSymbol": "AROW",
+      "successorSharesPerEntryShare": "1.03",
+      "cashPerEntryShare": "0",
+      "primaryEvidence": [
+        {
+          "accession": "0000717538-22-000190",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/717538/000071753822000190/arow-20220831.htm",
+          "fact": "Arrow Financial Form 8-K states a 3 percent stock dividend distributed 2022-09-23 to shareholders of record 2022-09-19."
+        }
+      ]
+    },
+    {
+      "eventNumber": 7090,
+      "issuerCik": "0000893847",
+      "ticker": "HWBK",
+      "evaluationSession": "2022-06-08",
+      "entrySession": "2022-06-09",
+      "horizon": 126,
+      "targetExitSession": "2022-12-08",
+      "actionId": "1f2e1e66-1497-4dc0-ad10-dee5ab8c8dcc",
+      "bucket": "stock_dividends",
+      "exDate": "2022-06-14",
+      "recordDate": "2022-06-15",
+      "payableDate": "2022-07-01",
+      "providerRate": "1.04",
+      "resolutionDecision": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "transformationKind": "STOCK_DIVIDEND_QUANTITY",
+      "resultState": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "successorSymbol": "HWBK",
+      "successorSharesPerEntryShare": "1.04",
+      "cashPerEntryShare": "0",
+      "primaryEvidence": [
+        {
+          "accession": "0000893847-22-000014",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/893847/000089384722000014/hwbk-20220429.htm",
+          "fact": "Hawthorn Bancshares Form 8-K states a special 4 percent stock dividend payable 2022-07-01 to shareholders of record 2022-06-15."
+        }
+      ]
+    }
+  ],
+  "resolutionApplied": false
+}
