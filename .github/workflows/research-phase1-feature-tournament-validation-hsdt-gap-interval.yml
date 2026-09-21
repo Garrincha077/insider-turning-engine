@@ -1,0 +1,132 @@
+name: Diagnose F2 validation HSDT long-gap interval
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-validation-hsdt-gap-interval.yml"
+      - "scripts/research_phase1_feature_tournament_validation_hsdt_gap_interval.py"
+      - "tests/test_research_phase1_feature_tournament_validation_hsdt_gap_interval.py"
+      - "docs/research-phase1-feature-tournament-validation-hsdt-gap-interval-gate.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-feature-tournament-validation-hsdt-gap-interval-v1
+  cancel-in-progress: true
+
+env:
+  SCOPE_RELEASE: research-phase1-insider-feature-tournament-validation-residual33-scope-v1
+  SCOPE_ASSET: validation-residual33-scope.json
+  SCOPE_DIGEST: sha256:0dab36d7553ec3ceb0838c79cf7ad70a85fa240686d7493930de160c55adb946
+  MARKET_RELEASE: research-market-alpaca-v1
+  RESULT_RELEASE: research-phase1-insider-feature-tournament-validation-hsdt-gap-interval-v1
+  RESULT_ASSET: validation-hsdt-gap-interval.json
+
+jobs:
+  diagnose:
+    name: Diagnose exact HSDT validation market-presence gap
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --all-groups --frozen
+
+      - name: Lint and test HSDT gap diagnostic
+        run: |
+          uv run ruff check scripts/research_phase1_feature_tournament_validation_hsdt_gap_interval.py tests/test_research_phase1_feature_tournament_validation_hsdt_gap_interval.py
+          uv run pytest -q tests/test_research_phase1_feature_tournament_validation_hsdt_gap_interval.py
+
+      - name: Download and verify residual scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/scope work/download work/market work/output
+          gh release download "$SCOPE_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$SCOPE_ASSET" --dir work/scope
+          test "sha256:$(sha256sum "work/scope/$SCOPE_ASSET" | cut -d' ' -f1)" = "$SCOPE_DIGEST"
+
+      - name: Download and verify frozen 2021-2022 market presence archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          declare -A DIGESTS=(
+            [2021]=550ff3456ad16a045692a5d9d567d13ef2b8788283f4c39c3baa5d8aecd7a704
+            [2022]=8a71037090cda77bc3937409ffa9fcb9c463545b5f3a7d9a73995a92759d187a
+          )
+          for year in 2021 2022; do
+            asset="alpaca-market-$year.tar.gz"
+            gh release download "$MARKET_RELEASE" --repo "$GITHUB_REPOSITORY"               --pattern "$asset" --dir work/download
+            test "$(sha256sum "work/download/$asset" | cut -d' ' -f1)" = "${DIGESTS[$year]}"
+            mkdir -p "work/market/$year"
+            tar -xzf "work/download/$asset" -C "work/market/$year"               "canonical-market-$year.csv"
+          done
+          test ! -e work/market/2023
+
+      - name: Diagnose exact HSDT 29-session gap interval
+        run: >-
+          uv run python
+          scripts/research_phase1_feature_tournament_validation_hsdt_gap_interval.py
+          --scope "work/scope/$SCOPE_ASSET"
+          --market-root work/market
+          --output "work/output/$RESULT_ASSET"
+
+      - name: Assert diagnostic-only boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          p=json.loads(Path("work/output/validation-hsdt-gap-interval.json").read_text())
+          assert p["status"]=="PHASE1_FEATURE_TOURNAMENT_VALIDATION_HSDT_GAP_INTERVAL_DIAGNOSTIC_COMPLETE"
+          assert p["eventNumber"]==3657
+          assert p["issuerCik"]=="0001610853"
+          assert p["ticker"]=="HSDT"
+          assert p["entrySession"]=="2021-11-16"
+          assert p["targetExitSession"]=="2022-05-18"
+          assert p["maxInternalGapSessions"]==29
+          assert p["maxGapIntervals"]
+          assert all(x["missingSessionCount"]==29 for x in p["maxGapIntervals"])
+          assert p["resolutionApplied"] is False
+          assert p["primaryEvidenceCheckRequired"] is True
+          assert p["performanceRead"] is False
+          assert p["priceFieldsRead"]==[]
+          assert p["featureOutcomesRead"] is False
+          assert p["validationOpened"] is False
+          assert p["validationPerformanceOpened"] is False
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          PY
+
+      - name: Publish immutable HSDT gap diagnostic
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 F2 validation HSDT gap interval v1"               --notes "Performance-blind exact interval diagnostic for the sole prior-security validation long-gap candidate. No prices, returns, validation performance or 2023+ OOS were read."               --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE" "work/output/$RESULT_ASSET"             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase1-insider-feature-tournament-validation-hsdt-gap-interval-${{ github.run_id }}
+          path: work/output
+          retention-days: 90
