@@ -47,10 +47,15 @@ jobs:
           ).read_text()
           forbidden_runtime_sources = (
               "b0/events.csv",
-              "raw_126",
-              "excess_126",
-              "mae_126",
+              "b1-events.csv",
+              "b2-events.csv",
+              "b3-continuity-corrected-events.csv",
+              "b4-events.csv",
           )
           for token in forbidden_runtime_sources:
               assert token not in source, token
+
+          # Outcome-name literals are allowed only for the fail-closed
+          # FORBIDDEN_OUTPUT_TOKENS guard, not as runtime data sources.
+          assert "FORBIDDEN_OUTPUT_TOKENS" in source
           PY
