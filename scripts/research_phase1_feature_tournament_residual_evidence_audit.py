@@ -102,7 +102,7 @@ def _load_b1(path: Path) -> list[dict[str, Any]]:
         raise ValueError("B1 continuity contract opened performance")
     columns = payload["resolutionColumns"]
     rows = [
-        dict(zip(columns, values))
+        dict(zip(columns, values, strict=True))
         for values in payload["resolutions"]
     ]
     if len(rows) != 54:
