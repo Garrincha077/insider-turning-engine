@@ -1,0 +1,113 @@
+name: Adjudicate feature tournament POPE continuity conflict
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-pope-adjudication.yml"
+      - "research/phase1-feature-tournament-pope-primary-evidence-v1.json"
+      - "scripts/research_phase1_feature_tournament_pope_adjudication.py"
+      - "tests/test_research_phase1_feature_tournament_pope_adjudication.py"
+      - "docs/research-phase1-feature-tournament-pope-adjudication-gate.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-feature-tournament-pope-adjudication-v1
+  cancel-in-progress: false
+
+env:
+  CONFLICT_RELEASE: research-phase1-feature-tournament-pope-conflict-diagnostic-v1
+  CONFLICT_ASSET: pope-conflict.json
+  CONFLICT_DIGEST: sha256:4a510d67a691e8b74ab268c4610ec83356fef3544a2c56d1160610cba8f8bd1d
+  RESULT_RELEASE: research-phase1-feature-tournament-pope-adjudication-v1
+
+jobs:
+  adjudicate:
+    name: Primary-evidence POPE adjudication
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+
+      - name: Lint and test adjudication semantics
+        run: |
+          uv run ruff check scripts/research_phase1_feature_tournament_pope_adjudication.py tests/test_research_phase1_feature_tournament_pope_adjudication.py
+          uv run pytest -q tests/test_research_phase1_feature_tournament_pope_adjudication.py
+
+      - name: Download and verify frozen conflict
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/input work/output
+          gh release download "$CONFLICT_RELEASE" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$CONFLICT_ASSET" --dir work/input
+          test "sha256:$(sha256sum "work/input/$CONFLICT_ASSET" | cut -d' ' -f1)" = "$CONFLICT_DIGEST"
+
+      - name: Adjudicate POPE from frozen primary evidence
+        run: >-
+          uv run python scripts/research_phase1_feature_tournament_pope_adjudication.py
+          --conflict "work/input/$CONFLICT_ASSET"
+          --evidence research/phase1-feature-tournament-pope-primary-evidence-v1.json
+          --output work/output/pope-adjudication.json
+
+      - name: Assert sealed adjudication boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          p=json.load(open("work/output/pope-adjudication.json"))
+          assert p["status"]=="PHASE1_FEATURE_TOURNAMENT_POPE_CONFLICT_ADJUDICATED"
+          assert p["safePriorEvidenceRows"]==175
+          assert p["conflictRows"]==1
+          assert p["adjudicatedRows"]==1
+          assert p["remainingPOPEConflictRows"]==0
+          assert p["remainingPrimaryEvidenceRows"]==34
+          r=p["resolution"]
+          assert r["ticker"]=="POPE"
+          assert r["successorSymbol"]=="RYN"
+          assert r["successorSharesPerEntryShare"]==3.929
+          assert r["cashPerEntryShare"]==0
+          assert r["transformationKind"]=="PASSIVE_HOLDER_STOCK_MERGER"
+          assert p["performanceRead"] is False
+          assert p["priceFieldsRead"]==[]
+          assert p["featureOutcomesRead"] is False
+          assert p["validationOpened"] is False
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          assert p["featureDiscoveryOutcomesOpened"] is False
+          print(json.dumps(p,indent=2,sort_keys=True))
+          PY
+
+      - name: Publish immutable POPE adjudication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" \
+              --title "Phase-1 feature tournament POPE continuity adjudication v1" \
+              --notes "Primary-evidence adjudication of the sole B1/B3 economic conflict. Passive/no-election POPE holder receives 3.929 RYN and zero cash. No feature outcomes or 2023+ OOS opened." \
+              --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE" work/output/pope-adjudication.json \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: feature-tournament-pope-adjudication-${{ github.run_id }}
+          path: work/output/pope-adjudication.json
+          retention-days: 90
