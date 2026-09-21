@@ -1,0 +1,186 @@
+name: Resolve feature tournament new-primary10 continuity rows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-new-primary10-resolution.yml"
+      - "research/phase1-feature-tournament-new-primary10-evidence-v1.json"
+      - "scripts/research_phase1_feature_tournament_new_primary10_resolver.py"
+      - "tests/test_research_phase1_feature_tournament_new_primary10_resolver.py"
+      - "docs/research-phase1-feature-tournament-new-primary10-resolution-gate.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-feature-tournament-new-primary10-resolution-v1
+  cancel-in-progress: false
+
+env:
+  SCOPE_RELEASE: research-phase1-feature-tournament-long-gap7-resolution-v1
+  SCOPE_ASSET: new-primary10-scope.json
+  SCOPE_DIGEST: sha256:b508811617035eb569d359ee9f5cad97f403f8bd0e51e2413150eaf44630a936
+  GAP_RELEASE: research-phase1-feature-tournament-stage-b-gap-diagnostics-v1
+  GAP_ASSET: gap-diagnostics.csv
+  GAP_DIGEST: sha256:7d0bdd8e6fa4fa43ab4d7ee731a8cb00380659a89d3b2626a472ea7d0fb73afa
+  EVIDENCE_PATH: research/phase1-feature-tournament-new-primary10-evidence-v1.json
+  EVIDENCE_GIT_BLOB: ef2c6874c610532cdbcb4c983ea06cace0ba4936
+  RESULT_RELEASE: research-phase1-feature-tournament-new-primary10-resolution-v1
+
+jobs:
+  resolve:
+    name: Primary SEC continuity resolution
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --all-groups --frozen
+
+      - name: Lint and test final10 semantics
+        run: |
+          uv run ruff check scripts/research_phase1_feature_tournament_new_primary10_resolver.py tests/test_research_phase1_feature_tournament_new_primary10_resolver.py
+          uv run pytest -q tests/test_research_phase1_feature_tournament_new_primary10_resolver.py
+
+      - name: Verify frozen repository evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$EVIDENCE_PATH"
+          test "$(git hash-object "$EVIDENCE_PATH")" = "$EVIDENCE_GIT_BLOB"
+          python - <<'PY'
+          import json, os
+          p=json.load(open(os.environ["EVIDENCE_PATH"]))
+          assert p["contractId"]=="phase1-feature-tournament-new-primary10-evidence-v1"
+          assert p["performanceRead"] is False
+          assert p["priceFieldsRead"]==[]
+          assert p["featureOutcomesRead"] is False
+          assert p["validationOpened"] is False
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          assert p["sourceScope"]["rows"]==10
+          assert p["sourceScope"]["tickerCounts"]=={
+              "AVGR":3,
+              "HMG":2,
+              "OAS":3,
+              "SNES":2,
+          }
+          PY
+
+      - name: Download and verify frozen scope and exact gaps
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/input work/output
+
+          gh release download "$SCOPE_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$SCOPE_ASSET" --dir work/input
+          test "sha256:$(sha256sum "work/input/$SCOPE_ASSET" | cut -d' ' -f1)" = "$SCOPE_DIGEST"
+
+          gh release download "$GAP_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$GAP_ASSET" --dir work/input
+          test "sha256:$(sha256sum "work/input/$GAP_ASSET" | cut -d' ' -f1)" = "$GAP_DIGEST"
+
+      - name: Resolve final ten continuity rows
+        run: >-
+          uv run python scripts/research_phase1_feature_tournament_new_primary10_resolver.py
+          --scope "work/input/$SCOPE_ASSET"
+          --stage-gaps "work/input/$GAP_ASSET"
+          --evidence "$EVIDENCE_PATH"
+          --output work/output/new-primary10-resolution.json
+
+      - name: Assert final10 sealed boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+
+          p=json.load(open("work/output/new-primary10-resolution.json"))
+          assert p["status"]=="PHASE1_FEATURE_TOURNAMENT_NEW_PRIMARY10_RESOLVED"
+          assert p["sourceRows"]==10
+          assert p["resolvedRows"]==10
+          assert p["unresolvedRows"]==0
+          assert p["tickerCounts"]=={
+              "AVGR":3,
+              "HMG":2,
+              "OAS":3,
+              "SNES":2,
+          }
+          assert p["resultStateCounts"]=={
+              "DISCONTINUOUS_NO_COMPLETE_VALUATION":3,
+              "PRICE_CONTINUOUS_ADJUSTED":7,
+          }
+
+          avgr=[x for x in p["rows"] if x["ticker"]=="AVGR"]
+          assert len(avgr)==3
+          assert {x["effectiveDate"] for x in avgr}=={"2016-06-01"}
+          assert {x["resolutionDecision"] for x in avgr}=={"SAME_SECURITY_CONTINUITY"}
+
+          snes=[x for x in p["rows"] if x["ticker"]=="SNES"]
+          assert len(snes)==2
+          assert {x["effectiveDate"] for x in snes}=={"2018-05-07"}
+          assert {x["resolutionDecision"] for x in snes}=={"SAME_SECURITY_CONTINUITY"}
+
+          hmg=[x for x in p["rows"] if x["ticker"]=="HMG"]
+          assert len(hmg)==2
+          assert {x["effectiveDate"] for x in hmg}=={"2020-10-08","2021-06-11"}
+          assert {x["resolutionDecision"] for x in hmg}=={"SAME_SECURITY_CONTINUITY"}
+
+          oas=[x for x in p["rows"] if x["ticker"]=="OAS"]
+          assert len(oas)==3
+          assert {x["effectiveDate"] for x in oas}=={"2020-11-19"}
+          assert {x["resolutionDecision"] for x in oas}=={
+              "DISCONTINUOUS_NO_COMPLETE_VALUATION"
+          }
+          assert {x["transformationKind"] for x in oas}=={
+              "BANKRUPTCY_REORG_UNVALUED_WARRANT"
+          }
+          assert {x["successorSymbol"] for x in oas}=={""}
+          assert {x["holderConsideration"] for x in oas}=={
+              "PRO_RATA_REORGANIZATION_WARRANTS"
+          }
+
+          assert p["resolutionComplete"] is True
+          assert p["performanceRead"] is False
+          assert p["priceFieldsRead"]==[]
+          assert p["featureOutcomesRead"] is False
+          assert p["featureDiscoveryOutcomesOpened"] is False
+          assert p["validationOpened"] is False
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+
+          print(json.dumps({
+              "resolvedRows":p["resolvedRows"],
+              "resultStateCounts":p["resultStateCounts"],
+              "tickerCounts":p["tickerCounts"],
+              "unresolvedRows":p["unresolvedRows"],
+          },indent=2,sort_keys=True))
+          PY
+
+      - name: Publish immutable final10 resolution
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 feature tournament new-primary10 resolution v1"               --notes "Primary SEC evidence resolves the final ten Stage-B continuity rows: AVGR 3, SNES 2 and HMG 2 as same-security continuity; OAS 3 as bankruptcy-reorganization discontinuity with unvalued warrant consideration. Feature outcomes, validation and 2023+ OOS remain closed."               --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE"             work/output/new-primary10-resolution.json             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: feature-tournament-new-primary10-resolution-${{ github.run_id }}
+          path: work/output/new-primary10-resolution.json
+          retention-days: 90
