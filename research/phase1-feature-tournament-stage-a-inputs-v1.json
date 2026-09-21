@@ -1,0 +1,54 @@
+{
+  "schemaVersion": "1.0.0",
+  "manifestId": "PHASE1_FEATURE_TOURNAMENT_STAGE_A_INPUTS_V1",
+  "status": "PARTIALLY_PINNED_AWAITING_RAW_CONTEXT_RELEASE",
+  "frozenAt": "2026-09-21",
+  "researchOnly": true,
+  "forwardReturnsRead": false,
+  "outcomeFieldsRead": [],
+  "validationOpened": false,
+  "oosOpened": false,
+  "productionScoringChanged": false,
+  "secReconciliation": {
+    "release": "research-sec-amendments-v1",
+    "asset": "sec-amendment-reconciliation-2013-2022.tar.gz",
+    "digest": "sha256:fc4acf047f2705573e7511f4c96295788b09405029be2c18dcb8e28546f2022f",
+    "filesUsed": [
+      "effective-end-2022.jsonl",
+      "reconciled-all-revisions.jsonl"
+    ]
+  },
+  "adjustedMarket": {
+    "release": "research-market-alpaca-v1",
+    "adjustment": "all",
+    "symbolMapping": "disabled-with-asof-dash",
+    "assets": {
+      "alpaca-market-2016.tar.gz": "sha256:df531881b67f9f42e40b2c2fff03f6ca19c0b5f9b13deb6190132b7987fb69ca",
+      "alpaca-market-2017.tar.gz": "sha256:7515a3807249bbead7cf7edc2a2aa1d267b01fc49ddf72885c40746520e762d0",
+      "alpaca-market-2018.tar.gz": "sha256:4a99eafc6cac31ee30d23bf82c1feccb4bbe14919f7c4df2d59e792f8a5b2f54",
+      "alpaca-market-2019.tar.gz": "sha256:c701d559a7d5128fd07ec19e2d5d3b39eb5ae8c0d9bd51a8b278d34c9b6f9238",
+      "alpaca-market-2020.tar.gz": "sha256:5577a548576e81c5e468b9e5027c9a8ec1ba8e1dd14ed38a0f223e797c5358e2",
+      "alpaca-market-2021.tar.gz": "sha256:550ff3456ad16a045692a5d9d567d13ef2b8788283f4c39c3baa5d8aecd7a704"
+    },
+    "role": "B0 exact-entry reproduction plus split/dividend-consistent F3 trailing context only"
+  },
+  "rawMarket": {
+    "release": "research-market-alpaca-raw-feature-context-v1",
+    "period": "2016-2020",
+    "adjustment": "raw",
+    "symbolMapping": "disabled-with-asof-dash",
+    "assets": null,
+    "role": "nominal stock price, dollar ADV, F4 basis/reclaim"
+  },
+  "expectedScope": {
+    "benchmark": "B0_ANY_QUALIFIED_PURCHASE",
+    "exactEntryEvents": 24192,
+    "distinctIssuers": 4729,
+    "dedupSessions": 20,
+    "evaluationPeriod": "2016-2020",
+    "discoveryPeriod": "2016-2018",
+    "confirmationPeriod": "2019-2020"
+  },
+  "marketCapStatus": "PIT_BLOCKED_PENDING_RAW_PRICE_AND_PIT_SHARES",
+  "stageARunAllowed": false
+}
