@@ -18,7 +18,6 @@ from collections import defaultdict
 from pathlib import Path
 
 import httpx
-
 import research_market_alpaca_backfill as base
 
 MIN_YEAR = 2015
