@@ -15,7 +15,7 @@ permissions:
 
 concurrency:
   group: research-market-alpaca-raw-feature-context-v1
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   SEC_RELEASE_TAG: research-sec-amendments-v1
