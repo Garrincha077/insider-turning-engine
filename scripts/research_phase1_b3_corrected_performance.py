@@ -202,7 +202,7 @@ def _validate_contract_mapping(
     session_index = {day: idx for idx, day in enumerate(sessions)}
     by_key: dict[tuple[int, int], dict[str, Any]] = {}
 
-    for event_number, event in enumerate(events, start=1):
+    for event in events:
         entry = event["entrySession"]
         if entry not in session_index:
             raise ValueError("canonical B3 entry is absent from XNYS calendar")
