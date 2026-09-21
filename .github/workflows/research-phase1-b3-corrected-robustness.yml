@@ -1,0 +1,151 @@
+name: Run B3 continuity-corrected robustness diagnostics
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/b3-ps-pit-history
+    paths:
+      - "docs/research-phase1-b3-corrected-robustness-gate.md"
+      - "scripts/research_phase1_b3_corrected_robustness.py"
+      - "tests/test_research_phase1_b3_corrected_robustness.py"
+      - ".github/workflows/research-phase1-b3-corrected-robustness.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-b3-continuity-corrected-robustness-v1
+  cancel-in-progress: false
+
+env:
+  SOURCE_RELEASE: research-phase1-b3-continuity-corrected-development-v1
+  SOURCE_ASSET: b3-continuity-corrected-development-2016-2020.tar.gz
+  SOURCE_DIGEST: sha256:b7b058a2e82cb072876804178e9af6e247fa9dc70b6f93a3f3c8e32ffe67c8be
+  SOURCE_RUN_ID: "35634832574"
+  RESULT_RELEASE: research-phase1-b3-continuity-corrected-robustness-v1
+
+jobs:
+  robustness:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync frozen environment
+        run: uv sync --all-groups --frozen
+
+      - name: Lint corrected robustness implementation
+        run: >-
+          uv run ruff check
+          scripts/research_phase1_b3_corrected_robustness.py
+          tests/test_research_phase1_b3_corrected_robustness.py
+
+      - name: Test frozen corrected robustness source contract
+        run: >-
+          uv run pytest -q
+          tests/test_research_phase1_b3_corrected_robustness.py
+
+      - name: Verify immutable corrected development source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/source
+          gh release view "$SOURCE_RELEASE" --repo "$GITHUB_REPOSITORY" --json assets > work/assets.json
+
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          assets = {
+              item["name"]: item
+              for item in json.loads(Path("work/assets.json").read_text())["assets"]
+          }
+          assert assets[os.environ["SOURCE_ASSET"]]["digest"] == os.environ["SOURCE_DIGEST"]
+          PY
+
+          gh release download "$SOURCE_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$SOURCE_ASSET" --dir work/source
+
+          tar -xzf "work/source/$SOURCE_ASSET" -C work/source             summary.json b3-continuity-corrected-events.csv
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          s = json.loads(Path("work/source/summary.json").read_text())
+          assert s["status"] == "PHASE1_B3_CONTINUITY_CORRECTED_DEVELOPMENT_COMPLETE"
+          assert s["continuityCorrectionComplete"] is True
+          assert s["maeRecomputed"] is False
+          assert s["validationPerformanceComputed"] is False
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          PY
+
+      - name: Run unchanged frozen robustness semantics
+        run: >-
+          uv run python scripts/research_phase1_b3_corrected_robustness.py
+          --events work/source/b3-continuity-corrected-events.csv
+          --source-summary work/source/summary.json
+          --output work/b3-corrected-robustness.json
+          --source-run-id "$SOURCE_RUN_ID"
+          --source-release "$SOURCE_RELEASE"
+          --source-asset "$SOURCE_ASSET"
+          --source-asset-digest "$SOURCE_DIGEST"
+
+      - name: Assert no progression leakage
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          s = json.loads(Path("work/b3-corrected-robustness.json").read_text())
+          assert s["status"] == "PHASE1_B3_CONTINUITY_CORRECTED_ROBUSTNESS_COMPLETE"
+          assert s["sourceStatus"] == "PHASE1_B3_CONTINUITY_CORRECTED_DEVELOPMENT_COMPLETE"
+          assert s["researchOnly"] is True
+          assert s["formalAlphaClaim"] is False
+          assert s["oosEligible"] is False
+          assert s["calendarTimeHacStageOpened"] is False
+          assert s["validationPerformanceComputed"] is False
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["b3DefinitionChanged"] is False
+          assert s["continuityCorrectionComplete"] is True
+          assert s["robustnessSemanticsChanged"] is False
+          assert s["progression"] in {
+              "BLOCK_HAC_AND_OOS",
+              "MAY_FREEZE_SEPARATE_DAILY_PATH_HAC_DESIGN",
+          }
+          print(json.dumps(s, indent=2, sort_keys=True))
+          PY
+
+      - name: Persist immutable corrected robustness evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 B3 continuity-corrected robustness v1"               --notes "Development-only continuity-corrected B3 robustness using the already-frozen B1/B3 warning semantics unchanged. Validation, HAC and 2023+ OOS remain closed."               --prerelease
+          fi
+
+          gh release upload "$RESULT_RELEASE"             work/b3-corrected-robustness.json             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3-continuity-corrected-robustness-${{ github.run_id }}
+          path: work/b3-corrected-robustness.json
+          retention-days: 90
