@@ -1,0 +1,111 @@
+name: Freeze feature tournament residual continuity scope
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-residual-continuity-scope.yml"
+      - "scripts/research_phase1_feature_tournament_residual_continuity_scope.py"
+      - "tests/test_research_phase1_feature_tournament_residual_continuity_scope.py"
+      - "docs/research-phase1-feature-tournament-residual-continuity-scope-gate.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-feature-tournament-residual-continuity-scope-v1
+  cancel-in-progress: false
+
+env:
+  SOURCE_RELEASE: research-phase1-feature-tournament-prior-continuity-overlap-v2
+  SOURCE_ASSET: prior-continuity-overlap-v2.json
+  SOURCE_DIGEST: sha256:1a67ed7d265f8d2d073c5a717cf5aed897f6ee86d6f3287e6056fd8261121741
+  RESULT_RELEASE: research-phase1-feature-tournament-residual-continuity-scope-v1
+
+jobs:
+  freeze:
+    name: Freeze exact 35-row residual continuity scope
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+
+      - name: Lint and test residual-scope semantics
+        run: |
+          uv run ruff check scripts/research_phase1_feature_tournament_residual_continuity_scope.py tests/test_research_phase1_feature_tournament_residual_continuity_scope.py
+          uv run pytest -q tests/test_research_phase1_feature_tournament_residual_continuity_scope.py
+
+      - name: Verify and download immutable overlap source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/input work/output
+          gh release download "$SOURCE_RELEASE" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$SOURCE_ASSET" --dir work/input
+          test "sha256:$(sha256sum "work/input/$SOURCE_ASSET" | cut -d' ' -f1)" = "$SOURCE_DIGEST"
+
+      - name: Freeze exact residual scope
+        run: >-
+          uv run python scripts/research_phase1_feature_tournament_residual_continuity_scope.py
+          --overlap "work/input/$SOURCE_ASSET"
+          --output work/output/residual-continuity-scope.json
+
+      - name: Assert 35-row sealed residual boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          p=json.load(open("work/output/residual-continuity-scope.json"))
+          assert p["status"]=="PHASE1_FEATURE_TOURNAMENT_RESIDUAL_CONTINUITY_SCOPE_FROZEN"
+          assert p["sourceUnresolvedRows"]==210
+          assert p["safePriorEvidenceRows"]==175
+          assert p["residualRows"]==35
+          assert p["conflictingPriorRows"]==1
+          assert p["unmatchedRows"]==34
+          assert p["performanceRead"] is False
+          assert p["priceFieldsRead"]==[]
+          assert p["featureOutcomesRead"] is False
+          assert p["resolutionComplete"] is False
+          assert p["featureDiscoveryOutcomesOpened"] is False
+          assert p["validationOpened"] is False
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          print(json.dumps({k:p[k] for k in (
+            "residualRows","conflictingPriorRows","unmatchedRows",
+            "residualUniqueEvents","residualUniqueIssuers","residualUniqueTickers",
+            "rowsByHorizon","rowsByCurrentResolutionSource",
+            "residualSemanticKeySha256","identities"
+          )}, indent=2, sort_keys=True))
+          PY
+
+      - name: Publish immutable residual scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" \
+              --title "Phase-1 feature tournament residual continuity scope v1" \
+              --notes "Exact 35-row residual continuity research scope after 175 safe frozen B1/B3 evidence matches. No feature outcomes or 2023+ OOS opened." \
+              --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE" work/output/residual-continuity-scope.json \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: feature-tournament-residual-continuity-scope-${{ github.run_id }}
+          path: work/output/residual-continuity-scope.json
+          retention-days: 90
