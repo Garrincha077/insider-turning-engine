@@ -1,0 +1,125 @@
+name: Resolve F2 validation provider8 continuity rows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-validation-provider8.yml"
+      - "scripts/research_phase1_feature_tournament_validation_provider8_resolver.py"
+      - "tests/test_research_phase1_feature_tournament_validation_provider8_resolver.py"
+      - "docs/research-phase1-feature-tournament-validation-provider8-gate.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-feature-tournament-validation-provider8-v1
+  cancel-in-progress: true
+
+env:
+  SOURCE_RELEASE: research-phase1-insider-feature-tournament-validation-prior-evidence-v1
+  SOURCE_ASSET: validation-prior-evidence-audit.json
+  SOURCE_DIGEST: sha256:6d261d773a47b311b18827fece4307105788be17ac6ece16d38daa4b27974361
+  RESULT_RELEASE: research-phase1-insider-feature-tournament-validation-provider8-v1
+
+jobs:
+  resolve:
+    name: Resolve eight exact-action validation rows
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --all-groups --frozen
+
+      - name: Lint and test provider8 resolver
+        run: |
+          uv run ruff check scripts/research_phase1_feature_tournament_validation_provider8_resolver.py tests/test_research_phase1_feature_tournament_validation_provider8_resolver.py
+          uv run pytest -q tests/test_research_phase1_feature_tournament_validation_provider8_resolver.py
+
+      - name: Download and verify frozen prior-evidence audit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/input work/output
+          gh release download "$SOURCE_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$SOURCE_ASSET" --dir work/input
+          test "sha256:$(sha256sum "work/input/$SOURCE_ASSET" | cut -d' ' -f1)" = "$SOURCE_DIGEST"
+
+      - name: Resolve provider8 and freeze residual33
+        run: >-
+          uv run python scripts/research_phase1_feature_tournament_validation_provider8_resolver.py
+          --audit "work/input/$SOURCE_ASSET"
+          --resolution-output work/output/validation-provider8-resolution.json
+          --residual-output work/output/validation-residual33.json
+
+      - name: Assert provider8 boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+
+          p=json.load(open("work/output/validation-provider8-resolution.json"))
+          r=json.load(open("work/output/validation-residual33.json"))
+
+          assert p["status"]=="PHASE1_FEATURE_TOURNAMENT_VALIDATION_PROVIDER8_RESOLVED"
+          assert p["sourceUnresolvedRows"]==41
+          assert p["resolvedProviderRows"]==8
+          assert p["remainingResidualRows"]==33
+          assert p["tickerCounts"]=={
+              "BOTJ":2,
+              "CLDB":3,
+              "GNTY":1,
+              "HWBK":1,
+              "WPF":1,
+          }
+          assert p["resolutionDecisionCounts"]=={
+              "SYMBOL_CHANGED_SAME_SECURITY":1,
+              "TRANSFORMED_HOLDER_CONSIDERATION":7,
+          }
+          assert r["status"]=="PHASE1_FEATURE_TOURNAMENT_VALIDATION_RESIDUAL33_FROZEN"
+          assert r["providerRowsResolved"]==8
+          assert r["residualRows"]==33
+          assert r["categoryCounts"]=={
+              "LONG_GAP_NEW_PRIMARY_EVIDENCE_REQUIRED":10,
+              "LONG_GAP_PRIOR_SECURITY_CANDIDATE":1,
+              "PROVIDER_NEW_PRIMARY_EVIDENCE_REQUIRED":22,
+          }
+
+          for payload in (p,r):
+              assert payload["performanceRead"] is False
+              assert payload["priceFieldsRead"]==[]
+              assert payload["featureOutcomesRead"] is False
+              assert payload["validationOpened"] is False
+              assert payload["validationPerformanceOpened"] is False
+              assert payload["oosOpened"] is False
+              assert payload["productionScoringChanged"] is False
+          PY
+
+      - name: Publish immutable provider8 resolution
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 F2 validation provider8 resolution v1"               --notes "Eight exact corporate-action validation continuity rows resolved from frozen prior evidence. Thirty-three residual rows remain; validation performance and 2023+ OOS stay closed."               --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE"             work/output/validation-provider8-resolution.json             work/output/validation-residual33.json             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase1-insider-feature-tournament-validation-provider8-${{ github.run_id }}
+          path: work/output
+          retention-days: 90
