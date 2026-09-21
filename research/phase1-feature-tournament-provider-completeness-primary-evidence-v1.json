@@ -1,0 +1,130 @@
+{
+  "schemaVersion": "1.0.0",
+  "contractId": "phase1-feature-tournament-provider-completeness-primary-evidence-v1",
+  "frozenAt": "2026-09-21",
+  "researchOnly": true,
+  "performanceRead": false,
+  "priceFieldsRead": [],
+  "featureOutcomesRead": false,
+  "validationOpened": false,
+  "oosOpened": false,
+  "productionScoringChanged": false,
+  "scope": {
+    "expectedRows": 13,
+    "expectedActions": 4,
+    "expectedEvents": 7,
+    "evaluationYears": [2019, 2020],
+    "discoveryOverlapRows": 0
+  },
+  "evidence": [
+    {
+      "actionId": "3f1999bc-0671-4ac9-832d-34a273de33b0",
+      "issuerCik": "0001704235",
+      "ticker": "QES",
+      "providerAcquireeCusip": "74875T103",
+      "providerAcquirerCusip": "48253L106",
+      "providerPreSplitAcquirerRate": 0.4844,
+      "effectiveDate": "2020-07-28",
+      "resolutionDecision": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "transformationKind": "PRIMARY_SEC_POST_SPLIT_STOCK_MERGER",
+      "resultState": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "successorSymbol": "KLXE",
+      "successorSharesPerEntryShare": 0.0969,
+      "cashPerEntryShare": 0,
+      "primaryEvidence": [
+        {
+          "accession": "0001104659-20-087284",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1704235/000110465920087284/tm2025874d1_8k.htm",
+          "fact": "QES closing Form 8-K states each QES share was converted into 0.0969 KLXE shares on 2020-07-28."
+        },
+        {
+          "accession": "0001104659-20-086641",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1704235/000110465920086641/tm2025520d3_8k.htm",
+          "fact": "KLXE filing states the final 0.0969 exchange ratio reflects the immediately preceding 1-for-5 KLXE reverse split."
+        }
+      ]
+    },
+    {
+      "actionId": "025514e5-df61-4736-abbd-958aef5d7747",
+      "issuerCik": "0001002135",
+      "ticker": "WSTL",
+      "providerAcquireeCusip": "957541204",
+      "providerAcquirerCusip": "957541303",
+      "effectiveDate": "2020-10-01",
+      "resolutionDecision": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "transformationKind": "PRIMARY_SEC_REVERSE_FORWARD_CASHOUT_ONE_ENTRY_SHARE",
+      "resultState": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "successorSymbol": "",
+      "successorSharesPerEntryShare": 0,
+      "cashPerEntryShare": 1.48,
+      "holderPolicy": "ONE_ENTRY_SHARE",
+      "holderPolicyReason": "The frozen performance engine values one original entry share. Westell holders with fewer than 1,000 shares were cashed out at $1.48 per share.",
+      "primaryEvidence": [
+        {
+          "accession": "0001002135-20-000100",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1002135/000100213520000100/wstl-20200930.htm",
+          "fact": "Westell Form 10-Q states the reverse/forward transaction became effective 2020-10-01 and repurchased affected Class A shares at $1.48 per share."
+        },
+        {
+          "accession": "0001002135-20-000029",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1002135/000100213520000029/exhibit991pr.htm",
+          "fact": "Westell primary release states holders of fewer than 1,000 shares are cashed out at $1.48 per share while larger holders remain shareholders."
+        }
+      ]
+    },
+    {
+      "actionId": "5952fed5-9d9e-4228-b719-dab4e78cb1cc",
+      "issuerCik": "0001764711",
+      "ticker": "PAAC",
+      "providerAcquireeCusip": "74317H105",
+      "providerAcquirerCusip": "53620U102",
+      "effectiveDate": "2020-06-16",
+      "resolutionDecision": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "transformationKind": "PRIMARY_SEC_SPAC_STOCK_EXCHANGE",
+      "resultState": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "successorSymbol": "LGHL",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "primaryEvidence": [
+        {
+          "accession": "0001213900-21-019135",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1806524/000121390021019135/f20f2020_liongrouphold.htm",
+          "fact": "Lion Group Form 20-F identifies LGHL ADSs on Nasdaq and states Lion securities began trading under LGHL after the 2020 transaction."
+        },
+        {
+          "accession": "0001213900-20-023184",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1806524/000121390020023184/ea125693ex99-2_liongrouphold.htm",
+          "fact": "Lion Group filing states each outstanding PAAC common share was exchanged for one Class A ordinary share of Lion Group Holding Ltd."
+        }
+      ]
+    },
+    {
+      "actionId": "fd86b4fb-0687-4693-bf79-cbdef0e8bb19",
+      "issuerCik": "0001337068",
+      "ticker": "MGYR",
+      "providerAcquireeCusip": "55977T109",
+      "providerAcquirerCusip": "55977T208",
+      "effectiveDate": "2021-07-14",
+      "resolutionDecision": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "transformationKind": "PRIMARY_SEC_SAME_SYMBOL_REORGANIZATION",
+      "resultState": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "successorSymbol": "MGYR",
+      "successorSharesPerEntryShare": 1.2213,
+      "cashPerEntryShare": 0,
+      "primaryEvidence": [
+        {
+          "accession": "0001174947-21-001150",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1337068/000117494721001150/form10k-27058mgyr.htm",
+          "fact": "Magyar Bancorp Form 10-K states each public pre-conversion share was converted into 1.2213 Company common shares in the 2021 second-step conversion."
+        },
+        {
+          "accession": "0001174947-21-000793",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1337068/000117494721000793/form10q-26550_mgyr.htm",
+          "fact": "Magyar Bancorp Form 10-Q states the conversion closed on 2021-07-14 and each public share was exchanged for 1.2213 new Company common shares."
+        }
+      ]
+    }
+  ],
+  "finalResolutionContractCreated": false,
+  "confirmationOutcomesOpened": false
+}
