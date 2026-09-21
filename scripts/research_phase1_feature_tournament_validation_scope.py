@@ -95,42 +95,77 @@ def _candidate_stream(
     return retained
 
 
-def _f2_category(
-    event: dict[str, Any],
-    issuer_rows: list[dict[str, Any]],
+def _f2_categories(
+    events: list[dict[str, Any]],
+    revisions: dict[str, list[dict[str, Any]]],
     calendar: Any,
-) -> str:
-    evaluation = str(event["evaluationSession"])
-    cutoff = calendar.session_close(
-        pd.Timestamp(evaluation)
-    ).to_pydatetime()
-    if cutoff.tzinfo is None:
-        cutoff = cutoff.replace(tzinfo=UTC)
-    cutoff = cutoff.astimezone(UTC)
+) -> dict[tuple[str, str], str]:
+    wanted = {
+        (str(event["issuerCik"]), str(event["evaluationSession"]))
+        for event in events
+    }
+    ownerships: dict[tuple[str, str], set[str]] = {
+        key: set()
+        for key in wanted
+    }
+    cutoff_cache: dict[str, Any] = {}
 
-    active = stage_a._active_purchases(issuer_rows, cutoff)
-    ownerships: set[str] = set()
-    for row in active:
-        row_session = market_audit._evaluation_session(
-            row["_knowledge"].isoformat(),
-            calendar,
-        )
-        if row_session != evaluation:
+    for issuer, rows in revisions.items():
+        wanted_sessions = {
+            evaluation
+            for cik, evaluation in wanted
+            if cik == issuer
+        }
+        if not wanted_sessions:
             continue
-        ownership = str(
-            (row.get("transaction") or {}).get("ownershipNature") or ""
-        ).upper()
-        if ownership in {"D", "I"}:
-            ownerships.add(ownership)
+        for row in rows:
+            row_session = market_audit._evaluation_session(
+                row["_knowledge"].isoformat(),
+                calendar,
+            )
+            if row_session not in wanted_sessions:
+                continue
 
-    if ownerships == {"D"}:
-        return "DIRECT_ONLY"
-    if ownerships == {"I"}:
-        return "INDIRECT_ONLY"
-    if ownerships == {"D", "I"}:
-        return "MIXED"
-    return "UNKNOWN"
+            cutoff = cutoff_cache.get(row_session)
+            if cutoff is None:
+                cutoff = calendar.session_close(
+                    pd.Timestamp(row_session)
+                ).to_pydatetime()
+                if cutoff.tzinfo is None:
+                    cutoff = cutoff.replace(tzinfo=UTC)
+                cutoff = cutoff.astimezone(UTC)
+                cutoff_cache[row_session] = cutoff
 
+            if row["_valid_from"] > cutoff:
+                continue
+            valid_to = row["_valid_to"]
+            if valid_to is not None and cutoff >= valid_to:
+                continue
+            lifecycle = row.get("lifecycle") or {}
+            if str(lifecycle.get("status") or "").upper() == "VOID":
+                continue
+            if row["_knowledge"] > cutoff:
+                continue
+            if not stage_a._qualified_purchase(row):
+                continue
+
+            ownership = str(
+                (row.get("transaction") or {}).get("ownershipNature") or ""
+            ).upper()
+            if ownership in {"D", "I"}:
+                ownerships[(issuer, row_session)].add(ownership)
+
+    result: dict[tuple[str, str], str] = {}
+    for key, values in ownerships.items():
+        if values == {"D"}:
+            result[key] = "DIRECT_ONLY"
+        elif values == {"I"}:
+            result[key] = "INDIRECT_ONLY"
+        elif values == {"D", "I"}:
+            result[key] = "MIXED"
+        else:
+            result[key] = "UNKNOWN"
+    return result
 
 def _assert_confirmation(path: Path) -> None:
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -200,6 +235,11 @@ def run(
     revisions = stage_a._load_revisions(sec_revisions, issuers)
     calendar = xcals.get_calendar("XNYS")
     sessions = p0._expected_sessions()
+    f2_by_event = _f2_categories(
+        validation_candidates,
+        revisions,
+        calendar,
+    )
 
     conn = sqlite3.connect(db_path)
     rows: list[dict[str, Any]] = []
@@ -241,10 +281,12 @@ def run(
                 missing_entry += 1
                 continue
 
-            f2 = _f2_category(
-                event,
-                revisions.get(str(event["issuerCik"]), []),
-                calendar,
+            f2 = f2_by_event.get(
+                (
+                    str(event["issuerCik"]),
+                    evaluation,
+                ),
+                "UNKNOWN",
             )
             rows.append(
                 {
