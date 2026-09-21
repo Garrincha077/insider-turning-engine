@@ -1,0 +1,113 @@
+name: Resolve F2 validation exact-action prior evidence
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-validation-exact-action-resolution.yml"
+      - "scripts/research_phase1_feature_tournament_validation_exact_action_resolution.py"
+      - "tests/test_research_phase1_feature_tournament_validation_exact_action_resolution.py"
+      - "docs/research-phase1-feature-tournament-validation-exact-action-resolution-gate.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-feature-tournament-validation-exact-action-resolution-v1
+  cancel-in-progress: true
+
+env:
+  AUDIT_RELEASE: research-phase1-insider-feature-tournament-validation-prior-evidence-v1
+  AUDIT_ASSET: validation-prior-evidence-audit.json
+  AUDIT_DIGEST: sha256:6d261d773a47b311b18827fece4307105788be17ac6ece16d38daa4b27974361
+  RESULT_RELEASE: research-phase1-insider-feature-tournament-validation-exact-action-resolution-v1
+  RESULT_ASSET: validation-exact-action-prior-resolution.json
+
+jobs:
+  resolve:
+    name: Resolve 8 exact-action validation continuity rows
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --all-groups --frozen
+
+      - name: Lint and test exact-action resolver
+        run: |
+          uv run ruff check scripts/research_phase1_feature_tournament_validation_exact_action_resolution.py tests/test_research_phase1_feature_tournament_validation_exact_action_resolution.py
+          uv run pytest -q tests/test_research_phase1_feature_tournament_validation_exact_action_resolution.py
+
+      - name: Download and verify frozen prior-evidence audit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/input work/output
+          gh release download "$AUDIT_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$AUDIT_ASSET" --dir work/input
+          test "sha256:$(sha256sum "work/input/$AUDIT_ASSET" | cut -d' ' -f1)" = "$AUDIT_DIGEST"
+
+      - name: Apply frozen exact-action prior-evidence rule
+        run: >-
+          uv run python
+          scripts/research_phase1_feature_tournament_validation_exact_action_resolution.py
+          --audit "work/input/$AUDIT_ASSET"
+          --output "work/output/$RESULT_ASSET"
+
+      - name: Assert exact 8-row resolution and closed validation boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          p=json.loads(Path("work/output/validation-exact-action-prior-resolution.json").read_text())
+          assert p["status"]=="PHASE1_FEATURE_TOURNAMENT_VALIDATION_EXACT_ACTION_PRIOR_RESOLUTION_COMPLETE"
+          assert p["sourceUnresolvedRows"]==41
+          assert p["eligibleExactActionRows"]==8
+          assert p["resolvedRows"]==8
+          assert p["remainingUnresolvedRows"]==33
+          assert p["resolvedKeySha256"]=="sha256:fbd00d6952afad146499ae0cc998c1c79bee8ab15084eae4bdd45899bab8cb34"
+          assert len(p["resolutionRows"])==8
+          assert p["resolutionApplied"] is True
+          assert p["resolutionComplete"] is False
+          assert p["performanceRead"] is False
+          assert p["priceFieldsRead"]==[]
+          assert p["featureOutcomesRead"] is False
+          assert p["validationOpened"] is False
+          assert p["validationPerformanceOpened"] is False
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          assert all(
+              r["classificationSource"]=="VALIDATION_EXACT_ACTION_PRIOR_EVIDENCE_REUSE"
+              for r in p["resolutionRows"]
+          )
+          PY
+
+      - name: Publish immutable exact-action validation resolution
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 F2 validation exact-action prior resolution v1"               --notes "Performance-blind deterministic reuse of 8 validation continuity rows whose exact corporate-action IDs and holder economics already agree across frozen prior contracts. 33 rows remain unresolved; validation performance and 2023+ OOS remain closed."               --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE" "work/output/$RESULT_ASSET"             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase1-insider-feature-tournament-validation-exact-action-resolution-${{ github.run_id }}
+          path: work/output
+          retention-days: 90
