@@ -1,4 +1,4 @@
-# Phase-1 current status — 2026-09-20
+# Phase-1 current status — 2026-09-21
 
 This is the compact live checkpoint. For operational continuation,
 `docs/HANDOFF.md` remains authoritative. Older dated progress files are audit
@@ -11,7 +11,7 @@ history.
 | B0 | any qualified open-market purchase | development descriptive complete |
 | B1 | canonical CMP opportunistic purchase | continuity-corrected development/robustness complete; HAC/OOS blocked |
 | B2 | independent-owner cluster | development complete |
-| B3 | company net buying | final 264/264 continuity contract complete; corrected development gate next |
+| B3 | company net buying | continuity-corrected development + corrected robustness complete; BLOCK_HAC_AND_OOS |
 | B4 | B1 AND B2 exact-session intersection | development complete |
 
 ## B3 data / development status
@@ -77,23 +77,53 @@ Classification counts:
 
 See `docs/progress-2026-09-20-b3-continuity-complete.md`.
 
+## B3 continuity-corrected development — COMPLETE
+
+Run **35634832574** — SUCCESS.
+
+- release: `research-phase1-b3-continuity-corrected-development-v1`
+- asset SHA-256:
+  `sha256:b7b058a2e82cb072876804178e9af6e247fa9dc70b6f93a3f3c8e32ffe67c8be`
+- exact-entry events: **29,930**
+- event-horizon rows: **119,720**
+- continuity-contract rows applied: **264**
+- 126d matured: **29,072**
+- 126d SPY excess mean / median: **+4.0286% / -2.7248%**
+- 126d win rate: **44.8473%**
+- corrected MAE recomputation: **false**
+- 2023+ OOS: **sealed**
+- production scoring: **unchanged**
+
+## B3 continuity-corrected robustness — BLOCK_HAC_AND_OOS
+
+Run **35635187501** — SUCCESS.
+
+- event-weighted 126d mean: **+4.0286%**
+- issuer equal-weight mean: **+5.0390%**
+- entry-session equal-weight mean: **+3.3464%**
+- positive-mean years: **3 / 5**
+- top-1%-removed mean: **-0.2021%**
+- blocking warning:
+  `top1PctRemovedMeanNonPositive=true`
+- progression: **BLOCK_HAC_AND_OOS**
+- robustness semantics changed: **false**
+
+The continuity correction does not change the substantive B3 robustness
+conclusion.
+
+See
+`docs/progress-2026-09-21-b3-corrected-development-robustness.md`.
+
 ## Active next gate
 
-Freeze and implement B3 continuity-corrected development performance before
-opening corrected outcomes.
+Synthesize the completed B0/B1/B2/B3/B4 development benchmark family, then
+freeze the insider-only feature-tournament methodology **before** reading any
+new feature performance.
 
-Required rules:
+The feature-tournament gate must predeclare candidate features, transforms,
+missingness, deduplication, comparison/stability metrics, multiple-testing
+control and selection rules. Turning/technical confirmation remains a later,
+separate incremental layer.
 
-1. consume only the immutable final continuity contract;
-2. keep development cohort 2016-2020 and outcome ceiling 2022-12-31;
-3. keep exact 21/63/126/252 XNYS targets, 126 primary;
-4. never substitute a later market bar for a missing exact target session;
-5. preserve holder quantities/cash exactly from the contract;
-6. value every component of a multi-component basket at the exact target
-   session or mark it incomplete;
-7. keep 2023+ sealed and production scoring unchanged;
-8. reapply the already frozen robustness semantics after corrected development
-   results, with no retuning.
+HAC/OOS remains blocked. 2023+ remains sealed.
 
-HAC/OOS remains blocked unless the corrected frozen robustness gate later
-permits progression.
