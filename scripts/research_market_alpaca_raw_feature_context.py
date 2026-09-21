@@ -5,7 +5,7 @@ coherent. It does not compute forward returns or open validation/OOS.
 
 The canonical 2016-2022 research market release uses adjustment=all and is
 preserved unchanged. This parallel context uses adjustment=raw, asof="-", and
-only 2015-2020. 2015 is trailing history for early-2016 feature formation.
+only 2016-2020. Earliest-2016 trailing context may therefore be missing and is measured by Stage A coverage.
 """
 
 from __future__ import annotations
@@ -20,18 +20,16 @@ from pathlib import Path
 import httpx
 import research_market_alpaca_backfill as base
 
-MIN_YEAR = 2015
+MIN_YEAR = 2016
 MAX_YEAR = 2020
 SEALED_YEAR = 2023
 
 
 def _load_context_symbols(source: Path, year: int) -> tuple[list[str], dict[str, int]]:
     if not MIN_YEAR <= year <= MAX_YEAR:
-        raise ValueError("raw feature-context year must be 2015-2020")
+        raise ValueError("raw feature-context year must be 2016-2020")
 
-    if year == 2015:
-        wanted_years = {2016}
-    elif year < 2020:
+    if year < 2020:
         wanted_years = {year, year + 1}
     else:
         wanted_years = {2020}
