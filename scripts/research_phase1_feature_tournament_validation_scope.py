@@ -52,7 +52,6 @@ def _candidate_stream(
 ) -> list[dict[str, Any]]:
     events_by_ticker, _ = market_audit._load_events(sec_effective)
     sessions = p0._expected_sessions()
-    session_index = {day: idx for idx, day in enumerate(sessions)}
 
     candidates: list[dict[str, Any]] = []
     for ticker, events in events_by_ticker.items():
