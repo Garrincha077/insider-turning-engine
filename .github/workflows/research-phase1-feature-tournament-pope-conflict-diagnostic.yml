@@ -1,0 +1,100 @@
+name: Freeze POPE prior continuity conflict diagnostic
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-pope-conflict-diagnostic.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-feature-tournament-pope-conflict-diagnostic-v1
+  cancel-in-progress: false
+
+env:
+  SOURCE_RELEASE: research-phase1-feature-tournament-residual-continuity-scope-v1
+  SOURCE_ASSET: residual-continuity-scope.json
+  SOURCE_DIGEST: sha256:bba0f3fd8c46c04e0ccd27a6b6a2a6ac0f8fcf074d89fee7239d5477f0574e01
+  RESULT_RELEASE: research-phase1-feature-tournament-pope-conflict-diagnostic-v1
+
+jobs:
+  freeze:
+    name: Freeze exact POPE conflict
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify and download frozen residual scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/input work/output
+          gh release download "$SOURCE_RELEASE" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$SOURCE_ASSET" --dir work/input
+          test "sha256:$(sha256sum "work/input/$SOURCE_ASSET" | cut -d' ' -f1)" = "$SOURCE_DIGEST"
+
+      - name: Freeze the single prior-economic conflict
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+
+          source=json.loads(Path("work/input/residual-continuity-scope.json").read_text())
+          rows=[r for r in source["rows"] if r["matchStatus"]=="PRIOR_ECONOMIC_CONFLICT"]
+          assert len(rows)==1
+          row=rows[0]
+          assert row["ticker"]=="POPE"
+          assert row["issuerCik"]=="0000784011"
+          assert sorted(row["priorSources"])==["B1","B3"]
+          assert len(row["priorMatches"])==2
+          raw=json.dumps(row,sort_keys=True,separators=(",",":")).encode()
+          payload={
+              "schemaVersion":"1.0.0",
+              "status":"PHASE1_FEATURE_TOURNAMENT_POPE_PRIOR_CONTINUITY_CONFLICT_FROZEN",
+              "researchOnly":True,
+              "performanceRead":False,
+              "priceFieldsRead":[],
+              "featureOutcomesRead":False,
+              "validationOpened":False,
+              "oosOpened":False,
+              "productionScoringChanged":False,
+              "sourceResidualScopeSha256":"$SOURCE_DIGEST",
+              "conflictRows":1,
+              "conflictRowSha256":"sha256:"+hashlib.sha256(raw).hexdigest(),
+              "row":row,
+              "adjudicated":False,
+          }
+          Path("work/output/pope-conflict.json").write_text(
+              json.dumps(payload,indent=2,sort_keys=True)+"\n"
+          )
+          print(json.dumps(payload,indent=2,sort_keys=True))
+          PY
+
+      - name: Publish immutable POPE conflict diagnostic
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" \
+              --title "Phase-1 feature tournament POPE continuity conflict v1" \
+              --notes "Exact performance-blind B1/B3 economic conflict for POPE from the frozen 35-row residual scope. No adjudication or feature outcome opened." \
+              --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE" work/output/pope-conflict.json \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: feature-tournament-pope-conflict-${{ github.run_id }}
+          path: work/output/pope-conflict.json
+          retention-days: 90
