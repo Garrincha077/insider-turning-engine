@@ -1,0 +1,203 @@
+name: Freeze feature tournament Stage-B final continuity contract
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-stage-b-final-continuity.yml"
+      - "scripts/research_phase1_feature_tournament_stage_b_final_continuity.py"
+      - "tests/test_research_phase1_feature_tournament_stage_b_final_continuity.py"
+      - "docs/research-phase1-feature-tournament-stage-b-final-continuity-gate.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-feature-tournament-stage-b-final-continuity-v1
+  cancel-in-progress: false
+
+env:
+  SCOPE_RELEASE: research-phase1-feature-tournament-stage-b-unresolved-scope-v1
+  SCOPE_ASSET: stage-b-unresolved-scope.json
+  SCOPE_DIGEST: sha256:4882e009646ea117d123b5f95ae41ea700203dd470d3b24be2cd1592eebe9afd
+
+  OVERLAP_RELEASE: research-phase1-feature-tournament-prior-continuity-overlap-v2
+  OVERLAP_ASSET: prior-continuity-overlap-v2.json
+  OVERLAP_DIGEST: sha256:1a67ed7d265f8d2d073c5a717cf5aed897f6ee86d6f3287e6056fd8261121741
+
+  B1_PATH: research/b1-security-continuity-resolution-v1.json
+  B1_DIGEST: sha256:88325d71dd9da1f18bdc2c2695933860e087addd586def8b4271ed768d121430
+
+  B3_RELEASE: research-phase1-b3-final-continuity-contract-v1
+  B3_ASSET: b3-final-continuity-contract.json
+  B3_DIGEST: sha256:22e1af6713eb0c0f73604a150787ac9248f044eef63e1f88b70b31697aede163
+
+  POPE_RELEASE: research-phase1-feature-tournament-pope-adjudication-v1
+  POPE_ASSET: pope-adjudication.json
+  POPE_DIGEST: sha256:8c87c27a3689c1aa10c5d8881cf91de0bb078e97d6133968f1c7d0528afd18a4
+
+  PROVIDER_RELEASE: research-phase1-feature-tournament-provider17-resolution-v1
+  PROVIDER_ASSET: provider17-resolution.json
+  PROVIDER_DIGEST: sha256:b439ff00ab99fb77dd81f929d078a9e1f4966bcc3800f4a21896700c1efc99c9
+
+  LONG_GAP_RELEASE: research-phase1-feature-tournament-long-gap7-resolution-v1
+  LONG_GAP_ASSET: long-gap7-resolution.json
+  LONG_GAP_DIGEST: sha256:45422f3d291ce188005eeaddd9e6dac4ad440d9a27324809fbf36ed118ad9e67
+
+  FINAL10_RELEASE: research-phase1-feature-tournament-new-primary10-resolution-v1
+  FINAL10_ASSET: new-primary10-resolution.json
+  FINAL10_DIGEST: sha256:0062bf09ee7dc882e0b1d2829aa165ea6b9d34db14705716d3f5941cd89897d3
+
+  RESULT_RELEASE: research-phase1-feature-tournament-stage-b-final-continuity-v1
+
+jobs:
+  merge:
+    name: Merge exact 210-row Stage-B continuity contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --all-groups --frozen
+
+      - name: Lint and test final merger semantics
+        run: |
+          uv run ruff check scripts/research_phase1_feature_tournament_stage_b_final_continuity.py tests/test_research_phase1_feature_tournament_stage_b_final_continuity.py
+          uv run pytest -q tests/test_research_phase1_feature_tournament_stage_b_final_continuity.py
+
+      - name: Verify frozen B1 continuity source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "sha256:$(sha256sum "$B1_PATH" | cut -d' ' -f1)" = "$B1_DIGEST"
+
+      - name: Download and verify immutable continuity inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/input work/output
+
+          download_verify() {
+            local release="$1"
+            local asset="$2"
+            local digest="$3"
+            gh release download "$release" --repo "$GITHUB_REPOSITORY"               --pattern "$asset" --dir work/input
+            test "sha256:$(sha256sum "work/input/$asset" | cut -d' ' -f1)" = "$digest"
+          }
+
+          download_verify "$SCOPE_RELEASE" "$SCOPE_ASSET" "$SCOPE_DIGEST"
+          download_verify "$OVERLAP_RELEASE" "$OVERLAP_ASSET" "$OVERLAP_DIGEST"
+          download_verify "$B3_RELEASE" "$B3_ASSET" "$B3_DIGEST"
+          download_verify "$POPE_RELEASE" "$POPE_ASSET" "$POPE_DIGEST"
+          download_verify "$PROVIDER_RELEASE" "$PROVIDER_ASSET" "$PROVIDER_DIGEST"
+          download_verify "$LONG_GAP_RELEASE" "$LONG_GAP_ASSET" "$LONG_GAP_DIGEST"
+          download_verify "$FINAL10_RELEASE" "$FINAL10_ASSET" "$FINAL10_DIGEST"
+
+      - name: Merge all Stage-B continuity resolutions
+        run: >-
+          uv run python scripts/research_phase1_feature_tournament_stage_b_final_continuity.py
+          --scope "work/input/$SCOPE_ASSET"
+          --overlap "work/input/$OVERLAP_ASSET"
+          --b1 "$B1_PATH"
+          --b3 "work/input/$B3_ASSET"
+          --pope "work/input/$POPE_ASSET"
+          --provider "work/input/$PROVIDER_ASSET"
+          --long-gap "work/input/$LONG_GAP_ASSET"
+          --final10 "work/input/$FINAL10_ASSET"
+          --output work/output/stage-b-final-continuity.json
+
+      - name: Assert zero-unresolved final boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+
+          p=json.load(open("work/output/stage-b-final-continuity.json"))
+          assert p["status"]=="PHASE1_FEATURE_TOURNAMENT_STAGE_B_FINAL_CONTINUITY_COMPLETE"
+          assert p["sourceUnresolvedRows"]==210
+          assert p["classifiedRows"]==210
+          assert p["unresolvedRows"]==0
+          assert p["sourceGroupCounts"]=={
+              "SAFE_PRIOR_EVIDENCE":175,
+              "POPE_ADJUDICATION":1,
+              "PROVIDER17":17,
+              "LONG_GAP7":7,
+              "NEW_PRIMARY10":10,
+          }
+          assert len(p["resolutionRows"])==210
+
+          keys={
+              (
+                  r["eventNumber"],r["issuerCik"],r["ticker"],
+                  r["evaluationSession"],r["entrySession"],
+                  r["horizon"],r["targetExitSession"],
+              )
+              for r in p["resolutionRows"]
+          }
+          assert len(keys)==210
+
+          basket=[
+              r for r in p["resolutionRows"]
+              if r["resolutionDecision"]=="TRANSFORMED_MULTI_COMPONENT_CONSIDERATION"
+          ]
+          assert len(basket)==1
+          assert basket[0]["ticker"]=="NBA.U"
+          assert {
+              x["symbol"] for x in basket[0]["basket"]
+          }=={"MIMO","MIMO WS"}
+
+          oas=[r for r in p["resolutionRows"] if r["ticker"]=="OAS"]
+          assert len(oas)==3
+          assert {r["resultState"] for r in oas}=={
+              "DISCONTINUOUS_NO_COMPLETE_VALUATION"
+          }
+          assert {r["successorSymbol"] for r in oas}=={""}
+
+          assert p["resolutionComplete"] is True
+          assert p["finalResolutionContractCreated"] is True
+          assert p["performanceRead"] is False
+          assert p["priceFieldsRead"]==[]
+          assert p["featureOutcomesRead"] is False
+          assert p["featureDiscoveryOutcomesOpened"] is False
+          assert p["validationOpened"] is False
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+
+          print(json.dumps({
+              "classifiedRows":p["classifiedRows"],
+              "unresolvedRows":p["unresolvedRows"],
+              "sourceGroupCounts":p["sourceGroupCounts"],
+              "resolutionDecisionCounts":p["resolutionDecisionCounts"],
+              "resultStateCounts":p["resultStateCounts"],
+              "classifiedKeySha256":p["classifiedKeySha256"],
+          },indent=2,sort_keys=True))
+          PY
+
+      - name: Publish immutable final Stage-B continuity contract
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 feature tournament Stage-B final continuity v1"               --notes "Final performance-blind 210/210 continuity contract. Zero unresolved rows. Feature discovery outcomes remain closed until this gate succeeds; validation and 2023+ OOS remain sealed."               --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE"             work/output/stage-b-final-continuity.json             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: feature-tournament-stage-b-final-continuity-${{ github.run_id }}
+          path: work/output/stage-b-final-continuity.json
+          retention-days: 90
