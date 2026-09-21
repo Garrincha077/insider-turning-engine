@@ -73,6 +73,22 @@ Stage-B final continuity:
 - 210/210 classified;
 - zero unresolved.
 
+Provider-completeness amendment:
+- release:
+  `research-phase1-feature-tournament-provider-completeness-amendment-v1`;
+- asset: `provider-completeness-amendment.json`;
+- SHA-256:
+  `sha256:faf787e918b953dcffbcc2b714c34873d6228031e25a09e509ee58e1a067fbb2`;
+- 13 already-classified provider rows receive primary-evidence terminal
+  consideration semantics;
+- discovery overlap = 0;
+- validation-event overlap = 0.
+
+This amendment was created after an initial confirmation execution failed
+closed on incomplete provider merger semantics and **before any successful
+2019-2020 confirmation outcome run**. It does not alter discovery selection,
+thresholds, orientation or PASS rules.
+
 The discovery valuation/grouping helper source is frozen at Git blob:
 `4bf0717f1d866dfbd282dd365f6e466f0cc92900`.
 
