@@ -1,0 +1,123 @@
+name: Freeze feature tournament Stage B continuity scope
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-stage-b-continuity-scope.yml"
+      - "scripts/research_phase1_feature_tournament_stage_b_scope.py"
+      - "tests/test_research_phase1_feature_tournament_stage_b_scope.py"
+      - "docs/research-phase1-feature-tournament-stage-b-continuity-scope-gate.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-feature-tournament-stage-b-continuity-scope-v1
+  cancel-in-progress: false
+
+env:
+  SOURCE_RELEASE: research-phase1-insider-feature-tournament-stage-a-v1
+  SOURCE_ASSET: phase1-insider-feature-tournament-stage-a-v1.tar.gz
+  SOURCE_DIGEST: sha256:06bd11f7ea2352d95e0b3bcdb997af869b6b020c46c224e5ac942bb9a0eccb0d
+  RESULT_RELEASE: research-phase1-feature-tournament-stage-b-continuity-scope-v1
+
+jobs:
+  freeze:
+    name: Performance-blind Stage B continuity scope
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+
+      - name: Test frozen Stage B scope semantics
+        run: >-
+          uv run pytest -q
+          tests/test_research_phase1_feature_tournament_stage_b_scope.py
+
+      - name: Verify pinned Stage A source asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/source work/output
+          gh release view "$SOURCE_RELEASE" --repo "$GITHUB_REPOSITORY" --json assets > work/assets.json
+          python - <<'PY'
+          import json, os
+          assets = {x["name"]: x for x in json.load(open("work/assets.json"))["assets"]}
+          asset = assets[os.environ["SOURCE_ASSET"]]
+          assert asset.get("digest") == os.environ["SOURCE_DIGEST"], asset
+          PY
+          gh release download "$SOURCE_RELEASE" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$SOURCE_ASSET" --dir work/source
+          tar -xzf "work/source/$SOURCE_ASSET" -C work/source \
+            summary.json stage-a-feature-matrix.csv
+          test -s work/source/summary.json
+          test -s work/source/stage-a-feature-matrix.csv
+
+      - name: Freeze exact Stage B event-horizon scope
+        run: >-
+          uv run python scripts/research_phase1_feature_tournament_stage_b_scope.py
+          --matrix work/source/stage-a-feature-matrix.csv
+          --summary work/source/summary.json
+          --output work/output/stage-b-continuity-scope.json
+
+      - name: Assert performance blindness and corrected strict scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          s = json.load(open("work/output/stage-b-continuity-scope.json"))
+          assert s["status"] == "PHASE1_FEATURE_TOURNAMENT_STAGE_B_CONTINUITY_SCOPE_FROZEN"
+          assert s["events"] == 24190
+          assert s["distinctIssuers"] == 4729
+          assert s["horizonsSessions"] == [21, 63, 126, 252]
+          assert s["eventHorizonRows"] == 96760
+          assert s["performanceRead"] is False
+          assert s["priceFieldsRead"] == []
+          assert s["featureOutcomesRead"] is False
+          assert s["continuityResolutionComplete"] is False
+          assert s["unresolvedRows"] is None
+          assert s["featureDiscoveryOutcomesOpened"] is False
+          assert s["validationOpened"] is False
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          print(json.dumps({
+              "events": s["events"],
+              "rows": s["eventHorizonRows"],
+              "scopeKeySha256": s["scopeKeySha256"],
+              "sourceStageAScopeKeySha256": s["sourceStageAScopeKeySha256"],
+          }, indent=2, sort_keys=True))
+          PY
+
+      - name: Publish immutable Stage B continuity scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" \
+              --title "Phase-1 feature tournament Stage B continuity scope v1" \
+              --notes "Performance-blind 24,190-event / 96,760 event-horizon scope frozen from the pinned strict Stage-A asset. No outcomes, validation or 2023+ OOS opened." \
+              --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE" \
+            work/output/stage-b-continuity-scope.json \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase1-feature-tournament-stage-b-continuity-scope-${{ github.run_id }}
+          path: work/output/stage-b-continuity-scope.json
+          retention-days: 90
