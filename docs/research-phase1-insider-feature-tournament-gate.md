@@ -255,6 +255,13 @@ Therefore:
 
 This amendment is frozen before any feature-tournament outcome is read.
 
+
+Raw-price formation context is frozen to **2016-2020** because the Alpaca SIP
+probe for 2015 returned zero bars for the requested historical symbol universe
+without request errors. Earliest-2016 trailing raw context is therefore allowed
+to be missing and must be reflected in feature coverage; no alternate provider
+is introduced after seeing feature outcomes.
+
 ## Coverage classes
 
 Coverage is measured on frozen B0 exact-entry events in each relevant period.
