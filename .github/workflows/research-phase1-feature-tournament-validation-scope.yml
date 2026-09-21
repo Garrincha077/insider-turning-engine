@@ -15,7 +15,7 @@ permissions:
 
 concurrency:
   group: research-phase1-feature-tournament-validation-scope-v1
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   CONFIRMATION_RELEASE: research-phase1-insider-feature-tournament-confirmation-v1
