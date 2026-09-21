@@ -78,6 +78,37 @@ def _load_actions(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+
+def _provider_terms_complete(
+    candidate_rows: list[dict[str, Any]],
+) -> bool:
+    if len(candidate_rows) != 1:
+        return False
+    action = candidate_rows[0]
+    bucket = str(action.get("bucket") or "")
+    try:
+        if bucket == "cash_mergers":
+            return float(action["rate"]) >= 0
+        if bucket == "stock_mergers":
+            return (
+                float(action["acquiree_rate"]) > 0
+                and float(action["acquirer_rate"]) > 0
+                and bool(str(action.get("acquirer_symbol") or "").strip())
+            )
+        if bucket == "stock_and_cash_mergers":
+            return (
+                float(action["acquiree_rate"]) > 0
+                and float(action["acquirer_rate"]) > 0
+                and float(action["cash_rate"]) >= 0
+                and bool(str(action.get("acquirer_symbol") or "").strip())
+            )
+        if bucket == "redemptions":
+            return float(action["rate"]) >= 0
+    except (KeyError, TypeError, ValueError):
+        return False
+    return False
+
+
 def run(
     *,
     scope_csv: Path,
@@ -124,6 +155,13 @@ def run(
         )
         state, successor = continuity._provider_state(candidates)
         source = "provider"
+        if (
+            state == "TRANSFORMED_HOLDER_CONSIDERATION"
+            and not _provider_terms_complete(candidates)
+        ):
+            state = "UNRESOLVED_CONTINUITY"
+            successor = None
+            source = "provider_incomplete_terms"
 
         gap = continuity._max_internal_gap(
             observed.get(ticker, []),
@@ -215,8 +253,8 @@ def run(
             row["eventNumber"]
             for row in unresolved
         ],
-        "providerSemanticsCompletenessChecked": False,
-        "performanceStageBlocked": True,
+        "providerSemanticsCompletenessChecked": True,
+        "performanceStageBlocked": len(unresolved) > 0,
         "nextGate": (
             "Resolve all unresolved rows and separately verify complete "
             "provider holder-consideration semantics before validation."
