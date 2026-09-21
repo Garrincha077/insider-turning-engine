@@ -122,6 +122,38 @@ def _confirmation_market_maps(
     return maps, db_path
 
 
+def _terms_for_confirmation(
+    ledger_row: dict[str, Any],
+    final_row: dict[str, Any] | None,
+    actions: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    try:
+        return discovery._terms_for(ledger_row, final_row, actions)
+    except ValueError as exc:
+        action_ids = discovery._action_ids(ledger_row)
+        action_rows = [
+            actions[action_id]
+            for action_id in action_ids
+            if action_id in actions
+        ]
+        detail = {
+            "eventNumber": ledger_row.get("eventNumber"),
+            "issuerCik": ledger_row.get("issuerCik"),
+            "ticker": ledger_row.get("ticker"),
+            "entrySession": ledger_row.get("entrySession"),
+            "horizon": ledger_row.get("horizon"),
+            "targetExitSession": ledger_row.get("targetExitSession"),
+            "state": ledger_row.get("state"),
+            "successorSymbol": ledger_row.get("successorSymbol"),
+            "candidateActionIds": action_ids,
+            "actions": action_rows,
+        }
+        raise ValueError(
+            f"confirmation continuity adapter failed: {exc}; "
+            f"context={json.dumps(detail, sort_keys=True)}"
+        ) from exc
+
+
 def _value_confirmation_outcomes(
     matrix: list[dict[str, str]],
     ledger: list[dict[str, str]],
@@ -173,7 +205,7 @@ def _value_confirmation_outcomes(
             raise ValueError("confirmation event lacks four Stage-B rows")
         for ledger_row in matches:
             key = discovery._horizon_key(ledger_row)
-            terms = discovery._terms_for(
+            terms = _terms_for_confirmation(
                 ledger_row,
                 final_by_key.get(key),
                 actions,
