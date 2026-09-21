@@ -1,0 +1,201 @@
+name: Audit insider feature tournament validation continuity
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-validation-continuity.yml"
+      - "scripts/research_phase1_feature_tournament_validation_continuity.py"
+      - "tests/test_research_phase1_feature_tournament_validation_continuity.py"
+      - "docs/research-phase1-feature-tournament-validation-continuity-gate.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-feature-tournament-validation-continuity-v1
+  cancel-in-progress: true
+
+env:
+  SCOPE_RELEASE: research-phase1-insider-feature-tournament-validation-scope-v1
+  SCOPE_ARCHIVE: phase1-insider-feature-tournament-validation-scope-v1.tar.gz
+  SCOPE_SUMMARY: summary.json
+  SCOPE_SUMMARY_DIGEST: sha256:c30fe291ddab95f9022c4d7e9b6c11655c6bf34822bae0d8fe94a417d51b021b
+  SCOPE_KEY: sha256:8f2d7d09c43689007d22690d8c846cf253532d8cff15997c8def2ddde8df7bc3
+  MARKET_RELEASE: research-market-alpaca-v1
+  RESULT_RELEASE: research-phase1-insider-feature-tournament-validation-continuity-audit-v1
+
+jobs:
+  audit:
+    name: Performance-blind 126d validation continuity audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY_ID }}
+      ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --all-groups --frozen
+
+      - name: Lint and test continuity semantics
+        run: |
+          uv run ruff check scripts/research_phase1_feature_tournament_validation_continuity.py tests/test_research_phase1_feature_tournament_validation_continuity.py
+          uv run pytest -q tests/test_research_phase1_feature_tournament_validation_continuity.py
+
+      - name: Download and semantically verify frozen validation scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/scope work/download/scope work/ca work/download/market work/market work/output
+
+          gh release download "$SCOPE_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$SCOPE_SUMMARY" --dir work/scope
+          test "sha256:$(sha256sum "work/scope/$SCOPE_SUMMARY" | cut -d' ' -f1)" = "$SCOPE_SUMMARY_DIGEST"
+
+          gh release download "$SCOPE_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$SCOPE_ARCHIVE" --dir work/download/scope
+          tar -xzf "work/download/scope/$SCOPE_ARCHIVE" -C work/scope             validation-scope.csv
+          test -s work/scope/validation-scope.csv
+
+          python - <<'PY'
+          import csv, json, os
+          from scripts import research_phase1_feature_tournament_validation_scope as scope
+
+          summary=json.load(open("work/scope/summary.json"))
+          assert summary["scopeKeySha256"]==os.environ["SCOPE_KEY"]
+          assert summary["validationScopeRows"]==7493
+          assert summary["validationDistinctIssuers"]==3037
+          assert summary["f2ObservedRows"]==6886
+          assert summary["f2CategoryCounts"]=={
+              "DIRECT_ONLY":5199,
+              "INDIRECT_ONLY":1687,
+              "MIXED":606,
+              "UNKNOWN":1,
+          }
+          assert summary["outcomesRead"] is False
+          assert summary["validationOpened"] is False
+          assert summary["oosOpened"] is False
+
+          with open("work/scope/validation-scope.csv", newline="") as f:
+              raw=list(csv.DictReader(f))
+          rows=[]
+          for row in raw:
+              normalized=dict(row)
+              normalized["eventNumber"]=int(row["eventNumber"])
+              rows.append(normalized)
+          assert len(rows)==7493
+          assert scope._scope_digest(rows)==os.environ["SCOPE_KEY"]
+          assert max(r["targetExitSession"] for r in rows) <= "2022-12-31"
+          PY
+
+      - name: Freeze bounded validation corporate-action inventory
+        run: >-
+          uv run python scripts/research_market_corporate_action_inventory.py
+          --events work/scope/validation-scope.csv
+          --output-dir work/ca
+
+      - name: Assert corporate-action inventory boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          p=json.load(open("work/ca/corporate-actions.json"))
+          assert p["period"]==["2016-01-01","2022-12-31"]
+          assert p["performanceRead"] is False
+          assert p["researchOnly"] is True
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          assert p["eventTickerCount"] > 0
+          PY
+
+      - name: Download and verify frozen pre-2023 market presence corpus
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          declare -A DIGESTS=(
+            [2016]=df531881b67f9f42e40b2c2fff03f6ca19c0b5f9b13deb6190132b7987fb69ca
+            [2017]=7515a3807249bbead7cf7edc2a2aa1d267b01fc49ddf72885c40746520e762d0
+            [2018]=4a99eafc6cac31ee30d23bf82c1feccb4bbe14919f7c4df2d59e792f8a5b2f54
+            [2019]=c701d559a7d5128fd07ec19e2d5d3b39eb5ae8c0d9bd51a8b278d34c9b6f9238
+            [2020]=5577a548576e81c5e468b9e5027c9a8ec1ba8e1dd14ed38a0f223e797c5358e2
+            [2021]=550ff3456ad16a045692a5d9d567d13ef2b8788283f4c39c3baa5d8aecd7a704
+            [2022]=8a71037090cda77bc3937409ffa9fcb9c463545b5f3a7d9a73995a92759d187a
+          )
+          for year in 2016 2017 2018 2019 2020 2021 2022; do
+            asset="alpaca-market-$year.tar.gz"
+            gh release download "$MARKET_RELEASE" --repo "$GITHUB_REPOSITORY"               --pattern "$asset" --dir work/download/market
+            test "$(sha256sum "work/download/market/$asset" | cut -d' ' -f1)" = "${DIGESTS[$year]}"
+            mkdir -p "work/market/$year"
+            tar -xzf "work/download/market/$asset" -C "work/market/$year"               "canonical-market-$year.csv"
+          done
+          test ! -e work/market/2023
+
+      - name: Audit exact validation continuity scope
+        run: >-
+          uv run python scripts/research_phase1_feature_tournament_validation_continuity.py
+          --scope-csv work/scope/validation-scope.csv
+          --scope-summary work/scope/summary.json
+          --corporate-actions work/ca/corporate-actions.json
+          --market-root work/market
+          --output work/output
+
+      - name: Assert outcome-blind audit boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import csv, json, os
+
+          p=json.load(open("work/output/summary.json"))
+          assert p["status"]=="PHASE1_FEATURE_TOURNAMENT_VALIDATION_CONTINUITY_AUDITED"
+          assert p["sourceScopeKeySha256"]==os.environ["SCOPE_KEY"]
+          assert p["scopeRows"]==7493
+          assert p["primaryHorizonSessions"]==126
+          assert p["providerSemanticsCompletenessChecked"] is True
+          assert p["performanceRead"] is False
+          assert p["priceFieldsRead"]==[]
+          assert p["featureOutcomesRead"] is False
+          assert p["validationOpened"] is False
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+
+          with open("work/output/validation-continuity-audit.csv", newline="") as f:
+              rows=list(csv.DictReader(f))
+          assert len(rows)==7493
+          assert {r["horizon"] for r in rows}=={"126"}
+          print(json.dumps(p,indent=2,sort_keys=True))
+          PY
+
+      - name: Publish immutable validation continuity audit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp docs/research-phase1-feature-tournament-validation-continuity-gate.md work/output/
+          cp work/ca/corporate-actions.json work/output/
+          tar -C work/output -czf work/phase1-insider-feature-tournament-validation-continuity-audit-v1.tar.gz             summary.json             validation-continuity-audit.csv             corporate-actions.json             research-phase1-feature-tournament-validation-continuity-gate.md
+
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 F2 validation continuity audit v1"               --notes "Performance-blind 126-session continuity audit for the frozen 7,493-row validation scope. Validation outcomes and 2023+ OOS remain closed; any unresolved rows define the next evidence-resolution scope."               --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE"             work/phase1-insider-feature-tournament-validation-continuity-audit-v1.tar.gz             work/output/summary.json             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase1-insider-feature-tournament-validation-continuity-audit-${{ github.run_id }}
+          path: work/output
+          retention-days: 90
