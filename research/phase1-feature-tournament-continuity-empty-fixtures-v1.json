@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "fixtureSetId": "PHASE1_FEATURE_TOURNAMENT_CONTINUITY_EMPTY_V1",
+  "researchOnly": true,
+  "performanceRead": false,
+  "oosOpened": false,
+  "productionScoringChanged": false,
+  "purpose": "Initial feature-tournament continuity audit starts from frozen provider evidence plus the frozen long-gap rule only. Existing B1/B3 resolutions may be reused only in a later key-matched performance-blind resolution stage; no performance-selected fixture is applied to this initial audit.",
+  "fixtures": []
+}
