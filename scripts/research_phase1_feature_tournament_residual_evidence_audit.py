@@ -9,8 +9,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-EXPECTED_RESIDUAL_ROWS = 35
-EXPECTED_POST_POPE_ROWS = 34
+EXPECTED_RESIDUAL_ROWS = 34
 EXPECTED_PROVIDER_ROWS = 17
 EXPECTED_PROVIDER_REUSABLE_ROWS = 17
 EXPECTED_LONG_GAP_ROWS = 17
@@ -236,41 +235,46 @@ def _long_gap_match(
 
 def run(
     *,
-    residual_path: Path,
+    residual34_path: Path,
     unresolved_path: Path,
-    pope_adjudication_path: Path,
     b3_contract_path: Path,
     b1_contract_path: Path,
     output_path: Path,
 ) -> dict[str, Any]:
-    residual = json.loads(residual_path.read_text(encoding="utf-8"))
+    residual = json.loads(residual34_path.read_text(encoding="utf-8"))
     unresolved = json.loads(unresolved_path.read_text(encoding="utf-8"))
-    pope = json.loads(pope_adjudication_path.read_text(encoding="utf-8"))
     b3 = json.loads(b3_contract_path.read_text(encoding="utf-8"))
     b1_rows = _load_b1(b1_contract_path)
 
-    for label, payload in (
-        ("residual", residual),
-        ("unresolved", unresolved),
-        ("pope", pope),
-        ("b3", b3),
-    ):
-        _assert_boundary(payload, label=label)
+    _assert_boundary(residual, label="residual34")
+    _assert_boundary(unresolved, label="unresolved")
 
-    if residual.get("residualRows") != EXPECTED_RESIDUAL_ROWS:
-        raise ValueError("residual continuity row count changed")
-    if residual.get("safePriorEvidenceRows") != 175:
-        raise ValueError("safe prior-evidence partition changed")
-    if residual.get("conflictingPriorRows") != 1:
-        raise ValueError("residual conflict partition changed")
-    if residual.get("unmatchedRows") != EXPECTED_POST_POPE_ROWS:
-        raise ValueError("residual unmatched partition changed")
+    b3_required = {
+        "researchOnly": True,
+        "performanceRead": False,
+        "priceFieldsRead": [],
+        "oosOpened": False,
+        "productionScoringChanged": False,
+        "classifiedRows": 264,
+        "finalResolutionContractCreated": True,
+        "correctedPerformanceOpened": False,
+    }
+    for key, expected in b3_required.items():
+        if b3.get(key) != expected:
+            raise ValueError(f"B3 final continuity contract mismatch: {key}")
 
-    if pope.get("status") != "PHASE1_FEATURE_TOURNAMENT_POPE_CONFLICT_ADJUDICATED":
-        raise ValueError("POPE conflict is not adjudicated")
-    if pope.get("remainingPrimaryEvidenceRows") != EXPECTED_POST_POPE_ROWS:
-        raise ValueError("POPE adjudication residual count changed")
-    pope_key = _semantic_key(pope["resolution"])
+    residual_required = {
+        "status": "PHASE1_FEATURE_TOURNAMENT_RESIDUAL34_SCOPE_FROZEN",
+        "sourceResidual35Rows": 35,
+        "safePriorEvidenceRows": 175,
+        "popeAdjudicatedRows": 1,
+        "residualRows": EXPECTED_RESIDUAL_ROWS,
+        "resolutionComplete": False,
+        "featureDiscoveryOutcomesOpened": False,
+    }
+    for key, expected in residual_required.items():
+        if residual.get(key) != expected:
+            raise ValueError(f"residual34 contract mismatch: {key}")
 
     if unresolved.get("unresolvedRows") != 210:
         raise ValueError("Stage-B unresolved scope row count changed")
@@ -285,15 +289,14 @@ def run(
     if not isinstance(b3_rows, list) or len(b3_rows) != 264:
         raise ValueError("B3 final continuity contract changed")
 
-    source_rows = [
-        item
-        for item in residual["rows"]
-        if _semantic_key(item) != pope_key
-    ]
-    if len(source_rows) != EXPECTED_POST_POPE_ROWS:
-        raise ValueError("post-POPE residual row count changed")
-    if any(item.get("matchStatus") != "NO_PRIOR_EVIDENCE_MATCH" for item in source_rows):
-        raise ValueError("post-POPE scope contains a non-unmatched row")
+    source_rows = list(residual["rows"])
+    if len(source_rows) != EXPECTED_RESIDUAL_ROWS:
+        raise ValueError("residual34 row count changed")
+    if any(
+        item.get("matchStatus") != "NO_PRIOR_EVIDENCE_MATCH"
+        for item in source_rows
+    ):
+        raise ValueError("residual34 contains a non-unmatched row")
 
     audited: list[dict[str, Any]] = []
     for row in source_rows:
@@ -391,8 +394,7 @@ def run(
         "oosOpened": False,
         "productionScoringChanged": False,
         "sourceResidualRows": EXPECTED_RESIDUAL_ROWS,
-        "popeAdjudicatedRows": 1,
-        "postPOPEResidualRows": len(audited),
+        "auditedRows": len(audited),
         "providerRows": provider_rows,
         "providerActionReusableRows": (
             categories["PROVIDER_ACTION_REUSE_B3"]
@@ -428,18 +430,16 @@ def run(
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--residual", type=Path, required=True)
+    parser.add_argument("--residual34", type=Path, required=True)
     parser.add_argument("--unresolved", type=Path, required=True)
-    parser.add_argument("--pope-adjudication", type=Path, required=True)
     parser.add_argument("--b3-contract", type=Path, required=True)
     parser.add_argument("--b1-contract", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
     result = run(
-        residual_path=args.residual,
+        residual34_path=args.residual34,
         unresolved_path=args.unresolved,
-        pope_adjudication_path=args.pope_adjudication,
         b3_contract_path=args.b3_contract,
         b1_contract_path=args.b1_contract,
         output_path=args.output,
