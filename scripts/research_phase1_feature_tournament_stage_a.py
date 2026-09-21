@@ -10,14 +10,13 @@ import json
 import math
 import sqlite3
 import statistics
-from collections import Counter, defaultdict
+from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import exchange_calendars as xcals
 import pandas as pd
-
 import research_market_event_audit as market_audit
 import research_market_event_audit_v2 as p0
 
@@ -704,7 +703,7 @@ def run(
     raw_paths = _market_paths(
         raw_root,
         "raw-feature-market",
-        range(2015, 2021),
+        range(2016, 2021),
     )
     adjusted_db = output / "stage-a-adjusted.sqlite"
     raw_db = output / "stage-a-raw.sqlite"
