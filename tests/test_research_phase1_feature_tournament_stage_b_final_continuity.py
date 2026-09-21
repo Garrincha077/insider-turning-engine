@@ -90,6 +90,8 @@ def test_prior_resolution_preserves_multicomponent_basket() -> None:
         "MIMO",
         "MIMO WS",
     }
+    assert all("quantityPerEntryUnit" in item for item in result["basket"])
+    assert all("quantity" not in item for item in result["basket"])
 
 
 def test_prior_resolution_normalizes_legacy_b1_quantity() -> None:
