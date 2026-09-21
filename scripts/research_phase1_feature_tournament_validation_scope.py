@@ -11,6 +11,7 @@ from datetime import UTC
 from pathlib import Path
 from typing import Any
 
+import exchange_calendars as xcals
 import pandas as pd
 import research_market_event_audit as market_audit
 import research_market_event_audit_v2 as p0
@@ -131,14 +132,48 @@ def _f2_category(
     return "UNKNOWN"
 
 
+def _assert_confirmation(path: Path) -> None:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    required = {
+        "status": "PHASE1_INSIDER_FEATURE_TOURNAMENT_CONFIRMATION_COMPLETE",
+        "definitionId": "PHASE1_INSIDER_FEATURE_TOURNAMENT_V1",
+        "confirmedCandidateCount": 1,
+        "confirmationComplete": True,
+        "validationOpened": False,
+        "validationEventOutcomesRead": False,
+        "oosOpened": False,
+        "productionScoringChanged": False,
+    }
+    for key, expected in required.items():
+        if payload.get(key) != expected:
+            raise ValueError(f"confirmation contract mismatch: {key}")
+    confirmed = payload.get("confirmedCandidates")
+    if confirmed != [
+        {
+            "family": "F2",
+            "variantId": "F2_DIRECT_VS_INDIRECT",
+            "coverageClass": "GENERAL_ELIGIBLE",
+            "frozenGroupDefinition": {
+                "kind": "F2_DYNAMIC",
+                "sourceFeature": "F2_DIRECT_VS_INDIRECT",
+                "preferred": "INDIRECT_ONLY",
+                "complement": "DIRECT_ONLY",
+            },
+        }
+    ]:
+        raise ValueError("confirmed candidate changed")
+
+
 def run(
     *,
+    confirmation_results: Path,
     sec_effective: Path,
     sec_revisions: Path,
     market_root: Path,
     output: Path,
 ) -> dict[str, Any]:
     output.mkdir(parents=True, exist_ok=True)
+    _assert_confirmation(confirmation_results)
     if (market_root / "2023").exists():
         raise ValueError("sealed 2023 market directory mounted")
 
@@ -163,7 +198,7 @@ def run(
         for row in validation_candidates
     }
     revisions = stage_a._load_revisions(sec_revisions, issuers)
-    calendar = p0.xcals.get_calendar("XNYS")
+    calendar = xcals.get_calendar("XNYS")
     sessions = p0._expected_sessions()
     session_index = {day: idx for idx, day in enumerate(sessions)}
 
@@ -321,6 +356,7 @@ def run(
 
 def main() -> None:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--confirmation-results", type=Path, required=True)
     parser.add_argument("--sec-effective", type=Path, required=True)
     parser.add_argument("--sec-revisions", type=Path, required=True)
     parser.add_argument("--market-root", type=Path, required=True)
@@ -329,6 +365,7 @@ def main() -> None:
     print(
         json.dumps(
             run(
+                confirmation_results=args.confirmation_results,
                 sec_effective=args.sec_effective,
                 sec_revisions=args.sec_revisions,
                 market_root=args.market_root,
