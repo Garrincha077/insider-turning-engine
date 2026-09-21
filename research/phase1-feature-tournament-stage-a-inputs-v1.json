@@ -54,12 +54,17 @@
   },
   "expectedScope": {
     "benchmark": "B0_ANY_QUALIFIED_PURCHASE",
-    "exactEntryEvents": 24192,
+    "exactEntryEvents": 24190,
     "distinctIssuers": 4729,
     "dedupSessions": 20,
     "evaluationPeriod": "2016-2020",
     "discoveryPeriod": "2016-2018",
-    "confirmationPeriod": "2019-2020"
+    "confirmationPeriod": "2019-2020",
+    "evaluationBoundaryRule": "evaluationSession <= 2020-12-31; excludes two canonical B0 knowledge-year-2020 spillovers evaluated on 2021-01-04",
+    "excludedBoundarySpillovers": [
+      "0001708176|HOFV|2021-01-04|2021-01-05",
+      "0001641631|XAIR|2021-01-04|2021-01-05"
+    ]
   },
   "marketCapStatus": "PIT_BLOCKED_PENDING_RAW_PRICE_AND_PIT_SHARES",
   "stageARunAllowed": true
