@@ -5,6 +5,7 @@ import fixture from './fixtures/research-v2.json' with { type: 'json' };
 import { ready, section } from './helpers';
 import originalSettings from './public/data/settings-status.json' with { type: 'json' };
 import type { SettingsStatus } from '../lib/operations-data';
+import type { ResearchSnapshot } from '../lib/research-v2';
 
 type Fixture = Omit<typeof fixture, 'economicTransactions'> & { economicTransactions: Array<Omit<typeof fixture.economicTransactions[number], 'shares'> & { shares: number | null }> };
 
@@ -90,6 +91,30 @@ test('v2 facts drive scoreless Radar, real clusters, basis and source-linked tap
   await expect(page.getByText('Informational daily digest · draft preview', { exact: true })).toBeVisible();
   await expect(page.getByText(/This preview does not send a message/)).toBeVisible();
   expect(chartErrors).toEqual([]);
+});
+
+test('Insider Ratio counts economic events once and exposes live and monthly views', async ({ page }) => {
+  await v2(page, (value) => {
+    const research = value as unknown as ResearchSnapshot;
+    research.coverage.expectedSecDays = ['2026-08-28', '2026-08-31'];
+    research.coverage.days = research.coverage.expectedSecDays.map((day) => ({ day,
+      discoveredFilings: 1, storedFilings: 1, parseRows: 1, quarantinedRows: 0,
+      failures: 0, complete: true }));
+    research.economicTransactions.forEach((row) => { row.secDay = '2026-08-28'; });
+    research.economicTransactions.push({ ...research.economicTransactions[0],
+      eventId: 'evt_ratio_sale', accession: '0001234567-26-000003', code: 'S', side: 'SELL',
+      value: 500, secDay: '2026-08-31', owners: [research.economicTransactions[0].owners[0]] });
+    research.coverage.economicEvents += 1;
+    research.coverage.canonicalOwnerRows += 1;
+  });
+  await ready(page);
+  await section(page, 'Insider Ratio');
+  await expect(page.getByText('Latest complete SEC day', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('insider-ratio-current')).toHaveText('2×');
+  await expect(page.getByRole('button', { name: 'Daily rolling 30D' })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Calendar months' }).click();
+  await expect(page.getByRole('button', { name: 'Calendar months' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByText(/Each economic event is counted once/)).toBeVisible();
 });
 
 test('v2 semantic corruption cannot fall back to the legacy snapshot', async ({ page }) => {

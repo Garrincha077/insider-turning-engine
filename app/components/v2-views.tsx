@@ -15,6 +15,89 @@ function ratio(numerator: number, denominator: number): string {
   return `${metric(numerator / denominator, 2)}×`;
 }
 
+type RatioPoint = { label: string; ratio: number | null; buys: number; sales: number; partial: boolean };
+
+function priorDate(day: string, offset: number): string {
+  const value = new Date(`${day}T00:00:00Z`);
+  value.setUTCDate(value.getUTCDate() - offset);
+  return value.toISOString().slice(0, 10);
+}
+
+/** Factual event-count barometer inspired by the common monthly buy/sell ratio. */
+export function InsiderRatioV2({ data }: { data: ResearchSnapshot }) {
+  const companies = new Map(data.companies.map((row) => [row.issuerCik, row]));
+  const sectors = [...new Set(data.companies.map((row) => row.sector ?? 'Unmapped'))].sort();
+  const [selectedSector, setSelectedSector] = usePreference('insider-ratio.sector', 'All sectors', isString);
+  const [savedMode, setMode] = usePreference('insider-ratio.mode', 'rolling', isString);
+  const mode = savedMode === 'monthly' ? 'monthly' : 'rolling';
+  const completeDays = data.coverage.days.filter((row) => row.complete).map((row) => row.day).sort();
+  const latestDay = completeDays.at(-1) ?? null;
+  const eligible = data.economicTransactions.filter((row) => row.aggregateEligible
+    && row.processing === 'EFFECTIVE' && row.table === 'NON_DERIVATIVE'
+    && (row.side === 'BUY' || row.side === 'SELL')
+    && (selectedSector === 'All sectors'
+      || (companies.get(row.issuerCik)?.sector ?? 'Unmapped') === selectedSector));
+  const unavailableForHistory = eligible.filter((row) => row.secDay == null).length;
+
+  const rolling: RatioPoint[] = completeDays.map((day) => {
+    const start = priorDate(day, 29);
+    const rows = eligible.filter((row) => row.secDay != null && row.secDay <= day
+      && row.transactionDate >= start && row.transactionDate <= day);
+    const buys = rows.filter((row) => row.side === 'BUY').length;
+    const sales = rows.filter((row) => row.side === 'SELL').length;
+    return { label: day, ratio: sales ? buys / sales : null, buys, sales, partial: false };
+  });
+  const current = rolling.at(-1) ?? null;
+  const monthlyMap = new Map<string, { buys: number; sales: number }>();
+  for (const row of eligible) {
+    if (!latestDay || row.secDay == null || row.secDay > latestDay) continue;
+    const month = row.transactionDate.slice(0, 7);
+    const bucket = monthlyMap.get(month) ?? { buys: 0, sales: 0 };
+    bucket[row.side === 'BUY' ? 'buys' : 'sales']++;
+    monthlyMap.set(month, bucket);
+  }
+  const firstObserved = completeDays[0] ?? '';
+  const finalObserved = latestDay ?? '';
+  const monthly: RatioPoint[] = [...monthlyMap].sort(([a], [b]) => a.localeCompare(b)).map(([month, bucket]) => ({
+    label: month,
+    ratio: bucket.sales ? bucket.buys / bucket.sales : null,
+    buys: bucket.buys,
+    sales: bucket.sales,
+    partial: month === firstObserved.slice(0, 7) || month === finalObserved.slice(0, 7),
+  }));
+  const shown = mode === 'monthly' ? monthly : rolling;
+  const valid = rolling.flatMap((row) => row.ratio == null ? [] : [row.ratio]);
+  const average = valid.length ? valid.reduce((sum, value) => sum + value, 0) / valid.length : null;
+  const chartValid = shown.flatMap((row) => row.ratio == null ? [] : [row.ratio]);
+  const chartAverage = chartValid.length ? chartValid.reduce((sum, value) => sum + value, 0) / chartValid.length : null;
+  const tooltip = (params: unknown) => {
+    const list = Array.isArray(params) ? params : [params];
+    const index = Number((list[0] as { dataIndex?: number } | undefined)?.dataIndex ?? -1);
+    const row = shown[index];
+    if (!row) return '';
+    return `${row.label}${row.partial ? ' (partial)' : ''}<br/>Buy events: ${row.buys}<br/>Sale events: ${row.sales}<br/>Buy / sell: ${row.ratio == null ? '— (no sale denominator)' : `${metric(row.ratio, 2)}×`}`;
+  };
+
+  return <div className="space-y-5">
+    <section className="rounded-xl border border-emerald-400/30 bg-emerald-400/5 p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-semibold">SEC insider buy/sell event ratio</h2><p className="mt-2 max-w-4xl text-sm leading-6 text-muted-foreground">Purchase events divided by sale events. The current reading is a rolling 30-calendar-day window recalculated after each complete SEC daily-index cycle, without a three-month publication delay.</p></div><span className="rounded-full border border-emerald-400/40 px-3 py-1 text-xs text-emerald-200">Daily refreshed · not intraday</span></div>
+    </section>
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{[
+      ['Current 30D ratio', current?.ratio == null ? '—' : `${metric(current.ratio, 2)}×`, 'insider-ratio-current'],
+      ['Buy events · 30D', current ? String(current.buys) : '—', undefined],
+      ['Sale events · 30D', current ? String(current.sales) : '—', undefined],
+      ['Observed 30D average', average == null ? '—' : `${metric(average, 2)}×`, undefined],
+      ['Latest complete SEC day', latestDay ?? 'Unavailable', undefined],
+    ].map(([label, value, testId]) => <article key={label} className="rounded-xl border border-border bg-card p-4"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-3 font-mono text-lg" data-testid={testId}>{value}</p></article>)}</div>
+    <section className="rounded-xl border border-border bg-card p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-base font-semibold">Observed ratio history</h2><p className="mt-1 text-xs text-muted-foreground">Event counts, not transaction dollars</p></div><div className="flex flex-wrap gap-2"><select aria-label="Ratio sector" className={controlClass} value={selectedSector} onChange={(event) => setSelectedSector(event.target.value)}><option>All sectors</option>{sectors.map((sector) => <option key={sector}>{sector}</option>)}</select><button aria-pressed={mode === 'rolling'} className={controlClass} onClick={() => setMode('rolling')}>Daily rolling 30D</button><button aria-pressed={mode === 'monthly'} className={controlClass} onClick={() => setMode('monthly')}>Calendar months</button></div></div>
+      <p className="my-3 text-sm leading-6 text-muted-foreground">{mode === 'rolling' ? 'Each point uses transactions in the preceding 30 calendar days that were available by that SEC day. This prevents later filings from leaking backward into earlier points.' : 'Calendar-month observations use transaction dates and all filings available by the latest complete SEC day. An asterisk marks a partial boundary month.'}</p>
+      {!shown.length ? <p className="py-8 text-sm text-muted-foreground">No complete SEC-day history is available for this selection.</p> : <EChart style={{ height: 390 }} option={{ textStyle: { color: '#cbd5e1' }, tooltip: { trigger: 'axis', formatter: tooltip }, grid: { left: 62, right: 24, top: 36, bottom: 55 }, xAxis: { type: 'category', data: shown.map((row) => `${row.label}${row.partial ? ' *' : ''}`), axisLabel: { hideOverlap: true } }, yAxis: { type: 'value', min: 0, name: 'Buy / sell events', axisLabel: { formatter: (value: number) => `${metric(value, 1)}×` }, splitLine: { lineStyle: { color: '#263446' } } }, series: [{ type: mode === 'monthly' ? 'bar' : 'line', name: 'Buy / sell event ratio', data: shown.map((row) => row.ratio), connectNulls: false, showSymbol: mode === 'monthly', smooth: false, itemStyle: { color: '#34d399' }, lineStyle: { color: '#34d399', width: 2 }, areaStyle: mode === 'rolling' ? { color: 'rgba(52, 211, 153, 0.10)' } : undefined, markLine: chartAverage == null ? undefined : { silent: true, symbol: 'none', label: { formatter: `Observed average ${metric(chartAverage, 2)}×`, color: '#94a3b8' }, lineStyle: { type: 'dashed', color: '#64748b' }, data: [{ yAxis: chartAverage }] } }] }} />}
+    </section>
+    <section className="rounded-xl border border-border bg-card p-5 text-sm leading-6 text-muted-foreground"><h2 className="text-base font-semibold text-foreground">How to read it</h2><p className="mt-3">Each economic event is counted once, even when a filing has joint reporting owners. Only effective, qualified, non-derivative open-market P and S events with resolved eligible-company identity enter the ratio. A higher value means more observed purchase events relative to sale events; it is context, not a trading signal.</p><p className="mt-3">A missing sale denominator is shown as <strong className="text-foreground">—</strong>, never 0× or infinity. {unavailableForHistory ? `${unavailableForHistory.toLocaleString('en-US')} otherwise eligible events lack SEC-day lineage and are excluded from the historical curve. ` : ''}{data.coverage.scope}. The observed universe and history differ from GuruFocus, so the levels are not expected to match.</p></section>
+  </div>;
+}
+
 export function ActivityV2({ data }: { data: ResearchSnapshot }) {
   const companies = new Map(data.companies.map((row) => [row.issuerCik, row]));
   const pulseEnd = data.asOf.slice(0, 10);
