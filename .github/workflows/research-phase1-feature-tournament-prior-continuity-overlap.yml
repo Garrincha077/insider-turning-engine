@@ -1,0 +1,120 @@
+name: Measure feature tournament prior continuity overlap
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-prior-continuity-overlap.yml"
+      - "scripts/research_phase1_feature_tournament_prior_continuity_overlap.py"
+      - "tests/test_research_phase1_feature_tournament_prior_continuity_overlap.py"
+      - "docs/research-phase1-feature-tournament-prior-continuity-overlap-gate.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-feature-tournament-prior-continuity-overlap-v1
+  cancel-in-progress: false
+
+env:
+  SCOPE_RELEASE: research-phase1-feature-tournament-stage-b-unresolved-scope-v1
+  SCOPE_ASSET: stage-b-unresolved-scope.json
+  SCOPE_DIGEST: sha256:4882e009646ea117d123b5f95ae41ea700203dd470d3b24be2cd1592eebe9afd
+  B1_DIGEST: sha256:88325d71dd9da1f18bdc2c2695933860e087addd586def8b4271ed768d121430
+  B3_RELEASE: research-phase1-b3-final-continuity-contract-v1
+  B3_ASSET: b3-final-continuity-contract.json
+  B3_DIGEST: sha256:22e1af6713eb0c0f73604a150787ac9248f044eef63e1f88b70b31697aede163
+  RESULT_RELEASE: research-phase1-feature-tournament-prior-continuity-overlap-v1
+
+jobs:
+  overlap:
+    name: Performance-blind prior continuity overlap
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+
+      - name: Lint and test overlap semantics
+        run: |
+          uv run ruff check scripts/research_phase1_feature_tournament_prior_continuity_overlap.py tests/test_research_phase1_feature_tournament_prior_continuity_overlap.py
+          uv run pytest -q tests/test_research_phase1_feature_tournament_prior_continuity_overlap.py
+
+      - name: Verify and download immutable inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/input work/output
+
+          test "sha256:$(sha256sum research/b1-security-continuity-resolution-v1.json | cut -d' ' -f1)" = "$B1_DIGEST"
+
+          gh release download "$SCOPE_RELEASE" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$SCOPE_ASSET" --dir work/input
+          test "sha256:$(sha256sum "work/input/$SCOPE_ASSET" | cut -d' ' -f1)" = "$SCOPE_DIGEST"
+
+          gh release download "$B3_RELEASE" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$B3_ASSET" --dir work/input
+          test "sha256:$(sha256sum "work/input/$B3_ASSET" | cut -d' ' -f1)" = "$B3_DIGEST"
+
+      - name: Measure exact prior-evidence overlap
+        run: >-
+          uv run python scripts/research_phase1_feature_tournament_prior_continuity_overlap.py
+          --unresolved-scope "work/input/$SCOPE_ASSET"
+          --b1-contract research/b1-security-continuity-resolution-v1.json
+          --b3-contract "work/input/$B3_ASSET"
+          --output work/output/prior-continuity-overlap.json
+
+      - name: Assert research boundary and complete partition
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          p=json.load(open("work/output/prior-continuity-overlap.json"))
+          assert p["status"]=="PHASE1_FEATURE_TOURNAMENT_PRIOR_CONTINUITY_OVERLAP_COMPLETE"
+          assert p["sourceUnresolvedRows"]==210
+          assert p["safeReusableRows"] + p["conflictingPriorRows"] + p["unmatchedRows"] == 210
+          assert p["performanceRead"] is False
+          assert p["priceFieldsRead"]==[]
+          assert p["featureOutcomesRead"] is False
+          assert p["resolutionApplied"] is False
+          assert p["featureDiscoveryOutcomesOpened"] is False
+          assert p["validationOpened"] is False
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          print(json.dumps({k:p[k] for k in (
+            "sourceHitRows","sourceCombinationRows","safeReusableRows",
+            "conflictingPriorRows","unmatchedRows",
+            "safeReusableSemanticKeySha256"
+          )}, indent=2, sort_keys=True))
+          PY
+
+      - name: Publish immutable overlap result
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" \
+              --title "Phase-1 feature tournament prior continuity overlap v1" \
+              --notes "Performance-blind exact-key overlap of the 210 frozen unresolved B0 tournament rows against immutable B1 and B3 continuity contracts. No resolution or feature outcome opened." \
+              --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE" work/output/prior-continuity-overlap.json \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: feature-tournament-prior-continuity-overlap-${{ github.run_id }}
+          path: work/output/prior-continuity-overlap.json
+          retention-days: 90
