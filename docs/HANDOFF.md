@@ -11,7 +11,7 @@ This is the operational continuation point for a new ChatGPT/Codex session. Read
 3. Treat the exact-calendar P0 market audit as the authoritative market-data gate. Current tier: **C_EXPLORATORY**.
 4. Treat Phase-1 B0, B1, B2 and B4 development outputs as completed descriptive/research benchmarks, not production evidence.
 5. Treat the B3 P/S history, B3 amendment reconciliation, and B3 definition freeze as completed data/methodology gates.
-6. Current active task: implement the predeclared B3 continuity-corrected development performance using the immutable 264/264 final continuity contract; corrected performance has not yet been opened.
+6. Current active task: synthesize the completed B0/B1/B2/B3/B4 development benchmark family and freeze the insider-only feature-tournament design. B3 continuity-corrected development and corrected robustness are complete; corrected progression remains BLOCK_HAC_AND_OOS.
 7. Keep sealed OOS **2023+ unopened**.
 8. Do **not** change production scoring, weights, thresholds, signal states, alerts, or production methodology unless the owner explicitly asks.
 
@@ -110,7 +110,7 @@ Policy remains deterministic/PIT-safe: original state remains effective until am
 
 ---
 
-## B3 COMPANY NET BUYING — CURRENT STATUS 2026-09-20
+## B3 COMPANY NET BUYING — CURRENT STATUS 2026-09-21
 
 B3 is no longer blocked by missing sale history.
 
@@ -252,45 +252,81 @@ Persistent release: research-phase1-b3-identity-v1.
 Identity asset SHA-256:
 be808447f2f76bf34904f1950a0639a4b515a7a241165b4ea6267aaacc2a4d91.
 
-### Current active gate — B3 continuity-corrected development performance
+### B3 continuity-corrected development + robustness — COMPLETE
 
-B3 uncorrected development run 35502095184 remains the frozen descriptive
-starting point. The uncorrected robustness run 35502779482 remains
-`BLOCK_HAC_AND_OOS` because the 126-session top-1%-removed mean is -0.1974%.
-Do not retune that rule.
+The performance-blind continuity program is complete and the corrected
+development result has now been computed under a gate frozen before corrected
+outcomes were observed.
 
-The full performance-blind security-continuity program is now complete:
+Continuity contract:
 
-- original frozen unresolved scope: **264 event-horizon rows**;
-- final residual-13 resolution run 35540472056: **13 / 13 resolved**;
-- final continuity-contract run 35540610883: **SUCCESS**;
+- final continuity-contract run **35540610883** — SUCCESS;
 - classified rows: **264 / 264**;
 - unresolved rows: **0**;
-- exact classified/frozen-scope key SHA-256:
-  `sha256:6125fe42a9559ce937d385b4f49d1a74d33ce1caad7f5ec8487ce72bf854082b`;
-- final contract release: `research-phase1-b3-final-continuity-contract-v1`;
+- final contract release:
+  `research-phase1-b3-final-continuity-contract-v1`;
 - final contract asset SHA-256:
-  `sha256:22e1af6713eb0c0f73604a150787ac9248f044eef63e1f88b70b31697aede163`;
-- final resolution contract created: **true**;
-- corrected performance opened: **false**;
+  `sha256:22e1af6713eb0c0f73604a150787ac9248f044eef63e1f88b70b31697aede163`.
+
+Corrected development:
+
+- gate frozen before corrected outcomes:
+  `docs/research-phase1-b3-continuity-corrected-performance-gate.md`;
+- workflow run **35634832574** — SUCCESS;
+- release:
+  `research-phase1-b3-continuity-corrected-development-v1`;
+- corrected asset SHA-256:
+  `sha256:b7b058a2e82cb072876804178e9af6e247fa9dc70b6f93a3f3c8e32ffe67c8be`;
+- exact-entry events: **29,930**;
+- event-horizon rows: **119,720**;
+- contract-applied rows: **264**;
+- 126-session matured outcomes: **29,072**;
+- 126-session raw mean / median: **+13.9458% / +6.5495%**;
+- 126-session SPY excess mean / median: **+4.0286% / -2.7248%**;
+- 126-session excess win rate: **44.8473%**;
+- MAE was not synthetically recomputed across holder transformations.
+
+The corrected 126-session SPY-excess mean is only about **0.063 percentage
+points lower** than the canonical uncorrected mean. Continuity correction
+therefore does not materially change the descriptive B3 development profile.
+
+Corrected robustness semantics were also frozen before corrected outcomes were
+observed:
+
+- gate:
+  `docs/research-phase1-b3-corrected-robustness-gate.md`;
+- workflow run **35635187501** — SUCCESS;
+- release:
+  `research-phase1-b3-continuity-corrected-robustness-v1`;
+- asset SHA-256:
+  `sha256:06e5a5b133de599d6179fbbb6a2dc9cdcc47e906f3b617564da5a818fac95e96`.
+
+Primary 126-session corrected robustness:
+
+- event-weighted SPY excess mean: **+4.0286%**;
+- issuer equal-weight mean: **+5.0390%**;
+- entry-session equal-weight mean: **+3.3464%**;
+- positive-mean development years: **3 / 5**;
+- top-1%-removed mean: **-0.2021%**;
+- blocking warning:
+  `top1PctRemovedMeanNonPositive=true`;
+- progression: **BLOCK_HAC_AND_OOS**.
+
+The corrected robustness conclusion therefore matches the original robustness
+conclusion: B3 remains materially dependent on its extreme right tail.
+Do not retune the warning rule.
+
+Current boundary:
+
+- B3 corrected development: **complete**;
+- corrected robustness: **complete**;
+- HAC: **not opened**;
+- validation/OOS progression from this benchmark: **blocked**;
 - 2023+ OOS: **sealed**;
 - production scoring: **unchanged**.
 
-Final continuity classification counts:
-
-- SAME_SECURITY_CONTINUITY: 180
-- SYMBOL_CHANGED_SAME_SECURITY: 11
-- TRANSFORMED_HOLDER_CONSIDERATION: 71
-- TRANSFORMED_MULTI_COMPONENT_CONSIDERATION: 1
-- DISCONTINUOUS_NO_COMPLETE_VALUATION: 1
-
-The next implementation must consume this immutable final contract and preserve
-the frozen exact-XNYS target dates, missing-data policy, cash convention and
-multi-component valuation rules. NBA.U must retain both MIMO common and MIMO WS
-warrant components; incomplete exact-session basket valuation must fail closed.
-
-Corrected development performance may be opened only by a separately frozen
-research gate. Validation, HAC/OOS progression and 2023+ remain closed.
+See
+`docs/progress-2026-09-21-b3-corrected-development-robustness.md`.
 
 ---
 
@@ -432,7 +468,7 @@ The current frozen/research benchmark family is:
 | **B0** | any qualified open-market purchase | development descriptive run complete |
 | **B1** | canonical CMP-style opportunistic purchase | development run + continuity-corrected robustness/tail/year/temporal-clustering work complete; formal OOS still blocked |
 | **B2** | independent-owner cluster, primary 30 days and >=2 owner CIKs | development run complete |
-| **B3** | company net buying using complete PIT buy/sale history | 264/264 continuity contract complete; corrected development performance is the active next gate; HAC/OOS blocked |
+| **B3** | company net buying using complete PIT buy/sale history | continuity-corrected development + frozen robustness complete; BLOCK_HAC_AND_OOS |
 | **B4** | exact same-issuer + same-XNYS-session intersection of B1 and B2 | development run complete |
 
 Primary horizons remain 21/63/126/252 XNYS sessions, with 126 primary.
@@ -466,23 +502,23 @@ Do not open OOS until transaction eligibility, transforms, benchmark family, fea
 
 ## NEXT EXECUTION SEQUENCE
 
-1. Freeze the **B3 continuity-corrected development-performance gate** before
-   reading corrected outcomes.
-2. Consume only `research-phase1-b3-final-continuity-contract-v1`.
-3. Preserve exact 21/63/126/252 XNYS targets, 126 primary, and the existing
-   exact-session no-substitution missing-data rule.
-4. Apply same-security/symbol-change/holder-transformation terms exactly from
-   the final contract.
-5. For multi-component consideration, require exact target-session values for
-   every component or mark the row incomplete; do not impute or discard a
-   component.
-6. Compute corrected 2016-2020 development results only, with data bounded
-   through 2022-12-31.
-7. Reapply the already frozen B3 robustness semantics without retuning.
-8. Keep HAC/OOS blocked unless those frozen corrected robustness rules permit
-   progression.
-9. Compare B0/B1/B2/B3/B4 only after corrected B3 data validity is complete.
-10. Keep 2023+ sealed until explicit owner authorization after all prior gates.
+1. Treat B0/B1/B2/B3/B4 as a completed **development benchmark family** and
+   write a compact benchmark-family synthesis using the corrected B3 result.
+2. Preserve the existing robustness caveats: B1 and B3 are tail-sensitive and
+   neither may be promoted to formal-alpha evidence.
+3. Before any new feature performance is read, freeze the **insider-only
+   feature-tournament candidate set**, transforms, missingness rules,
+   comparison metric, multiple-testing control and selection/stability rules.
+4. Keep the feature tournament development-only. Do not use 2021-2022 to tune
+   feature definitions or weights.
+5. Require candidate features to beat transparent simple insider benchmarks in
+   a stability-aware way rather than merely improve event-weighted arithmetic
+   mean.
+6. Only after the insider-only feature set is frozen and defensible, test the
+   Turning/technical-confirmation overlay as a separate incremental layer.
+7. HAC remains closed while the frozen B1/B3 progression rules block it.
+8. Keep 2023+ sealed until methodology and the later validation stage are
+   explicitly authorized and frozen.
 
 
 ---
