@@ -1,6 +1,10 @@
 # Phase-1 feature tournament Stage-B continuity-scope gate
 
-Frozen: 2026-09-21 before Stage-A coverage/cutpoint output was observed.
+Originally frozen 2026-09-21 before Stage-A coverage/cutpoint output was
+observed. The B0 evaluation-session boundary correction from 24,192 to 24,190
+events was frozen before the successful strict Stage-A run and before any
+Stage-B feature outcome is opened. This document records that corrected,
+immutable Stage-A scope.
 
 ## Purpose
 
@@ -9,16 +13,27 @@ security-continuity audit before any insider-feature forward outcome is opened.
 
 ## Source
 
-Only the immutable Stage-A feature matrix may define the event universe.
+Only the immutable Stage-A feature matrix from release
+`research-phase1-insider-feature-tournament-stage-a-v1` may define the event
+universe.
+
+Pinned Stage-A archive:
+
+- asset: `phase1-insider-feature-tournament-stage-a-v1.tar.gz`;
+- SHA-256: `sha256:06bd11f7ea2352d95e0b3bcdb997af869b6b020c46c224e5ac942bb9a0eccb0d`.
 
 Expected frozen event scope:
 
 - benchmark event unit: B0 exact-entry issuer event;
-- events: **24,192**;
+- events: **24,190**;
 - distinct issuers: **4,729**;
 - evaluation sessions: 2016-2020;
 - issuer deduplication: 20 XNYS sessions;
 - no forward-return, SPY-excess, MAE or robustness field may be present/read.
+
+The two previously counted boundary spillovers whose first eligible evaluation
+session is 2021-01-04 are outside the tournament's 2016-2020 evaluation-session
+scope. Their exclusion is key/date based and does not use forward outcomes.
 
 ## Event-horizon expansion
 
@@ -29,7 +44,7 @@ Every Stage-A event is expanded mechanically to the already-frozen horizons:
 - 126 XNYS sessions;
 - 252 XNYS sessions.
 
-Expected rows: **96,768**.
+Expected rows: **96,760**.
 
 Target session is exactly `horizon` XNYS sessions after the exact Stage-A
 entry session. No nearest/later market bar may define the target.
@@ -49,8 +64,7 @@ Each scope row contains exactly the identity needed by later continuity work:
 - targetExitSession.
 
 The scope-key SHA-256 is computed from those fields in eventNumber/horizon
-order and becomes immutable only after the Stage-A source asset itself is
-published and pinned.
+order and becomes immutable after the pinned Stage-A source asset is consumed.
 
 ## Boundary
 
