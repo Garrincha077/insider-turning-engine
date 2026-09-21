@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "1.0.0",
+  "contractId": "phase1-feature-tournament-validation-hsdt-primary-evidence-v1",
+  "frozenAt": "2026-09-21",
+  "researchOnly": true,
+  "performanceRead": false,
+  "priceFieldsRead": [],
+  "featureOutcomesRead": false,
+  "validationOpened": false,
+  "oosOpened": false,
+  "productionScoringChanged": false,
+  "scope": {
+    "eventNumber": 3657,
+    "issuerCik": "0001610853",
+    "ticker": "HSDT",
+    "entrySession": "2021-11-16",
+    "horizon": 126,
+    "targetExitSession": "2022-05-18",
+    "maxInternalGapSessions": 29,
+    "previousObservedSession": "2022-02-03",
+    "firstMissingSession": "2022-02-04",
+    "lastMissingSession": "2022-03-17",
+    "nextObservedSession": "2022-03-18"
+  },
+  "primaryEvidence": [
+    {
+      "issuer": "Helius Medical Technologies, Inc.",
+      "form": "10-K",
+      "accession": "0001564590-22-010124",
+      "filingDate": "2022-03-14",
+      "periodOfReport": "2021-12-31",
+      "url": "https://www.sec.gov/Archives/edgar/data/1610853/000156459022010124/hsdt-10k_20211231.htm",
+      "facts": {
+        "registrantCik": "0001610853",
+        "securityClass": "Class A Common Stock, $0.001 par value per share",
+        "tradingSymbol": "HSDT",
+        "exchange": "The Nasdaq Stock Market LLC",
+        "filingFallsInsideFrozenGap": true
+      }
+    }
+  ],
+  "adjudication": {
+    "evidenceDate": "2022-03-14",
+    "resolutionDecision": "SAME_SECURITY_CONTINUITY",
+    "transformationKind": "",
+    "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+    "successorSymbol": "HSDT",
+    "successorSharesPerEntryShare": 1.0,
+    "cashPerEntryShare": 0.0,
+    "reason": "Primary SEC filing made inside the exact frozen missing-bar interval identifies the same registrant, same Class A common stock and same HSDT Nasdaq trading symbol; the observed HSDT series resumes after the gap."
+  }
+}
