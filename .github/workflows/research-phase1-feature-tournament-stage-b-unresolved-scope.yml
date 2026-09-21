@@ -1,0 +1,121 @@
+name: Freeze feature tournament Stage B unresolved scope
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-stage-b-unresolved-scope.yml"
+      - "scripts/research_phase1_feature_tournament_stage_b_unresolved_scope.py"
+      - "tests/test_research_phase1_feature_tournament_stage_b_unresolved_scope.py"
+      - "docs/research-phase1-feature-tournament-stage-b-unresolved-scope-gate.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-feature-tournament-stage-b-unresolved-scope-v1
+  cancel-in-progress: false
+
+env:
+  SOURCE_RELEASE: research-phase1-feature-tournament-stage-b-continuity-audit-v1
+  SOURCE_ASSET: feature-tournament-stage-b-continuity-audit-v1.tar.gz
+  SOURCE_DIGEST: sha256:77066ec138f53c0572a206559294768c6c898270ba6dcc3b2429ac7ddddab88f
+  RESULT_RELEASE: research-phase1-feature-tournament-stage-b-unresolved-scope-v1
+
+jobs:
+  freeze:
+    name: Performance-blind unresolved continuity scope
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+
+      - name: Test unresolved-scope semantics
+        run: >-
+          uv run pytest -q
+          tests/test_research_phase1_feature_tournament_stage_b_unresolved_scope.py
+
+      - name: Verify pinned continuity-audit source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/source work/output
+          gh release view "$SOURCE_RELEASE" --repo "$GITHUB_REPOSITORY" --json assets > work/assets.json
+          python - <<'PY'
+          import json, os
+          assets={x["name"]:x for x in json.load(open("work/assets.json"))["assets"]}
+          asset=assets[os.environ["SOURCE_ASSET"]]
+          assert asset.get("digest")==os.environ["SOURCE_DIGEST"], asset
+          PY
+          gh release download "$SOURCE_RELEASE" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$SOURCE_ASSET" --dir work/source
+          tar -xzf "work/source/$SOURCE_ASSET" -C work/source \
+            ledger/continuity-ledger.csv ledger/summary.json
+          test -s work/source/ledger/continuity-ledger.csv
+          test -s work/source/ledger/summary.json
+
+      - name: Freeze exact 210-row unresolved scope
+        run: >-
+          uv run python scripts/research_phase1_feature_tournament_stage_b_unresolved_scope.py
+          --ledger work/source/ledger/continuity-ledger.csv
+          --summary work/source/ledger/summary.json
+          --output work/output/stage-b-unresolved-scope.json
+
+      - name: Assert frozen unresolved boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          s=json.load(open("work/output/stage-b-unresolved-scope.json"))
+          assert s["status"]=="PHASE1_FEATURE_TOURNAMENT_STAGE_B_UNRESOLVED_SCOPE_FROZEN"
+          assert s["sourceEventRows"]==24190
+          assert s["sourceEventHorizonRows"]==96760
+          assert s["unresolvedRows"]==210
+          assert s["performanceRead"] is False
+          assert s["priceFieldsRead"]==[]
+          assert s["featureOutcomesRead"] is False
+          assert s["resolutionComplete"] is False
+          assert s["featureDiscoveryOutcomesOpened"] is False
+          assert s["validationOpened"] is False
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          print(json.dumps({k:s[k] for k in (
+            "unresolvedRows","unresolvedUniqueEvents","unresolvedUniqueIssuers",
+            "unresolvedUniqueTickers","longInternalGapRows",
+            "rowsByResolutionSource","rowsByHorizon","candidateActionRowsByType",
+            "scopeKeySha256","evidenceKeySha256"
+          )}, indent=2, sort_keys=True))
+          PY
+
+      - name: Publish frozen unresolved scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" \
+              --title "Phase-1 feature tournament Stage B unresolved scope v1" \
+              --notes "Exact 210-row performance-blind unresolved continuity scope from the frozen B0 feature-tournament audit. No returns, validation or 2023+ OOS opened." \
+              --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE" \
+            work/output/stage-b-unresolved-scope.json \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: feature-tournament-stage-b-unresolved-scope-${{ github.run_id }}
+          path: work/output/stage-b-unresolved-scope.json
+          retention-days: 90
