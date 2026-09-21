@@ -68,8 +68,7 @@ jobs:
           test -s work/scope/validation-scope.csv
 
           python - <<'PY'
-          import csv, json, os
-          from scripts import research_phase1_feature_tournament_validation_scope as scope
+          import csv, hashlib, json, os
 
           summary=json.load(open("work/scope/summary.json"))
           assert summary["scopeKeySha256"]==os.environ["SCOPE_KEY"]
@@ -94,7 +93,27 @@ jobs:
               normalized["eventNumber"]=int(row["eventNumber"])
               rows.append(normalized)
           assert len(rows)==7493
-          assert scope._scope_digest(rows)==os.environ["SCOPE_KEY"]
+
+          fields=(
+              "eventNumber",
+              "issuerCik",
+              "ticker",
+              "evaluationSession",
+              "entrySession",
+              "targetExitSession",
+              "F2_DIRECT_VS_INDIRECT",
+          )
+          material=[
+              {field: row[field] for field in fields}
+              for row in rows
+          ]
+          raw_json=json.dumps(
+              material,
+              sort_keys=True,
+              separators=(",",":"),
+          ).encode()
+          digest="sha256:"+hashlib.sha256(raw_json).hexdigest()
+          assert digest==os.environ["SCOPE_KEY"]
           assert max(r["targetExitSession"] for r in rows) <= "2022-12-31"
           PY
 
