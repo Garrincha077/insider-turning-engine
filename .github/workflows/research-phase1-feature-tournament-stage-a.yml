@@ -1,4 +1,4 @@
-name: Validate feature tournament Stage A implementation
+name: Freeze feature tournament Stage A coverage and cutpoints
 
 on:
   push:
@@ -7,16 +7,31 @@ on:
     paths:
       - "scripts/research_phase1_feature_tournament_stage_a.py"
       - "tests/test_research_phase1_feature_tournament_stage_a.py"
+      - "research/phase1-feature-tournament-stage-a-inputs-v1.json"
+      - "research/phase1-insider-feature-tournament-v1.json"
+      - "docs/research-phase1-insider-feature-tournament-gate.md"
       - ".github/workflows/research-phase1-feature-tournament-stage-a.yml"
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: research-phase1-feature-tournament-stage-a-v1
+  cancel-in-progress: false
+
+env:
+  SEC_RELEASE: research-sec-amendments-v1
+  ADJUSTED_RELEASE: research-market-alpaca-v1
+  RAW_RELEASE: research-market-alpaca-raw-feature-context-v1
+  RESULT_RELEASE: research-phase1-insider-feature-tournament-stage-a-v1
 
 jobs:
   validate:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    outputs:
+      ready: ${{ steps.manifest.outputs.ready }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -26,15 +41,18 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --all-groups --frozen
+
       - name: Lint Stage A implementation
         run: >-
           uv run ruff check
           scripts/research_phase1_feature_tournament_stage_a.py
           tests/test_research_phase1_feature_tournament_stage_a.py
+
       - name: Test Stage A PIT and cutpoint rules
         run: >-
           uv run pytest -q
           tests/test_research_phase1_feature_tournament_stage_a.py
+
       - name: Assert outcome-blind source contract
         shell: bash
         run: |
@@ -54,8 +72,212 @@ jobs:
           )
           for token in forbidden_runtime_sources:
               assert token not in source, token
-
-          # Outcome-name literals are allowed only for the fail-closed
-          # FORBIDDEN_OUTPUT_TOKENS guard, not as runtime data sources.
           assert "FORBIDDEN_OUTPUT_TOKENS" in source
           PY
+
+      - name: Read immutable-input readiness gate
+        id: manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+
+          p = json.loads(
+              Path(
+                  "research/phase1-feature-tournament-stage-a-inputs-v1.json"
+              ).read_text()
+          )
+          ready = (
+              p.get("status") == "FULLY_PINNED_BEFORE_STAGE_A"
+              and p.get("stageARunAllowed") is True
+              and isinstance((p.get("rawMarket") or {}).get("assets"), dict)
+              and len(p["rawMarket"]["assets"]) == 5
+          )
+          print(f"ready={'true' if ready else 'false'}")
+          PY
+
+  freeze:
+    needs: validate
+    if: needs.validate.outputs.ready == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+
+      - name: Assert fully pinned Stage A manifest before any data read
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          p = json.loads(
+              Path(
+                  "research/phase1-feature-tournament-stage-a-inputs-v1.json"
+              ).read_text()
+          )
+          assert p["status"] == "FULLY_PINNED_BEFORE_STAGE_A"
+          assert p["stageARunAllowed"] is True
+          assert p["forwardReturnsRead"] is False
+          assert p["outcomeFieldsRead"] == []
+          assert p["validationOpened"] is False
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          assert len(p["rawMarket"]["assets"]) == 5
+          PY
+
+      - name: Download pinned SEC and market formation inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p             work/download/sec             work/download/adjusted             work/download/raw             work/sec             work/adjusted             work/raw             work/output
+
+          gh release download "$SEC_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern 'sec-amendment-reconciliation-2013-2022.tar.gz'             --dir work/download/sec
+
+          for year in 2016 2017 2018 2019 2020 2021; do
+            gh release download "$ADJUSTED_RELEASE"               --repo "$GITHUB_REPOSITORY"               --pattern "alpaca-market-$year.tar.gz"               --dir work/download/adjusted
+          done
+
+          for year in 2016 2017 2018 2019 2020; do
+            gh release download "$RAW_RELEASE"               --repo "$GITHUB_REPOSITORY"               --pattern "raw-feature-market-$year.tar.gz"               --dir work/download/raw
+          done
+
+      - name: Verify every immutable asset digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          manifest = json.loads(
+              Path(
+                  "research/phase1-feature-tournament-stage-a-inputs-v1.json"
+              ).read_text()
+          )
+
+          def digest(path: Path) -> str:
+              h = hashlib.sha256()
+              with path.open("rb") as stream:
+                  for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                      h.update(chunk)
+              return "sha256:" + h.hexdigest()
+
+          sec = manifest["secReconciliation"]
+          sec_path = Path("work/download/sec") / sec["asset"]
+          assert digest(sec_path) == sec["digest"]
+
+          for name, expected in manifest["adjustedMarket"]["assets"].items():
+              assert digest(Path("work/download/adjusted") / name) == expected
+
+          for name, expected in manifest["rawMarket"]["assets"].items():
+              assert digest(Path("work/download/raw") / name) == expected
+          PY
+
+      - name: Extract bounded formation inputs only
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -xzf             work/download/sec/sec-amendment-reconciliation-2013-2022.tar.gz             -C work/sec             effective-end-2022.jsonl reconciled-all-revisions.jsonl
+
+          for year in 2016 2017 2018 2019 2020 2021; do
+            mkdir -p "work/adjusted/$year"
+            tar -xzf "work/download/adjusted/alpaca-market-$year.tar.gz"               -C "work/adjusted/$year" "canonical-market-$year.csv"
+          done
+
+          for year in 2016 2017 2018 2019 2020; do
+            mkdir -p "work/raw/$year"
+            tar -xzf "work/download/raw/raw-feature-market-$year.tar.gz"               -C "work/raw/$year" "raw-feature-market-$year.csv"
+          done
+
+          test ! -e work/adjusted/2022/canonical-market-2022.csv
+          test ! -e work/raw/2021/raw-feature-market-2021.csv
+          test ! -e work/raw/2022/raw-feature-market-2022.csv
+          test ! -e work/raw/2023
+
+      - name: Freeze Stage A feature coverage and discovery cutpoints
+        run: >-
+          uv run python scripts/research_phase1_feature_tournament_stage_a.py
+          --sec-effective work/sec/effective-end-2022.jsonl
+          --sec-revisions work/sec/reconciled-all-revisions.jsonl
+          --adjusted-root work/adjusted
+          --raw-root work/raw
+          --output work/output
+
+      - name: Assert Stage A stayed outcome-blind
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import csv
+          import json
+          from pathlib import Path
+
+          s = json.loads(Path("work/output/summary.json").read_text())
+          assert s["status"] == (
+              "PHASE1_INSIDER_FEATURE_TOURNAMENT_STAGE_A_FROZEN"
+          )
+          assert s["definitionId"] == "PHASE1_INSIDER_FEATURE_TOURNAMENT_V1"
+          assert s["forwardReturnsRead"] is False
+          assert s["outcomeFieldsRead"] == []
+          assert s["maeRead"] is False
+          assert s["robustnessRead"] is False
+          assert s["validationOpened"] is False
+          assert s["oosOpened"] is False
+          assert s["productionScoringChanged"] is False
+          assert s["scope"]["events"] == 24192
+          assert s["scope"]["distinctIssuers"] == 4729
+          assert s["scope"]["dedupSessions"] == 20
+          assert s["marketCapStatus"] == (
+              "PIT_BLOCKED_PENDING_RAW_PRICE_AND_PIT_SHARES"
+          )
+
+          with Path("work/output/stage-a-feature-matrix.csv").open(
+              encoding="utf-8",
+              newline="",
+          ) as stream:
+              fields = [name.lower() for name in (csv.DictReader(stream).fieldnames or [])]
+          forbidden = ("raw_21", "raw_63", "raw_126", "raw_252", "excess_", "mae_")
+          assert not any(
+              token in field
+              for field in fields
+              for token in forbidden
+          )
+          PY
+
+      - name: Publish immutable Stage A freeze
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp research/phase1-insider-feature-tournament-v1.json work/output/
+          cp research/phase1-feature-tournament-stage-a-inputs-v1.json work/output/
+          cp docs/research-phase1-insider-feature-tournament-gate.md work/output/
+
+          tar -C work/output -czf             work/phase1-insider-feature-tournament-stage-a-v1.tar.gz             summary.json             stage-a-feature-matrix.csv             stage-a-cutpoints.json             phase1-insider-feature-tournament-v1.json             phase1-feature-tournament-stage-a-inputs-v1.json             research-phase1-insider-feature-tournament-gate.md
+
+          if ! gh release view "$RESULT_RELEASE"             --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE"               --repo "$GITHUB_REPOSITORY"               --title "Phase-1 insider feature tournament Stage A v1"               --notes "Outcome-blind B0-scope feature coverage and 2016-2018 distribution cutpoint freeze. No forward returns, validation or OOS opened."               --prerelease
+          fi
+
+          gh release upload "$RESULT_RELEASE"             work/phase1-insider-feature-tournament-stage-a-v1.tar.gz             work/output/summary.json             work/output/stage-a-cutpoints.json             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase1-insider-feature-tournament-stage-a-${{ github.run_id }}
+          path: work/output
+          retention-days: 90
