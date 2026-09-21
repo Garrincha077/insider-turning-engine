@@ -32,7 +32,7 @@ def _conflict() -> dict[str, object]:
             "PHASE1_FEATURE_TOURNAMENT_POPE_PRIOR_CONTINUITY_"
             "CONFLICT_FROZEN"
         ),
-        "sourceResidualScopeSha256": "sha256:test",
+        "sourceResidualScopeSha256": mod.EXPECTED_RESIDUAL_SCOPE_SHA256,
         "conflictRows": 1,
         "conflictRowSha256": "sha256:row",
         "adjudicated": False,
