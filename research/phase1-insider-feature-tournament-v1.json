@@ -288,5 +288,21 @@
     "validationOpened": false,
     "oosOpened": false,
     "turningOverlayOpened": false
+  },
+  "f4Construction": {
+    "basisWindowCalendarDays": 90,
+    "basisPopulation": "qualified non-derivative open-market purchases known and lifecycle-effective by evaluation cutoff",
+    "basisWeighting": "share-weighted transaction price",
+    "marketPriceAdjustment": "raw",
+    "trueReclaim": "prior regular session below frozen basis and evaluation session at/above basis",
+    "reclaimPersist2": "two consecutive regular sessions at/above basis preceded by a regular session below basis",
+    "reclaimPersist5": "five consecutive regular sessions at/above basis preceded by a regular session below basis",
+    "futureSessionsRead": false
+  },
+  "marketContext": {
+    "adjustedLeg": "existing research-market-alpaca-v1 for split/dividend-consistent trailing return/drawdown context",
+    "rawLeg": "research-market-alpaca-raw-feature-context-v1 for nominal price, dollar ADV and F4 basis/reclaim",
+    "pitMarketCap": "PIT_BLOCKED_PENDING_RAW_PRICE_AND_PIT_SHARES",
+    "currentMarketCapSubstitutionAllowed": false
   }
 }
