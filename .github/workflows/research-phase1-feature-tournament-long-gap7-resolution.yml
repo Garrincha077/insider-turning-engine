@@ -1,0 +1,207 @@
+name: Resolve feature tournament long-gap7 continuity rows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-long-gap7-resolution.yml"
+      - "scripts/research_phase1_feature_tournament_long_gap7_resolver.py"
+      - "tests/test_research_phase1_feature_tournament_long_gap7_resolver.py"
+      - "docs/research-phase1-feature-tournament-long-gap7-resolution-gate.md"
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: research-phase1-feature-tournament-long-gap7-resolution-v1
+  cancel-in-progress: false
+
+env:
+  LONG_GAP_RELEASE: research-phase1-feature-tournament-provider17-resolution-v1
+  LONG_GAP_ASSET: long-gap17-scope.json
+  LONG_GAP_DIGEST: sha256:c3ce1962084cedb419d89eb2b764ab070c6e4d368be5e1e18599770e6727728d
+  STAGE_GAP_RELEASE: research-phase1-feature-tournament-stage-b-gap-diagnostics-v1
+  STAGE_GAP_ASSET: gap-diagnostics.csv
+  STAGE_GAP_DIGEST: sha256:7d0bdd8e6fa4fa43ab4d7ee731a8cb00380659a89d3b2626a472ea7d0fb73afa
+  B3_RELEASE: research-phase1-b3-final-continuity-contract-v1
+  B3_ASSET: b3-final-continuity-contract.json
+  B3_DIGEST: sha256:22e1af6713eb0c0f73604a150787ac9248f044eef63e1f88b70b31697aede163
+  B1_PATH: research/b1-security-continuity-resolution-v1.json
+  B1_DIGEST: sha256:88325d71dd9da1f18bdc2c2695933860e087addd586def8b4271ed768d121430
+  B1_GAP_RUN_ID: "35272945732"
+  B1_GAP_ARTIFACT: phase1-security-gap-diagnostics-35272945732
+  B1_GAP_ARTIFACT_DIGEST: sha256:f203552b0b52e51ec91338827ea8d87b2989fe5bbe462a4e36b3862f36ccee08
+  ONE_SIDED_PATH: research/b3-one-sided-primary-evidence-v1.json
+  ONE_SIDED_GIT_BLOB: fe31929752fd0f7567455cf1bda3fbc35b06a69f
+  RESULT_RELEASE: research-phase1-feature-tournament-long-gap7-resolution-v1
+
+jobs:
+  resolve:
+    name: Exact-gap evidence-equivalence resolution
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --all-groups --frozen
+
+      - name: Lint and test long-gap7 semantics
+        run: |
+          uv run ruff check scripts/research_phase1_feature_tournament_long_gap7_resolver.py tests/test_research_phase1_feature_tournament_long_gap7_resolver.py
+          uv run pytest -q tests/test_research_phase1_feature_tournament_long_gap7_resolver.py
+
+      - name: Verify frozen repository evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "sha256:$(sha256sum "$B1_PATH" | cut -d' ' -f1)" = "$B1_DIGEST"
+          test "$(git hash-object "$ONE_SIDED_PATH")" = "$ONE_SIDED_GIT_BLOB"
+
+      - name: Download and verify immutable release inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/input work/output work/b1-gaps
+
+          gh release download "$LONG_GAP_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$LONG_GAP_ASSET" --dir work/input
+          test "sha256:$(sha256sum "work/input/$LONG_GAP_ASSET" | cut -d' ' -f1)" = "$LONG_GAP_DIGEST"
+
+          gh release download "$STAGE_GAP_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$STAGE_GAP_ASSET" --dir work/input
+          test "sha256:$(sha256sum "work/input/$STAGE_GAP_ASSET" | cut -d' ' -f1)" = "$STAGE_GAP_DIGEST"
+
+          gh release download "$B3_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$B3_ASSET" --dir work/input
+          test "sha256:$(sha256sum "work/input/$B3_ASSET" | cut -d' ' -f1)" = "$B3_DIGEST"
+
+      - name: Download and verify frozen B1 gap artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$B1_GAP_RUN_ID/artifacts" > work/b1-artifacts.json
+          python - <<'PY'
+          import json, os
+          p=json.load(open("work/b1-artifacts.json"))
+          matches=[a for a in p["artifacts"] if a["name"]==os.environ["B1_GAP_ARTIFACT"]]
+          assert len(matches)==1, matches
+          assert matches[0].get("digest")==os.environ["B1_GAP_ARTIFACT_DIGEST"], matches[0]
+          assert matches[0].get("expired") is False
+          PY
+          gh run download "$B1_GAP_RUN_ID" --repo "$GITHUB_REPOSITORY"             --name "$B1_GAP_ARTIFACT" --dir work/b1-gaps
+          test -s work/b1-gaps/gap-diagnostics.csv
+
+      - name: Resolve exact-gap evidence equivalents
+        run: >-
+          uv run python scripts/research_phase1_feature_tournament_long_gap7_resolver.py
+          --long-gap-scope "work/input/$LONG_GAP_ASSET"
+          --stage-gaps "work/input/$STAGE_GAP_ASSET"
+          --b3-contract "work/input/$B3_ASSET"
+          --b1-contract "$B1_PATH"
+          --b1-gaps work/b1-gaps/gap-diagnostics.csv
+          --one-sided-evidence "$ONE_SIDED_PATH"
+          --resolution-output work/output/long-gap7-resolution.json
+          --residual-output work/output/new-primary10-scope.json
+
+      - name: Assert long-gap7 resolution boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+
+          p=json.load(open("work/output/long-gap7-resolution.json"))
+          r=json.load(open("work/output/new-primary10-scope.json"))
+
+          assert p["status"]=="PHASE1_FEATURE_TOURNAMENT_LONG_GAP7_RESOLVED"
+          assert p["sourceLongGapRows"]==17
+          assert p["resolvedRows"]==7
+          assert p["remainingNewPrimaryRows"]==10
+          assert p["resolvedTickerCounts"]=={
+              "CKX":4,
+              "CMCT":1,
+              "LOV":1,
+              "NSEC":1,
+          }
+
+          ckx=[x for x in p["rows"] if x["ticker"]=="CKX"]
+          assert len(ckx)==4
+          assert {x["effectiveDate"] for x in ckx}=={"2017-06-19","2020-11-04"}
+          assert {x["resolutionDecision"] for x in ckx}=={"SAME_SECURITY_CONTINUITY"}
+
+          nsec=[x for x in p["rows"] if x["ticker"]=="NSEC"]
+          assert len(nsec)==1
+          assert nsec[0]["effectiveDate"]=="2020-07-17"
+          assert nsec[0]["gapFirstMissingSession"]=="2020-07-17"
+
+          cmct=[x for x in p["rows"] if x["ticker"]=="CMCT"]
+          assert len(cmct)==1
+          assert cmct[0]["gapFirstMissingSession"]=="2020-07-21"
+          assert cmct[0]["gapLastMissingSession"]=="2020-08-14"
+          assert cmct[0]["effectiveDate"]=="2020-08-17"
+          assert cmct[0]["evidenceClass"]=="CROSS_EVENT_B1_EXACT_GAP_EQUIVALENCE"
+
+          lov=[x for x in p["rows"] if x["ticker"]=="LOV"]
+          assert len(lov)==1
+          assert lov[0]["effectiveDate"]=="2017-11-02"
+          assert lov[0]["gapPreviousObservedSession"]=="2017-11-02"
+          assert lov[0]["gapFirstMissingSession"]=="2017-11-03"
+          assert lov[0]["transformationKind"]=="ADS_EXCHANGE"
+          assert lov[0]["successorIssuerCik"]=="0001705338"
+
+          assert r["status"]=="PHASE1_FEATURE_TOURNAMENT_NEW_PRIMARY10_SCOPE_FROZEN"
+          assert r["longGapRowsResolved"]==7
+          assert r["residualRows"]==10
+          assert r["tickerCounts"]=={
+              "AVGR":3,
+              "HMG":2,
+              "OAS":3,
+              "SNES":2,
+          }
+
+          for payload in (p,r):
+              assert payload["performanceRead"] is False
+              assert payload["priceFieldsRead"]==[]
+              assert payload["featureOutcomesRead"] is False
+              assert payload["featureDiscoveryOutcomesOpened"] is False
+              assert payload["validationOpened"] is False
+              assert payload["oosOpened"] is False
+              assert payload["productionScoringChanged"] is False
+
+          print(json.dumps({
+              "resolvedRows":p["resolvedRows"],
+              "resolvedTickerCounts":p["resolvedTickerCounts"],
+              "newPrimaryRows":r["residualRows"],
+              "newPrimaryTickerCounts":r["tickerCounts"],
+          },indent=2,sort_keys=True))
+          PY
+
+      - name: Publish immutable long-gap7 resolution
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 feature tournament long-gap7 resolution v1"               --notes "Performance-blind exact-gap evidence equivalence resolves CKX 4, CMCT 1, LOV 1 and NSEC 1, leaving only 10 new-primary rows. No feature outcomes, validation or 2023+ OOS opened."               --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE"             work/output/long-gap7-resolution.json             work/output/new-primary10-scope.json             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: feature-tournament-long-gap7-resolution-${{ github.run_id }}
+          path: |
+            work/output/long-gap7-resolution.json
+            work/output/new-primary10-scope.json
+          retention-days: 90
