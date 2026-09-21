@@ -1,0 +1,144 @@
+name: Resolve F2 validation stock-dividend primary evidence
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-validation-stock-dividend-resolution.yml"
+      - "scripts/research_phase1_feature_tournament_validation_stock_dividend_resolution.py"
+      - "tests/test_research_phase1_feature_tournament_validation_stock_dividend_resolution.py"
+      - "research/validation-stock-dividend-primary-evidence-v1.json"
+      - "docs/research-phase1-feature-tournament-validation-stock-dividend-resolution-gate.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-feature-tournament-validation-stock-dividend-resolution-v1
+  cancel-in-progress: true
+
+env:
+  SCOPE_RELEASE: research-phase1-insider-feature-tournament-validation-residual32-scope-v1
+  SCOPE_ASSET: validation-residual32-scope.json
+  SCOPE_DIGEST: sha256:17129c2aded50c6e97d55e4af5ea9c469cb33ec5ff9171731f8b309d6f0ae06a
+  CONTINUITY_RELEASE: research-phase1-insider-feature-tournament-validation-continuity-audit-v1
+  CONTINUITY_ARCHIVE: phase1-insider-feature-tournament-validation-continuity-audit-v1.tar.gz
+  CONTINUITY_ARCHIVE_DIGEST: sha256:e1e34180cbd8e115412d88e75abc39711b1645515396b4f6bb52b19a6d7716d5
+  PROVIDER_DIGEST: sha256:c45e1c5ea5263d2384527359a544f3b81e49fa9f5b64fc9ff792153ad1fb0457
+  EVIDENCE_FILE: research/validation-stock-dividend-primary-evidence-v1.json
+  EVIDENCE_GIT_BLOB: 534d0ef0a19e88b67814ba33992969530a4e8b32
+  RESULT_RELEASE: research-phase1-insider-feature-tournament-validation-stock-dividend-resolution-v1
+  RESULT_ASSET: validation-stock-dividend-primary-resolution.json
+
+jobs:
+  resolve:
+    name: Resolve five validation stock-dividend rows
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --all-groups --frozen
+
+      - name: Lint and test stock-dividend resolver
+        run: |
+          uv run ruff check scripts/research_phase1_feature_tournament_validation_stock_dividend_resolution.py tests/test_research_phase1_feature_tournament_validation_stock_dividend_resolution.py
+          uv run pytest -q tests/test_research_phase1_feature_tournament_validation_stock_dividend_resolution.py
+
+      - name: Assert frozen primary-evidence blob
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object "$EVIDENCE_FILE")" = "$EVIDENCE_GIT_BLOB"
+
+      - name: Download and verify immutable scope and provider inventory
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/input work/continuity work/output
+
+          gh release download "$SCOPE_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$SCOPE_ASSET" --dir work/input
+          test "sha256:$(sha256sum "work/input/$SCOPE_ASSET" | cut -d' ' -f1)" = "$SCOPE_DIGEST"
+
+          gh release download "$CONTINUITY_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$CONTINUITY_ARCHIVE" --dir work/input
+          test "sha256:$(sha256sum "work/input/$CONTINUITY_ARCHIVE" | cut -d' ' -f1)" = "$CONTINUITY_ARCHIVE_DIGEST"
+
+          tar -xzf "work/input/$CONTINUITY_ARCHIVE" -C work/continuity corporate-actions.json
+          test "sha256:$(sha256sum work/continuity/corporate-actions.json | cut -d' ' -f1)" = "$PROVIDER_DIGEST"
+
+      - name: Apply frozen stock-dividend primary terms
+        run: >-
+          uv run python
+          scripts/research_phase1_feature_tournament_validation_stock_dividend_resolution.py
+          --scope "work/input/$SCOPE_ASSET"
+          --provider work/continuity/corporate-actions.json
+          --evidence "$EVIDENCE_FILE"
+          --output "work/output/$RESULT_ASSET"
+
+      - name: Assert five-row resolution and closed validation boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          p=json.loads(Path("work/output/validation-stock-dividend-primary-resolution.json").read_text())
+          assert p["status"]=="PHASE1_FEATURE_TOURNAMENT_VALIDATION_STOCK_DIVIDEND_PRIMARY_RESOLUTION_COMPLETE"
+          assert p["sourceResidualRows"]==32
+          assert p["resolvedRows"]==5
+          assert p["remainingUnresolvedRows"]==27
+          assert p["resolvedKeySha256"]=="sha256:7dd0615edd13ae996379d9c49194a45edbeda6e5bcf418e1b47c948540a562a3"
+          assert len(p["resolutionRows"])==5
+          expected={
+              "FGBI":("2021-12-14","1.1"),
+              "LARK":("2021-11-30","1.05"),
+              "HWBK":("2022-06-14","1.04"),
+              "AROW":("2022-09-16","1.03"),
+              "ATAX":("2022-09-29","1.01044"),
+          }
+          for r in p["resolutionRows"]:
+              assert (r["effectiveDate"],r["successorSharesPerEntryShare"])==expected[r["ticker"]]
+              assert r["resolutionDecision"]=="TRANSFORMED_HOLDER_CONSIDERATION"
+              assert r["transformationKind"]=="STOCK_DIVIDEND_QUANTITY"
+              assert r["resultState"]=="TRANSFORMED_HOLDER_CONSIDERATION"
+              assert r["successorSymbol"]==r["ticker"]
+              assert r["cashPerEntryShare"]=="0"
+              assert r["classificationSource"]=="VALIDATION_PRIMARY_STOCK_DIVIDEND_TERMS"
+          assert p["performanceRead"] is False
+          assert p["priceFieldsRead"]==[]
+          assert p["featureOutcomesRead"] is False
+          assert p["validationOpened"] is False
+          assert p["validationPerformanceOpened"] is False
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          PY
+
+      - name: Publish immutable stock-dividend resolution
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp "$EVIDENCE_FILE" work/output/
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 F2 validation stock-dividend primary resolution v1"               --notes "Performance-blind primary SEC plus frozen-provider resolution of five validation stock-dividend rows. 27 rows remain unresolved; validation performance and 2023+ OOS remain closed."               --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE"             "work/output/$RESULT_ASSET"             "work/output/validation-stock-dividend-primary-evidence-v1.json"             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase1-insider-feature-tournament-validation-stock-dividend-resolution-${{ github.run_id }}
+          path: work/output
+          retention-days: 90
