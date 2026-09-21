@@ -1,4 +1,4 @@
-name: Backfill raw Alpaca feature-formation context 2015-2020
+name: Backfill raw Alpaca feature-formation context 2016-2020
 
 on:
   workflow_dispatch:
@@ -54,7 +54,7 @@ jobs:
       fail-fast: false
       max-parallel: 2
       matrix:
-        year: [2015, 2016, 2017, 2018, 2019, 2020]
+        year: [2016, 2017, 2018, 2019, 2020]
     env:
       ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY_ID }}
       ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET_KEY }}
@@ -148,7 +148,7 @@ jobs:
 
           root = Path("work/years")
           summaries = []
-          for year in range(2015, 2021):
+          for year in range(2016, 2021):
               matches = list(root.glob(f"raw-feature-market-{year}-*/summary.json"))
               if len(matches) != 1:
                   raise SystemExit(
@@ -164,7 +164,7 @@ jobs:
           index = {
               "schemaVersion": "1.0.0",
               "dataset": "Alpaca SIP raw feature-formation market context",
-              "period": "2015-2020",
+              "period": "2016-2020",
               "adjustment": "raw",
               "feed": "sip",
               "symbolMapping": "disabled-with-asof-dash",
@@ -181,7 +181,7 @@ jobs:
           )
           PY
 
-          for year in 2015 2016 2017 2018 2019 2020; do
+          for year in 2016 2017 2018 2019 2020; do
             dir=$(find work/years -maxdepth 1 -type d               -name "raw-feature-market-${year}-*" | head -n 1)
             test -n "$dir"
             tar -C "$dir" -czf               "work/release/raw-feature-market-${year}.tar.gz"               "raw-feature-market-${year}.csv"               summary.json request-failures.json symbol-quarantines.json
@@ -195,7 +195,7 @@ jobs:
         run: |
           set -euo pipefail
           if ! gh release view "$RESULT_RELEASE"             --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release create "$RESULT_RELEASE"               --repo "$GITHUB_REPOSITORY"               --title "Research raw feature-formation market context v1"               --notes "Outcome-blind Alpaca SIP adjustment=raw context for 2015-2020 feature formation. No forward returns; validation and 2023+ OOS remain closed."               --prerelease
+            gh release create "$RESULT_RELEASE"               --repo "$GITHUB_REPOSITORY"               --title "Research raw feature-formation market context v1"               --notes "Outcome-blind Alpaca SIP adjustment=raw context for 2016-2020 feature formation. No forward returns; validation and 2023+ OOS remain closed."               --prerelease
           fi
           gh release upload "$RESULT_RELEASE" work/release/*             --repo "$GITHUB_REPOSITORY" --clobber
 
