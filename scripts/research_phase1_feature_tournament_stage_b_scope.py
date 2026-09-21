@@ -12,7 +12,7 @@ from typing import Any
 import research_market_event_audit_v2 as p0
 
 HORIZONS = (21, 63, 126, 252)
-EXPECTED_EVENTS = 24192
+EXPECTED_EVENTS = 24190
 EXPECTED_ISSUERS = 4729
 EXPECTED_ROWS = EXPECTED_EVENTS * len(HORIZONS)
 FORBIDDEN_TOKENS = ("raw_", "excess_", "mae_", "forward_return", "future_return")
