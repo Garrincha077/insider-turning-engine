@@ -175,6 +175,7 @@ def run(
         "priceFieldsRead": [],
         "featureOutcomesRead": False,
         "validationOpened": False,
+        "validationPerformanceOpened": False,
         "oosOpened": False,
         "productionScoringChanged": False,
         "sourceAuditRows": EXPECTED_AUDIT_ROWS,
