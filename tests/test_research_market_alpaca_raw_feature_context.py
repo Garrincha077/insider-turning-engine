@@ -25,20 +25,19 @@ def _write(path: Path, rows: list[dict[str, object]]) -> None:
     )
 
 
-def test_2015_context_uses_2016_symbols_only(tmp_path: Path) -> None:
+def test_2016_context_includes_2016_and_2017_symbols(tmp_path: Path) -> None:
     source = tmp_path / "sec.jsonl"
     _write(
         source,
         [
-            _row(2015, "OLD"),
             _row(2016, "AAA"),
-            _row(2016, "BBB"),
-            _row(2017, "CCC"),
+            _row(2017, "BBB"),
+            _row(2018, "CCC"),
         ],
     )
-    symbols, diag = mod._load_context_symbols(source, 2015)
+    symbols, diag = mod._load_context_symbols(source, 2016)
     assert symbols == ["AAA", "BBB"]
-    assert diag["sourceKnowledgeYears"] == [2016]
+    assert diag["sourceKnowledgeYears"] == [2016, 2017]
 
 
 def test_2019_context_includes_2019_and_2020_symbols(tmp_path: Path) -> None:
@@ -68,14 +67,14 @@ def test_2020_context_does_not_open_2021(tmp_path: Path) -> None:
 def test_missing_ticker_is_counted_not_invented(tmp_path: Path) -> None:
     source = tmp_path / "sec.jsonl"
     _write(source, [_row(2016, "AAA"), _row(2016, None)])
-    symbols, diag = mod._load_context_symbols(source, 2015)
+    symbols, diag = mod._load_context_symbols(source, 2016)
     assert symbols == ["AAA"]
     assert diag["missingTickerRowsInScope"] == 1
 
 
 def test_out_of_range_year_fails() -> None:
     with pytest.raises(ValueError, match="2015-2020"):
-        mod._load_context_symbols(Path("unused"), 2021)
+        mod._load_context_symbols(Path("unused"), 2015)
 
 
 def test_2023_sec_row_fails_closed(tmp_path: Path) -> None:
@@ -83,4 +82,4 @@ def test_2023_sec_row_fails_closed(tmp_path: Path) -> None:
     _write(source, [_row(2016, "AAA"), _row(2023, "ZZZ")])
     # 2023 is outside the wanted knowledge year and must still fail closed.
     with pytest.raises(ValueError, match="sealed OOS"):
-        mod._load_context_symbols(source, 2015)
+        mod._load_context_symbols(source, 2016)
