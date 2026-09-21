@@ -44,7 +44,7 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-          import hashlib, json
+          import hashlib, json, os
           from pathlib import Path
 
           source=json.loads(Path("work/input/residual-continuity-scope.json").read_text())
