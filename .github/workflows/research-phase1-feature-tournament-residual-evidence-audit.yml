@@ -1,0 +1,153 @@
+name: Audit feature tournament residual34 continuity evidence
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-residual-evidence-audit.yml"
+      - "scripts/research_phase1_feature_tournament_residual_evidence_audit.py"
+      - "tests/test_research_phase1_feature_tournament_residual_evidence_audit.py"
+      - "docs/research-phase1-feature-tournament-residual-evidence-audit-gate.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-feature-tournament-residual-evidence-audit-v1
+  cancel-in-progress: false
+
+env:
+  RESIDUAL34_RELEASE: research-phase1-feature-tournament-residual34-scope-v1
+  RESIDUAL34_ASSET: residual34-scope.json
+  RESIDUAL34_DIGEST: sha256:2e1642f23add5de232488b0bb4d657b7e4a95a42256ead8f1bfa78a5775550fe
+  UNRESOLVED_RELEASE: research-phase1-feature-tournament-stage-b-unresolved-scope-v1
+  UNRESOLVED_ASSET: stage-b-unresolved-scope.json
+  UNRESOLVED_DIGEST: sha256:4882e009646ea117d123b5f95ae41ea700203dd470d3b24be2cd1592eebe9afd
+  B3_RELEASE: research-phase1-b3-final-continuity-contract-v1
+  B3_ASSET: b3-final-continuity-contract.json
+  B3_DIGEST: sha256:22e1af6713eb0c0f73604a150787ac9248f044eef63e1f88b70b31697aede163
+  B1_PATH: research/b1-security-continuity-resolution-v1.json
+  B1_DIGEST: sha256:88325d71dd9da1f18bdc2c2695933860e087addd586def8b4271ed768d121430
+  RESULT_RELEASE: research-phase1-feature-tournament-residual-evidence-audit-v1
+
+jobs:
+  audit:
+    name: Performance-blind residual34 evidence audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --all-groups --frozen
+
+      - name: Lint and test evidence-audit semantics
+        run: |
+          uv run ruff check scripts/research_phase1_feature_tournament_residual_evidence_audit.py tests/test_research_phase1_feature_tournament_residual_evidence_audit.py
+          uv run pytest -q tests/test_research_phase1_feature_tournament_residual_evidence_audit.py
+
+      - name: Verify frozen repository evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$B1_PATH"
+          test "sha256:$(sha256sum "$B1_PATH" | cut -d' ' -f1)" = "$B1_DIGEST"
+
+      - name: Download and verify immutable research inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/input work/output
+
+          gh release download "$RESIDUAL34_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$RESIDUAL34_ASSET" --dir work/input
+          test "sha256:$(sha256sum "work/input/$RESIDUAL34_ASSET" | cut -d' ' -f1)" = "$RESIDUAL34_DIGEST"
+
+          gh release download "$UNRESOLVED_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$UNRESOLVED_ASSET" --dir work/input
+          test "sha256:$(sha256sum "work/input/$UNRESOLVED_ASSET" | cut -d' ' -f1)" = "$UNRESOLVED_DIGEST"
+
+          gh release download "$B3_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$B3_ASSET" --dir work/input
+          test "sha256:$(sha256sum "work/input/$B3_ASSET" | cut -d' ' -f1)" = "$B3_DIGEST"
+
+      - name: Audit exact action and prior-security evidence coverage
+        run: >-
+          uv run python scripts/research_phase1_feature_tournament_residual_evidence_audit.py
+          --residual34 "work/input/$RESIDUAL34_ASSET"
+          --unresolved "work/input/$UNRESOLVED_ASSET"
+          --b3-contract "work/input/$B3_ASSET"
+          --b1-contract "$B1_PATH"
+          --output work/output/residual-evidence-audit.json
+
+      - name: Assert audit-only partition
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          p=json.load(open("work/output/residual-evidence-audit.json"))
+
+          assert p["status"]=="PHASE1_FEATURE_TOURNAMENT_RESIDUAL_EVIDENCE_AUDIT_COMPLETE"
+          assert p["sourceResidualRows"]==34
+          assert p["auditedRows"]==34
+          assert p["providerRows"]==17
+          assert p["providerActionReusableRows"]==17
+          assert p["longGapRows"]==17
+          assert p["longGapPriorSecurityCandidateRows"]==7
+          assert p["newPrimaryEvidenceRows"]==10
+          assert p["categoryCounts"]=={
+              "LONG_GAP_NEW_PRIMARY_EVIDENCE_REQUIRED":10,
+              "LONG_GAP_PRIOR_SECURITY_CANDIDATE":7,
+              "PROVIDER_ACTION_REUSE_B1_STOCK_DIVIDEND":1,
+              "PROVIDER_ACTION_REUSE_B3":16,
+          }
+          assert p["newPrimaryEvidenceTickerCounts"]=={
+              "AVGR":3,
+              "HMG":2,
+              "OAS":3,
+              "SNES":2,
+          }
+          assert p["auditOnly"] is True
+          assert p["resolutionApplied"] is False
+          assert p["performanceRead"] is False
+          assert p["priceFieldsRead"]==[]
+          assert p["featureOutcomesRead"] is False
+          assert p["featureDiscoveryOutcomesOpened"] is False
+          assert p["validationOpened"] is False
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+
+          print(json.dumps({k:p[k] for k in (
+              "sourceResidualRows",
+              "providerActionReusableRows",
+              "longGapPriorSecurityCandidateRows",
+              "newPrimaryEvidenceRows",
+              "categoryCounts",
+              "newPrimaryEvidenceTickerCounts",
+          )},indent=2,sort_keys=True))
+          PY
+
+      - name: Publish immutable residual evidence audit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 feature tournament residual34 evidence audit v1"               --notes "Performance-blind evidence-coverage audit of the frozen 34-row residual: 17 exact provider-action reuse candidates, 7 long-gap prior-security candidates, and 10 rows requiring new primary evidence. No resolution or feature outcome opened."               --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE"             work/output/residual-evidence-audit.json             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: feature-tournament-residual-evidence-audit-${{ github.run_id }}
+          path: work/output/residual-evidence-audit.json
+          retention-days: 90
