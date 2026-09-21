@@ -301,7 +301,7 @@
   },
   "marketContext": {
     "adjustedLeg": "existing research-market-alpaca-v1 for split/dividend-consistent trailing return/drawdown context",
-    "rawLeg": "research-market-alpaca-raw-feature-context-v1 for nominal price, dollar ADV and F4 basis/reclaim",
+    "rawLeg": "research-market-alpaca-raw-feature-context-v1, 2016-2020 only; earliest-2016 trailing history may be missing and is handled by frozen coverage rules",
     "pitMarketCap": "PIT_BLOCKED_PENDING_RAW_PRICE_AND_PIT_SHARES",
     "currentMarketCapSubstitutionAllowed": false
   }
