@@ -73,7 +73,7 @@ def test_missing_ticker_is_counted_not_invented(tmp_path: Path) -> None:
 
 
 def test_out_of_range_year_fails() -> None:
-    with pytest.raises(ValueError, match="2015-2020"):
+    with pytest.raises(ValueError, match="2016-2020"):
         mod._load_context_symbols(Path("unused"), 2015)
 
 
