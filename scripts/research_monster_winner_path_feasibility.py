@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import research_market_event_audit_v2 as p0
+import research_phase1_feature_tournament_confirmation as confirmation
 import research_phase1_feature_tournament_discovery as discovery
 
 EXPECTED_EVENTS = 24190
@@ -136,12 +137,15 @@ def _needs_effective_date(terms: dict[str, Any], ticker: str) -> bool:
 def _effective_date(
     ledger_row: dict[str, Any],
     final_row: dict[str, Any] | None,
+    amendment_row: dict[str, Any] | None,
     terms: dict[str, Any],
     actions: dict[str, dict[str, Any]],
 ) -> str:
     ticker = str(ledger_row["ticker"]).upper()
     if not _needs_effective_date(terms, ticker):
         return ""
+    if amendment_row is not None:
+        return str(amendment_row.get("effectiveDate") or "")[:10]
     if final_row is not None:
         return str(final_row.get("effectiveDate") or "")[:10]
     return _provider_effective_date(ledger_row, actions)
@@ -264,6 +268,7 @@ def run(
     ledger_path: Path,
     corporate_actions_path: Path,
     final_contract_path: Path,
+    provider_amendment_path: Path,
     market_root: Path,
     output: Path,
 ) -> dict[str, Any]:
@@ -272,6 +277,9 @@ def run(
     ledger = discovery._load_ledger(ledger_path)
     final_rows = discovery._load_final_contract(final_contract_path)
     actions = discovery._load_actions(corporate_actions_path)
+    provider_amendment = confirmation._load_provider_amendment(
+        provider_amendment_path
+    )
 
     ledger_252 = [
         row for row in ledger if int(row["horizon"]) == PRIMARY_HORIZON
@@ -312,8 +320,20 @@ def run(
 
         key = discovery._horizon_key(ledger_row)
         final_row = final_by_key.get(key)
-        terms = discovery._terms_for(ledger_row, final_row, actions)
-        effective = _effective_date(ledger_row, final_row, terms, actions)
+        amendment_row = provider_amendment.get(key)
+        terms = confirmation._terms_for_confirmation(
+            ledger_row,
+            final_row,
+            amendment_row,
+            actions,
+        )
+        effective = _effective_date(
+            ledger_row,
+            final_row,
+            amendment_row,
+            terms,
+            actions,
+        )
 
         entry = str(event["entrySession"])
         target = str(ledger_row["targetExitSession"])
@@ -510,6 +530,7 @@ def run(
             year: dict(sorted(counts.items()))
             for year, counts in sorted(year_counts.items())
         },
+        "providerCompletenessAmendmentRows": len(provider_amendment),
         "sourceStageAScopeKeySha256": stage_a_summary["scope"]["scopeKeySha256"],
         "nextGate": (
             "Inspect performance-blind feasibility failures, then freeze the "
@@ -529,6 +550,7 @@ def main() -> None:
     parser.add_argument("--ledger", type=Path, required=True)
     parser.add_argument("--corporate-actions", type=Path, required=True)
     parser.add_argument("--final-contract", type=Path, required=True)
+    parser.add_argument("--provider-amendment", type=Path, required=True)
     parser.add_argument("--market-root", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
@@ -537,6 +559,7 @@ def main() -> None:
         ledger_path=args.ledger,
         corporate_actions_path=args.corporate_actions,
         final_contract_path=args.final_contract,
+        provider_amendment_path=args.provider_amendment,
         market_root=args.market_root,
         output=args.output,
     )
