@@ -1,0 +1,208 @@
+name: Freeze F2 validation final continuity contract
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-validation-final-continuity.yml"
+      - "scripts/research_phase1_feature_tournament_validation_final_continuity.py"
+      - "tests/test_research_phase1_feature_tournament_validation_final_continuity.py"
+      - "docs/research-phase1-feature-tournament-validation-final-continuity-gate.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-feature-tournament-validation-final-continuity-v1
+  cancel-in-progress: true
+
+env:
+  AUDIT_RELEASE: research-phase1-insider-feature-tournament-validation-continuity-audit-v1
+  AUDIT_ARCHIVE: phase1-insider-feature-tournament-validation-continuity-audit-v1.tar.gz
+  AUDIT_ARCHIVE_DIGEST: sha256:e1e34180cbd8e115412d88e75abc39711b1645515396b4f6bb52b19a6d7716d5
+  AUDIT_CSV_DIGEST: sha256:11608f09dc09f81a8bb467301ca14ccfed12caac55e79652c6b144e9091b599e
+  CORPORATE_ACTION_DIGEST: sha256:c45e1c5ea5263d2384527359a544f3b81e49fa9f5b64fc9ff792153ad1fb0457
+
+  EXACT_RELEASE: research-phase1-insider-feature-tournament-validation-exact-action-resolution-v1
+  EXACT_ASSET: validation-exact-action-prior-resolution.json
+  EXACT_DIGEST: sha256:6e238d29f9e8a31b388b84cb5f11964079f81b68985b44cf28b290e1fbb29bdc
+
+  HSDT_RELEASE: research-phase1-insider-feature-tournament-validation-hsdt-primary-resolution-v1
+  HSDT_ASSET: validation-hsdt-primary-resolution.json
+  HSDT_DIGEST: sha256:b5348aa135082da6a2d07510125ffde4b67b4f327a522597301782d3b2e37a03
+
+  STOCK_RELEASE: research-phase1-insider-feature-tournament-validation-stock-dividend-resolution-v1
+  STOCK_ASSET: validation-stock-dividend-primary-resolution.json
+  STOCK_DIGEST: sha256:fcac9796cb768fda95f0b2c1fdffc083379f3140500fca68c48a39bd5b007ba9
+
+  MERGER_RELEASE: research-phase1-insider-feature-tournament-validation-incomplete-stock-merger-resolution-v1
+  MERGER_ASSET: validation-incomplete-stock-merger-primary-resolution.json
+  MERGER_DIGEST: sha256:73722b4c87590a8a1fc0ad748534ce19a0d788281b965df1e475bc0dc789d584
+
+  SPAC_RELEASE: research-phase1-insider-feature-tournament-validation-spac-share-exchange-resolution-v1
+  SPAC_ASSET: validation-spac-share-exchange-primary-resolution.json
+  SPAC_DIGEST: sha256:ebc41a7a0e65c6bcb696330f6e6121deff55e954bcafde6fe4fe83ea59ca4581
+
+  CBTX_RELEASE: research-phase1-insider-feature-tournament-validation-cbtx-symbol-change-v1
+  CBTX_ASSET: validation-cbtx-symbol-change-resolution.json
+  CBTX_DIGEST: sha256:bf074cb873959b5da66fdb98af015349a1ec09bf6e5192785bac1e23699cdf5f
+
+  LONG_GAP_RELEASE: research-phase1-insider-feature-tournament-validation-long-gap10-primary-resolution-v1
+  LONG_GAP_ASSET: validation-long-gap10-primary-resolution.json
+  LONG_GAP_DIGEST: sha256:6d8c661cf00ff1bfd0a99cc7d469503ced8e7a5350f83a2917e149fc1a68a28c
+
+  RESULT_RELEASE: research-phase1-insider-feature-tournament-validation-final-continuity-v1
+  RESULT_ASSET: validation-final-continuity.json
+
+jobs:
+  merge:
+    name: Merge complete 191-row validation continuity overlay
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --all-groups --frozen
+
+      - name: Lint and test final validation merger
+        run: |
+          uv run ruff check scripts/research_phase1_feature_tournament_validation_final_continuity.py tests/test_research_phase1_feature_tournament_validation_final_continuity.py
+          uv run pytest -q tests/test_research_phase1_feature_tournament_validation_final_continuity.py
+
+      - name: Download and verify original performance-blind audit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/audit work/input work/output work/download
+          gh release download "$AUDIT_RELEASE" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$AUDIT_ARCHIVE" --dir work/download
+          test "sha256:$(sha256sum "work/download/$AUDIT_ARCHIVE" | cut -d' ' -f1)" = "$AUDIT_ARCHIVE_DIGEST"
+          tar -xzf "work/download/$AUDIT_ARCHIVE" -C work/audit \
+            validation-continuity-audit.csv corporate-actions.json summary.json
+          test "sha256:$(sha256sum work/audit/validation-continuity-audit.csv | cut -d' ' -f1)" = "$AUDIT_CSV_DIGEST"
+          test "sha256:$(sha256sum work/audit/corporate-actions.json | cut -d' ' -f1)" = "$CORPORATE_ACTION_DIGEST"
+
+      - name: Download and verify immutable 41-row resolution sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          download_verify() {
+            local release="$1"
+            local asset="$2"
+            local digest="$3"
+            gh release download "$release" --repo "$GITHUB_REPOSITORY" \
+              --pattern "$asset" --dir work/input
+            test "sha256:$(sha256sum "work/input/$asset" | cut -d' ' -f1)" = "$digest"
+          }
+          download_verify "$EXACT_RELEASE" "$EXACT_ASSET" "$EXACT_DIGEST"
+          download_verify "$HSDT_RELEASE" "$HSDT_ASSET" "$HSDT_DIGEST"
+          download_verify "$STOCK_RELEASE" "$STOCK_ASSET" "$STOCK_DIGEST"
+          download_verify "$MERGER_RELEASE" "$MERGER_ASSET" "$MERGER_DIGEST"
+          download_verify "$SPAC_RELEASE" "$SPAC_ASSET" "$SPAC_DIGEST"
+          download_verify "$CBTX_RELEASE" "$CBTX_ASSET" "$CBTX_DIGEST"
+          download_verify "$LONG_GAP_RELEASE" "$LONG_GAP_ASSET" "$LONG_GAP_DIGEST"
+
+      - name: Merge all affected validation continuity rows
+        run: >-
+          uv run python
+          scripts/research_phase1_feature_tournament_validation_final_continuity.py
+          --audit-csv work/audit/validation-continuity-audit.csv
+          --audit-summary work/audit/summary.json
+          --corporate-actions work/audit/corporate-actions.json
+          --exact-action "work/input/$EXACT_ASSET"
+          --hsdt "work/input/$HSDT_ASSET"
+          --stock-dividend "work/input/$STOCK_ASSET"
+          --incomplete-merger "work/input/$MERGER_ASSET"
+          --spac-exchange "work/input/$SPAC_ASSET"
+          --cbtx "work/input/$CBTX_ASSET"
+          --long-gap10 "work/input/$LONG_GAP_ASSET"
+          --output "work/output/$RESULT_ASSET"
+
+      - name: Assert zero-unresolved final validation boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          p=json.loads(Path("work/output/" + os.environ["RESULT_ASSET"]).read_text())
+          assert p["status"]==(
+              "PHASE1_FEATURE_TOURNAMENT_VALIDATION_"
+              "FINAL_CONTINUITY_COMPLETE"
+          )
+          assert p["sourceScopeRows"]==7493
+          assert p["sourceOrdinaryAdjustedRows"]==7302
+          assert p["sourceAffectedRows"]==191
+          assert p["sourceUnresolvedRows"]==41
+          assert p["classifiedRows"]==191
+          assert p["unresolvedRows"]==0
+          assert p["sourceGroupCounts"]=={
+              "PROVIDER_COMPLETE_TERMS":150,
+              "EXACT_ACTION_PRIOR":8,
+              "HSDT_PRIMARY":1,
+              "STOCK_DIVIDEND_PRIMARY":5,
+              "INCOMPLETE_STOCK_MERGER_PRIMARY":8,
+              "SPAC_SHARE_EXCHANGE_PRIMARY":8,
+              "CBTX_PRIMARY":1,
+              "LONG_GAP10_PRIMARY":10,
+          }
+          assert p["resolutionDecisionCounts"]=={
+              "SAME_SECURITY_CONTINUITY":11,
+              "SYMBOL_CHANGED_SAME_SECURITY":101,
+              "TRANSFORMED_HOLDER_CONSIDERATION":79,
+          }
+          assert p["resultStateCounts"]=={
+              "PRICE_CONTINUOUS_ADJUSTED":11,
+              "SYMBOL_CHANGED_SAME_SECURITY":101,
+              "TRANSFORMED_HOLDER_CONSIDERATION":79,
+          }
+          assert len(p["resolutionRows"])==191
+          assert p["resolutionComplete"] is True
+          assert p["finalResolutionContractCreated"] is True
+          assert p["performanceRead"] is False
+          assert p["priceFieldsRead"]==[]
+          assert p["featureOutcomesRead"] is False
+          assert p["validationOpened"] is False
+          assert p["validationPerformanceOpened"] is False
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          PY
+
+      - name: Publish immutable final validation continuity contract
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp docs/research-phase1-feature-tournament-validation-final-continuity-gate.md work/output/
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" \
+              --title "Phase-1 F2 validation final continuity v1" \
+              --notes "Final performance-blind F2 validation continuity overlay: 191/191 affected rows classified and zero unresolved. Validation performance is still unopened; 2023+ OOS remains sealed." \
+              --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE" \
+            "work/output/$RESULT_ASSET" \
+            work/output/research-phase1-feature-tournament-validation-final-continuity-gate.md \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase1-insider-feature-tournament-validation-final-continuity-${{ github.run_id }}
+          path: work/output
+          retention-days: 90
