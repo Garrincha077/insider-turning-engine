@@ -1,0 +1,142 @@
+name: Resolve F2 validation incomplete stock-merger primary evidence
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-validation-incomplete-stock-merger-resolution.yml"
+      - "scripts/research_phase1_feature_tournament_validation_incomplete_stock_merger_resolution.py"
+      - "tests/test_research_phase1_feature_tournament_validation_incomplete_stock_merger_resolution.py"
+      - "research/validation-incomplete-stock-merger-primary-evidence-v1.json"
+      - "docs/research-phase1-feature-tournament-validation-incomplete-stock-merger-resolution-gate.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-feature-tournament-validation-incomplete-stock-merger-resolution-v1
+  cancel-in-progress: true
+
+env:
+  SCOPE_RELEASE: research-phase1-insider-feature-tournament-validation-residual27-scope-v1
+  SCOPE_ASSET: validation-residual27-scope.json
+  SCOPE_DIGEST: sha256:04b4e2280e9059aed8c10f9a6d9ac1853f23f34f5028dba6482c014c1ff190a4
+  EVIDENCE_FILE: research/validation-incomplete-stock-merger-primary-evidence-v1.json
+  EVIDENCE_GIT_BLOB: 0dcd418b62c9ef837f9b61e9fe12e91719a2a3eb
+  RESULT_RELEASE: research-phase1-insider-feature-tournament-validation-incomplete-stock-merger-resolution-v1
+  RESULT_ASSET: validation-incomplete-stock-merger-primary-resolution.json
+
+jobs:
+  resolve:
+    name: Resolve eight incomplete stock-merger validation rows
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --all-groups --frozen
+
+      - name: Lint and test incomplete stock-merger resolver
+        run: |
+          uv run ruff check scripts/research_phase1_feature_tournament_validation_incomplete_stock_merger_resolution.py tests/test_research_phase1_feature_tournament_validation_incomplete_stock_merger_resolution.py
+          uv run pytest -q tests/test_research_phase1_feature_tournament_validation_incomplete_stock_merger_resolution.py
+
+      - name: Assert frozen primary-evidence blob
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object "$EVIDENCE_FILE")" = "$EVIDENCE_GIT_BLOB"
+
+      - name: Download and verify immutable residual-27 scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/input work/output
+          gh release download "$SCOPE_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$SCOPE_ASSET" --dir work/input
+          test "sha256:$(sha256sum "work/input/$SCOPE_ASSET" | cut -d' ' -f1)" = "$SCOPE_DIGEST"
+
+      - name: Apply frozen primary SEC merger terms
+        run: >-
+          uv run python
+          scripts/research_phase1_feature_tournament_validation_incomplete_stock_merger_resolution.py
+          --scope "work/input/$SCOPE_ASSET"
+          --evidence "$EVIDENCE_FILE"
+          --output "work/output/$RESULT_ASSET"
+
+      - name: Assert eight-row resolution and closed validation boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from collections import Counter
+          from pathlib import Path
+
+          p=json.loads(Path("work/output/validation-incomplete-stock-merger-primary-resolution.json").read_text())
+          assert p["status"]=="PHASE1_FEATURE_TOURNAMENT_VALIDATION_INCOMPLETE_STOCK_MERGER_PRIMARY_RESOLUTION_COMPLETE"
+          assert p["sourceResidualRows"]==27
+          assert p["resolvedRows"]==8
+          assert p["remainingUnresolvedRows"]==19
+          assert p["resolvedKeySha256"]=="sha256:31296aeae352b58fc55a6eba4cbfaf2fa0d600134a004afcf6c7980782a5b776"
+          assert len(p["resolutionRows"])==8
+          assert Counter(r["ticker"] for r in p["resolutionRows"])=={
+              "SPRT":2,
+              "APO":2,
+              "TSE":1,
+              "DKNG":2,
+              "AEI":1,
+          }
+          expected={
+              "SPRT":("2021-09-14","GREE","0.115"),
+              "APO":("2022-01-01","APO","1"),
+              "TSE":("2021-10-08","TSE","1"),
+              "DKNG":("2022-05-05","DKNG","1"),
+              "AEI":("2022-10-04","AEI","1"),
+          }
+          for r in p["resolutionRows"]:
+              assert (
+                  r["effectiveDate"],
+                  r["successorSymbol"],
+                  r["successorSharesPerEntryShare"],
+              )==expected[r["ticker"]]
+              assert r["resolutionDecision"]=="TRANSFORMED_HOLDER_CONSIDERATION"
+              assert r["resultState"]=="TRANSFORMED_HOLDER_CONSIDERATION"
+              assert r["cashPerEntryShare"]=="0"
+              assert r["classificationSource"]=="VALIDATION_PRIMARY_INCOMPLETE_STOCK_MERGER_TERMS"
+          assert p["performanceRead"] is False
+          assert p["priceFieldsRead"]==[]
+          assert p["featureOutcomesRead"] is False
+          assert p["validationOpened"] is False
+          assert p["validationPerformanceOpened"] is False
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          PY
+
+      - name: Publish immutable incomplete stock-merger resolution
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp "$EVIDENCE_FILE" work/output/
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 F2 validation incomplete stock-merger primary resolution v1"               --notes "Performance-blind primary SEC resolution of eight validation rows whose provider stock-merger actions lacked complete holder terms. 19 rows remain unresolved; validation performance and 2023+ OOS remain closed."               --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE"             "work/output/$RESULT_ASSET"             "work/output/validation-incomplete-stock-merger-primary-evidence-v1.json"             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase1-insider-feature-tournament-validation-incomplete-stock-merger-resolution-${{ github.run_id }}
+          path: work/output
+          retention-days: 90
