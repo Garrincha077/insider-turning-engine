@@ -1,0 +1,87 @@
+{
+  "schemaVersion": "1.0.0",
+  "definitionId": "MONSTER_WINNER_ENRICHMENT_V1_OUTCOME_EXECUTION",
+  "status": "FROZEN_BEFORE_MONSTER_OUTCOMES",
+  "frozenAt": "2026-09-22",
+  "researchOnly": true,
+  "sourceDefinition": "MONSTER_WINNER_ENRICHMENT_V1",
+  "sourcePathAudit": {
+    "runId": 35729304894,
+    "release": "research-monster-winner-enrichment-path-feasibility-v1",
+    "archiveSha256": "sha256:311482bf583cb8c9d0e7e4ebcef6cf29149bc92ffc1ab5842a772c0ae7f5ad38",
+    "summarySha256": "sha256:8cf04cfbf67471a84d35e393ca831d2dac47cc6f8d0909d93df3163d6eda927e",
+    "events": 24190,
+    "negativeLabelFeasibleEvents": 22293,
+    "unknownIfNoPositiveEvents": 1897
+  },
+  "primaryMetricAmendment": {
+    "rationale": "Prevent incomplete holder paths from improving a feature by shrinking its denominator.",
+    "positiveDensity": "observed positives / all feature-observed comparable events",
+    "lift": "preferred positive density / complement positive density",
+    "capture": "preferred observed positives / all observed positives in comparable cohort",
+    "unknownNoCrossingRemainsInDenominator": true,
+    "evaluableHitRate": "secondary diagnostic only"
+  },
+  "labels": {
+    "positive": "observed exact-session holder close crosses threshold",
+    "negative": "no crossing and local path satisfies >=95% coverage, <=5 consecutive missing sessions, deterministic complete holder consideration",
+    "unknown": "no crossing but negative cannot be proven",
+    "positivePriority": true
+  },
+  "primary": {
+    "id": "M100_252_CLOSE",
+    "horizonSessions": 252,
+    "multipleOfEntryOpen": 2
+  },
+  "secondary": [
+    {
+      "id": "M50_252_CLOSE",
+      "horizonSessions": 252,
+      "multipleOfEntryOpen": 1.5
+    },
+    {
+      "id": "M200_252_CLOSE",
+      "horizonSessions": 252,
+      "multipleOfEntryOpen": 3
+    },
+    {
+      "id": "M500_252_CLOSE",
+      "horizonSessions": 252,
+      "multipleOfEntryOpen": 6
+    },
+    {
+      "id": "M100_126_CLOSE",
+      "horizonSessions": 126,
+      "multipleOfEntryOpen": 2
+    },
+    {
+      "id": "M200_126_CLOSE",
+      "horizonSessions": 126,
+      "multipleOfEntryOpen": 3
+    }
+  ],
+  "marketPriceFieldsAuthorized": [
+    "open_at_exact_entry_session",
+    "close_at_exact_path_sessions"
+  ],
+  "intradayHighAuthorized": false,
+  "noNearestLaterBarSubstitution": true,
+  "discovery": {
+    "evaluationEnd": "2018-12-31",
+    "expectedEvents": 14340,
+    "confirmationEventsMayBeScored": false
+  },
+  "f2Variants": {
+    "F2_INDIRECT_VS_DIRECT": {
+      "preferred": "INDIRECT_ONLY",
+      "complement": "DIRECT_ONLY"
+    },
+    "F2_DIRECT_VS_INDIRECT": {
+      "preferred": "DIRECT_ONLY",
+      "complement": "INDIRECT_ONLY"
+    }
+  },
+  "knownSampleDiagnosticOpened": false,
+  "oosOpened": false,
+  "productionScoringChanged": false
+}
