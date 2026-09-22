@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "1.0.0",
+  "definitionId": "MONSTER_WINNER_ENRICHMENT_V1_CONFIRMATION_BINDING",
+  "status": "FROZEN_BEFORE_2019_2020_MONSTER_OUTCOMES",
+  "frozenAt": "2026-09-22",
+  "sourceDiscovery": {
+    "runId": 35730351909,
+    "release": "research-monster-winner-enrichment-discovery-v1",
+    "resultSha256": "sha256:e3d081908a3b72dd4fd36e3d58b1aa38f132371ebcd1821ae771715386a61588",
+    "archiveSha256": "sha256:d3a7e162532e5ff8626f0c257d33ffc489e7aef873586b51e9a5c8a04db43501"
+  },
+  "candidates": [
+    {
+      "family": "F3",
+      "variantId": "F3_DRAWDOWN_252",
+      "preferred": "Q5",
+      "complement": "Q1-Q4",
+      "cutpoints": "unchanged Stage-A 2016-2018"
+    },
+    {
+      "family": "F4",
+      "variantId": "F4_DISTANCE_BELOW",
+      "preferred": "Q1",
+      "complement": "Q2-Q5",
+      "cutpoints": "unchanged Stage-A 2016-2018"
+    }
+  ],
+  "confirmationScope": {
+    "evaluationStart": "2019-01-01",
+    "evaluationEnd": "2020-12-31",
+    "expectedEvents": 9850,
+    "expectedByYear": {
+      "2019": 4529,
+      "2020": 5321
+    }
+  },
+  "checks": {
+    "preferredResolvableNMin": 150,
+    "preferredDistinctIssuersMin": 75,
+    "preferredM100PositivesMin": 10,
+    "pooledM100LiftMin": 1.25,
+    "pooledM100CaptureMin": 0.15,
+    "require2019LiftAbove1": true,
+    "require2020LiftAbove1": true,
+    "outsideBottomAdvLiftMin": 1,
+    "maxSingleIssuerPreferredM100Share": 0.2
+  },
+  "primaryDenominator": "all feature-observed group events, including UNKNOWN no-crossing rows",
+  "replacementCandidateAllowed": false,
+  "knownSampleDiagnosticOpened": false,
+  "oosOpened": false,
+  "productionScoringChanged": false
+}
