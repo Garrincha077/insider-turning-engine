@@ -110,7 +110,6 @@ def run(
 
         try:
             for source in candidates:
-                evaluation = str(source["evaluationSession"])
                 evaluation_idx = int(source["evaluationIndex"])
                 entry_idx = evaluation_idx + 1
                 if entry_idx >= len(sessions):
