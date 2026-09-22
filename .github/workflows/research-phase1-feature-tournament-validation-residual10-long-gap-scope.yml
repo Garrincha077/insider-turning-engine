@@ -30,16 +30,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: {python-version: "3.12"}
+        with:\n          python-version: "3.12"
       - uses: astral-sh/setup-uv@v5
-        with: {enable-cache: true}
+        with:\n          enable-cache: true
       - run: uv sync --all-groups --frozen
       - name: Lint and test residual-10 freezer
         run: |
           uv run ruff check scripts/research_phase1_feature_tournament_validation_residual10_long_gap_scope.py tests/test_research_phase1_feature_tournament_validation_residual10_long_gap_scope.py
           uv run pytest -q tests/test_research_phase1_feature_tournament_validation_residual10_long_gap_scope.py
       - name: Download and verify inputs
-        env: {GH_TOKEN: ${{ github.token }}}
+        env:\n          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
