@@ -11,8 +11,6 @@ from typing import Any
 
 import exchange_calendars as xcals
 
-import research_monster_winner_discovery as monster
-
 CANDIDATES = ("F3_DRAWDOWN_252", "F4_DISTANCE_BELOW")
 DATA_BOUNDARY = "2022-12-30"
 SEALED_YEAR = 2023
