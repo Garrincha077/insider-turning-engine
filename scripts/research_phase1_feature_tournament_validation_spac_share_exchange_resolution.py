@@ -65,8 +65,9 @@ def _load_scope(path: Path) -> list[dict[str, Any]]:
         "productionScoringChanged":False,"residualRows":EXPECTED_SOURCE_ROWS,
         "scopeKeySha256":EXPECTED_SOURCE_DIGEST,
     }
-    for k,v in required.items():
-        if p.get(k)!=v: raise ValueError(f"residual-19 mismatch: {k}")
+    for key, expected in required.items():
+        if p.get(key) != expected:
+            raise ValueError(f"residual-19 mismatch: {key}")
     rows=p.get("rows")
     if not isinstance(rows,list) or len(rows)!=EXPECTED_SOURCE_ROWS:
         raise ValueError("residual-19 rows changed")
@@ -164,17 +165,23 @@ def run(*, scope_path: Path, evidence_path: Path, output_path: Path) -> dict[str
         if sorted(str(x) for x in r.get("candidateActionTypes") or [])
         == ["name_changes", "stock_mergers"]
     ]
-    if len(targets)!=EXPECTED_TARGET_ROWS: raise ValueError("SPAC target count changed")
-    if _digest(targets)!=EXPECTED_TARGET_DIGEST: raise ValueError("SPAC target digest changed")
+    if len(targets) != EXPECTED_TARGET_ROWS:
+        raise ValueError("SPAC target count changed")
+    if _digest(targets) != EXPECTED_TARGET_DIGEST:
+        raise ValueError("SPAC target digest changed")
 
     resolutions=[]
     for row in targets:
         ids=frozenset(str(x) for x in row.get("candidateActionIds") or [])
         fact=evidence.get(ids)
-        if fact is None: raise ValueError("SPAC action set lacks frozen evidence")
+        if fact is None:
+            raise ValueError("SPAC action set lacks frozen evidence")
         resolutions.append(_resolution(row,fact))
-    resolutions.sort(key=lambda r:(int(r["eventNumber"]),int(r["horizon"])))
-    if _digest(resolutions)!=EXPECTED_TARGET_DIGEST: raise ValueError("resolved SPAC keys changed")
+    resolutions.sort(
+        key=lambda row: (int(row["eventNumber"]), int(row["horizon"]))
+    )
+    if _digest(resolutions) != EXPECTED_TARGET_DIGEST:
+        raise ValueError("resolved SPAC keys changed")
 
     result={
         "schemaVersion":"1.0.0",
@@ -201,8 +208,13 @@ def main() -> None:
     parser.add_argument("--evidence",type=Path,required=True)
     parser.add_argument("--output",type=Path,required=True)
     args=parser.parse_args()
-    result=run(scope_path=args.scope,evidence_path=args.evidence,output_path=args.output)
-    print(json.dumps({k:v for k,v in result.items() if k!="resolutionRows"},indent=2,sort_keys=True))
+    result = run(
+        scope_path=args.scope,
+        evidence_path=args.evidence,
+        output_path=args.output,
+    )
+    compact = {key: value for key, value in result.items() if key != "resolutionRows"}
+    print(json.dumps(compact, indent=2, sort_keys=True))
 
 
 if __name__=="__main__":
