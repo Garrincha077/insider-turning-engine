@@ -1,0 +1,132 @@
+{
+  "schemaVersion": "1.0.0",
+  "contractId": "phase1-feature-tournament-validation-incomplete-stock-merger-primary-evidence-v1",
+  "frozenAt": "2026-09-22",
+  "researchOnly": true,
+  "performanceRead": false,
+  "priceFieldsRead": [],
+  "featureOutcomesRead": false,
+  "validationOpened": false,
+  "validationPerformanceOpened": false,
+  "oosOpened": false,
+  "productionScoringChanged": false,
+  "sourceResidualRelease": "research-phase1-insider-feature-tournament-validation-residual27-scope-v1",
+  "sourceResidualAsset": "validation-residual27-scope.json",
+  "sourceResidualAssetDigest": "sha256:04b4e2280e9059aed8c10f9a6d9ac1853f23f34f5028dba6482c014c1ff190a4",
+  "expectedRows": 8,
+  "expectedActions": 5,
+  "expectedKeySha256": "sha256:31296aeae352b58fc55a6eba4cbfaf2fa0d600134a004afcf6c7980782a5b776",
+  "evidence": [
+    {
+      "actionId": "d6cf9395-fd17-4af5-b03b-38dd3642aafd",
+      "issuerCik": "0001104855",
+      "ticker": "SPRT",
+      "effectiveDate": "2021-09-14",
+      "resolutionDecision": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "transformationKind": "PRIMARY_SEC_STOCK_MERGER",
+      "resultState": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "successorSymbol": "GREE",
+      "successorSharesPerEntryShare": 0.115,
+      "cashPerEntryShare": 0,
+      "primaryEvidence": [
+        {
+          "accession": "0001193125-21-272911",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1104855/000119312521272911/d225961d8k.htm",
+          "fact": "Support.com closing Form 8-K states each outstanding Support.com common share was converted at the merger effective time into 0.115 Greenidge Class A common shares, with cash only in lieu of fractional shares."
+        },
+        {
+          "accession": "0001193125-21-273493",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1844971/000119312521273493/d163523d8k.htm",
+          "fact": "Greenidge closing Form 8-K states the merger completed on 2021-09-14 and confirms the 0.115 exchange ratio."
+        }
+      ]
+    },
+    {
+      "actionId": "df44824a-c47a-46fa-b9fc-2f7574b6f21f",
+      "issuerCik": "0001411494",
+      "ticker": "APO",
+      "effectiveDate": "2022-01-01",
+      "resolutionDecision": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "transformationKind": "PRIMARY_SEC_SAME_SYMBOL_REORGANIZATION",
+      "resultState": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "successorSymbol": "APO",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "primaryEvidence": [
+        {
+          "accession": "0001858681-22-000021",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1858681/000185868122000021/proformacombinedfinancials.htm",
+          "fact": "Apollo successor filing states each outstanding legacy AGM Class A share was converted automatically into one HoldCo share at the AGM merger effective time."
+        },
+        {
+          "accession": "0001411494-21-000023",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1411494/000141149421000023/R21.htm",
+          "fact": "Legacy Apollo filing states each AGM Inc. Class A share would convert into one HoldCo share; the separate 1.149 ratio applies to Athene holders."
+        }
+      ]
+    },
+    {
+      "actionId": "5f641db7-9d3b-421a-a8fa-1d776400f766",
+      "issuerCik": "0001519061",
+      "ticker": "TSE",
+      "effectiveDate": "2021-10-08",
+      "resolutionDecision": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "transformationKind": "PRIMARY_SEC_SAME_SYMBOL_REORGANIZATION",
+      "resultState": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "successorSymbol": "TSE",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "primaryEvidence": [
+        {
+          "accession": "0001104659-21-124652",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1519061/000110465921124652/tm2129523d5_8k12b.htm",
+          "fact": "Trinseo successor Form 8-K12B states the merger became effective 2021-10-08, all outstanding Trinseo S.A. ordinary shares excluding treasury were exchanged one-for-one for Trinseo PLC ordinary shares, and TSE remained the trading symbol."
+        }
+      ]
+    },
+    {
+      "actionId": "e21ce7ea-649b-456a-a4f4-b025cbdc1fca",
+      "issuerCik": "0001772757",
+      "ticker": "DKNG",
+      "effectiveDate": "2022-05-05",
+      "resolutionDecision": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "transformationKind": "PRIMARY_SEC_SAME_SYMBOL_REORGANIZATION",
+      "resultState": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "successorSymbol": "DKNG",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "primaryEvidence": [
+        {
+          "accession": "0001883685-22-000026",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1883685/000188368522000026/dkng-20220630.htm",
+          "fact": "DraftKings successor filing states the 2022 holding-company reorganization converted each Old DraftKings Class A and Class B share one-for-one into the corresponding New DraftKings share."
+        },
+        {
+          "accession": "0001104659-22-056127",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1768012/000110465922056127/tm2214542d1_8k.htm",
+          "fact": "Closing Form 8-K states each Old DraftKings Class A share was cancelled and converted into one New DraftKings Class A share at the DraftKings merger effective time."
+        }
+      ]
+    },
+    {
+      "actionId": "7bb723b5-5b56-46bf-a324-324c32a33db3",
+      "issuerCik": "0001750106",
+      "ticker": "AEI",
+      "effectiveDate": "2022-10-04",
+      "resolutionDecision": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "transformationKind": "PRIMARY_SEC_SAME_SYMBOL_REORGANIZATION",
+      "resultState": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "successorSymbol": "AEI",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "primaryEvidence": [
+        {
+          "accession": "0001493152-22-027770",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1750106/000149315222027770/form8-k.htm",
+          "fact": "Alset successor Form 8-K states the reincorporation became effective 2022-10-04, each predecessor common share automatically converted into one successor common share, and trading continued under AEI."
+        }
+      ]
+    }
+  ],
+  "resolutionApplied": false
+}
