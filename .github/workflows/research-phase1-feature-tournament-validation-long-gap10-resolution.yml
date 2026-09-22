@@ -1,0 +1,184 @@
+name: Resolve F2 validation long-gap10 primary evidence
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-validation-long-gap10-resolution.yml"
+      - "research/validation-long-gap10-primary-evidence-v1.json"
+      - "scripts/research_phase1_feature_tournament_validation_long_gap10_resolution.py"
+      - "tests/test_research_phase1_feature_tournament_validation_long_gap10_resolution.py"
+      - "docs/research-phase1-feature-tournament-validation-long-gap10-resolution-gate.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-feature-tournament-validation-long-gap10-resolution-v1
+  cancel-in-progress: true
+
+env:
+  SCOPE_RELEASE: research-phase1-insider-feature-tournament-validation-residual10-long-gap-scope-v1
+  SCOPE_ASSET: validation-residual10-long-gap-scope.json
+  SCOPE_DIGEST: sha256:a1db8f513116f57d30a4ab07c32ccbc66a6868c52cd58250f240703011832f22
+  GAP_RELEASE: research-phase1-insider-feature-tournament-validation-gap-diagnostics-v1
+  GAP_ASSET: gap-diagnostics.csv
+  GAP_DIGEST: sha256:1e7d783cee4bdd3a5c64fc42cb0cc7a8e1a41e14f36220809aa0ba5d80af75b7
+  EVIDENCE_FILE: research/validation-long-gap10-primary-evidence-v1.json
+  EVIDENCE_GIT_BLOB: 7f51f0204cdaabe0cafbc51ba3038e4efe97c97f
+  RESULT_RELEASE: research-phase1-insider-feature-tournament-validation-long-gap10-primary-resolution-v1
+  RESULT_ASSET: validation-long-gap10-primary-resolution.json
+
+jobs:
+  resolve:
+    name: Primary SEC exact-gap continuity resolution
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --all-groups --frozen
+
+      - name: Lint and test long-gap10 resolver
+        run: |
+          uv run ruff check scripts/research_phase1_feature_tournament_validation_long_gap10_resolution.py tests/test_research_phase1_feature_tournament_validation_long_gap10_resolution.py
+          uv run pytest -q tests/test_research_phase1_feature_tournament_validation_long_gap10_resolution.py
+
+      - name: Assert frozen primary-evidence blob and boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object "$EVIDENCE_FILE")" = "$EVIDENCE_GIT_BLOB"
+          python - <<'PY'
+          import json
+          import os
+
+          p=json.load(open(os.environ["EVIDENCE_FILE"]))
+          assert p["contractId"]=="phase1-feature-tournament-validation-long-gap10-primary-evidence-v1"
+          assert len(p["identities"])==10
+          assert p["performanceRead"] is False
+          assert p["priceFieldsRead"]==[]
+          assert p["featureOutcomesRead"] is False
+          assert p["validationOpened"] is False
+          assert p["validationPerformanceOpened"] is False
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          PY
+
+      - name: Download and verify immutable residual scope and exact gaps
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/input work/output
+
+          gh release download "$SCOPE_RELEASE" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$SCOPE_ASSET" --dir work/input
+          test "sha256:$(sha256sum "work/input/$SCOPE_ASSET" | cut -d' ' -f1)" = "$SCOPE_DIGEST"
+
+          gh release download "$GAP_RELEASE" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$GAP_ASSET" --dir work/input
+          test "sha256:$(sha256sum "work/input/$GAP_ASSET" | cut -d' ' -f1)" = "$GAP_DIGEST"
+
+      - name: Resolve final ten validation continuity rows
+        run: >-
+          uv run python
+          scripts/research_phase1_feature_tournament_validation_long_gap10_resolution.py
+          --scope "work/input/$SCOPE_ASSET"
+          --gaps "work/input/$GAP_ASSET"
+          --evidence "$EVIDENCE_FILE"
+          --output "work/output/$RESULT_ASSET"
+
+      - name: Assert ten resolved rows and closed performance boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          p=json.loads(
+              Path("work/output/validation-long-gap10-primary-resolution.json").read_text()
+          )
+          assert p["status"]==(
+              "PHASE1_FEATURE_TOURNAMENT_VALIDATION_"
+              "LONG_GAP10_PRIMARY_RESOLUTION_COMPLETE"
+          )
+          assert p["sourceResidualRows"]==10
+          assert p["resolvedRows"]==10
+          assert p["remainingUnresolvedRows"]==0
+          assert p["resultStateCounts"]=={"PRICE_CONTINUOUS_ADJUSTED":10}
+          assert p["tickerCounts"]=={
+              "ACON":1,
+              "APMIU":1,
+              "GRCY":1,
+              "JAGX":1,
+              "KACLU":1,
+              "MCAGU":1,
+              "NETC.U":1,
+              "NVVE":1,
+              "ROCGU":1,
+              "UPTD":1,
+          }
+          expected_dates={
+              "ROCGU":"2022-02-07",
+              "APMIU":"2021-12-15",
+              "GRCY":"2022-01-11",
+              "MCAGU":"2022-03-22",
+              "NETC.U":"2022-04-12",
+              "KACLU":"2022-04-06",
+              "UPTD":"2022-08-22",
+              "JAGX":"2022-06-09",
+              "ACON":"2022-06-15",
+              "NVVE":"2022-07-27",
+          }
+          for row in p["resolutionRows"]:
+              assert row["effectiveDate"]==expected_dates[row["ticker"]]
+              assert row["successorSymbol"]==row["ticker"]
+              assert row["successorSharesPerEntryShare"]=="1"
+              assert row["cashPerEntryShare"]=="0"
+              assert row["sourceActionIds"]==[]
+              assert row["resolutionDecision"]=="SAME_SECURITY_CONTINUITY"
+          assert p["performanceRead"] is False
+          assert p["priceFieldsRead"]==[]
+          assert p["featureOutcomesRead"] is False
+          assert p["validationOpened"] is False
+          assert p["validationPerformanceOpened"] is False
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          assert p["finalValidationContinuityContractCreated"] is False
+          PY
+
+      - name: Publish immutable long-gap10 primary resolution
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp "$EVIDENCE_FILE" work/output/
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" \
+              --title "Phase-1 F2 validation long-gap10 primary resolution v1" \
+              --notes "Performance-blind primary SEC resolution of the final ten validation long-gap rows as same-security continuity. Validation performance and 2023+ OOS remain closed." \
+              --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE" \
+            "work/output/$RESULT_ASSET" \
+            "work/output/validation-long-gap10-primary-evidence-v1.json" \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase1-insider-feature-tournament-validation-long-gap10-resolution-${{ github.run_id }}
+          path: work/output
+          retention-days: 90
