@@ -12,10 +12,11 @@ This is the operational continuation point for a new ChatGPT/Codex session. Read
 4. Treat Phase-1 B0, B1, B2 and B4 development outputs as completed descriptive/research benchmarks, not production evidence.
 5. Treat the B3 P/S history, B3 amendment reconciliation, and B3 definition freeze as completed data/methodology gates.
 6. The frozen Phase-1 mean-separation feature tournament is terminal. F2 `DIRECT_VS_INDIRECT` returned **VALIDATION_FAIL_FROZEN**. Preserve that result; do not reinterpret, flip orientation, retune thresholds, or substitute a replacement feature inside that version.
-7. A new, separately versioned research objective is now active: **Monster Winner Enrichment v1**. Gate: `docs/research-monster-winner-enrichment-v1-gate.md`; machine-readable contract: `research/monster-winner-enrichment-v1.json`. Its goal is to concentrate rare future +100%/+200%/+500% opportunities for later technical/fundamental/risk filtering, not to maximize mean-return separation.
-8. Current next task for Monster Winner Enrichment v1: build a **performance-blind MFE/path-feasibility audit** and prove holder-path continuity/data coverage before any monster-tail outcome is computed.
-9. Keep sealed OOS **2023+ unopened**. 2021-2022 may only be used later as `KNOWN_SAMPLE_RETROSPECTIVE_DIAGNOSTIC`, never relabeled as untouched validation.
-10. Do **not** change production scoring, weights, thresholds, signal states, alerts, or production methodology unless the owner explicitly asks.
+7. **Monster Winner Enrichment v1 development is now confirmed.** The separately predeclared objective is to concentrate rare future +100%/+200%/+500% opportunities for later technical/fundamental/risk filtering, not to maximize mean-return separation.
+8. The performance-blind path audit is complete (run **35729304894**). Discovery 2016-2018 is complete (run **35730351909**). Chronological confirmation 2019-2020 is complete (run **35730954896**).
+9. Two definitions are frozen as `MONSTER_CONFIRMED_DEVELOPMENT_CANDIDATE`: **F3_DRAWDOWN_252** and **F4_DISTANCE_BELOW**. F1 and F2 have no Monster candidate. Do not reselect, retune or fit a post-hoc F3+F4 composite inside this version.
+10. Keep sealed OOS **2023+ unopened**. 2021-2022 may only be used as `KNOWN_SAMPLE_RETROSPECTIVE_DIAGNOSTIC`, never relabeled as untouched validation. A complete 252-session diagnostic for late 2021/2022 would require 2023+ data, so do not open it implicitly.
+11. Do **not** change production scoring, weights, thresholds, signal states, alerts, or production methodology unless the owner explicitly asks.
 
 ---
 
@@ -505,34 +506,39 @@ Do not open OOS until transaction eligibility, transforms, benchmark family, fea
 ## NEXT EXECUTION SEQUENCE
 
 1. Preserve the terminal Phase-1 mean-separation result: F2
-   `VALIDATION_FAIL_FROZEN`; do not retune or reinterpret it.
-2. Treat **Monster Winner Enrichment v1** as the active research track.
-   Frozen gate:
-   `docs/research-monster-winner-enrichment-v1-gate.md`.
-   Frozen machine contract:
-   `research/monster-winner-enrichment-v1.json`.
-3. Before reading any M50/M100/M200/M500 or MFE outcome, build a
-   **performance-blind holder-path feasibility audit** on the strict B0
-   2016-2020 event universe.
-4. The audit must verify:
-   - exact next-XNYS entry;
-   - 252-session calendar window;
-   - frozen security-continuity transformations;
-   - session-level holder-path availability;
-   - >=95% observable path requirement for a negative label;
-   - no >5-session internal missing run for a negative label;
-   - mandatory unvalued consideration => `MFE_UNKNOWN`;
-   - no nearest/later-bar substitution.
-5. Freeze the exact path/outcome contract before computing monster labels.
-6. Then compute 2016-2018 discovery enrichment using primary
-   `M100_252_CLOSE`, with +50/+200/+500 and top-tail diagnostics secondary.
-7. Apply unchanged selected family candidates to 2019-2020 confirmation under
-   the predeclared lift/capture/review-share rules.
-8. 2021-2022 may later be reported only as
-   `KNOWN_SAMPLE_RETROSPECTIVE_DIAGNOSTIC`; do not call it fresh validation.
-9. Keep 2023+ OOS sealed until a later explicit owner authorization and a
-   separate frozen execution gate.
-10. Production scoring and live signal delivery remain unchanged.
+   `VALIDATION_FAIL_FROZEN`; it is a different research objective and must
+   not be rewritten from the Monster result.
+2. Treat Monster Winner Enrichment v1 development as **confirmed**:
+   - path-feasibility run **35729304894**;
+   - discovery run **35730351909**;
+   - confirmation run **35730954896**.
+3. Preserve immutable Monster confirmation release
+   `research-monster-winner-enrichment-confirmation-v1`:
+   - result SHA-256
+     `sha256:c3fdae404172c30be4853d7cf8cc9b2bac946b7ffa30246b4527d8b383a92d2b`;
+   - archive SHA-256
+     `sha256:3a41a59ec050cb64d5ea265e3000a1b801be98f4ca252d133e51e2dfc6a08430`.
+4. Frozen confirmed development candidates:
+   - **F3_DRAWDOWN_252** — deepest trailing-252-session drawdown quintile;
+   - **F4_DISTANCE_BELOW** — lowest quintile of price distance to the frozen
+     90-calendar-day insider purchase basis.
+5. F1 and F2 do not advance under Monster Winner v1. Do not substitute a
+   rejected family or flip F2.
+6. Do not fit a combined F3+F4 rule after observing development confirmation
+   unless it is created as a separately versioned exploratory/predeclared
+   research track with honest post-selection status.
+7. 2021-2022 is no longer untouched validation. It may only be reported under
+   an explicitly labelled `KNOWN_SAMPLE_RETROSPECTIVE_DIAGNOSTIC` gate.
+8. Do not open 2023+ implicitly to finish a 252-session 2021-2022 path.
+   A complete clean OOS program for the fixed candidates requires explicit
+   owner authorization and a separately frozen 2023+ execution gate.
+9. Keep technical/fundamental review and the owner’s risk-management layer
+   separate from Monster Winner v1 at this stage.
+10. Production scoring, alerts and live methodology remain unchanged.
+
+See
+`docs/progress-2026-09-22-monster-winner-development-confirmed.md`
+for the compact current checkpoint.
 
 
 ---
