@@ -11,9 +11,11 @@ This is the operational continuation point for a new ChatGPT/Codex session. Read
 3. Treat the exact-calendar P0 market audit as the authoritative market-data gate. Current tier: **C_EXPLORATORY**.
 4. Treat Phase-1 B0, B1, B2 and B4 development outputs as completed descriptive/research benchmarks, not production evidence.
 5. Treat the B3 P/S history, B3 amendment reconciliation, and B3 definition freeze as completed data/methodology gates.
-6. Current active state: the frozen feature tournament has completed 2021-2022 validation. F2 `DIRECT_VS_INDIRECT` returned **VALIDATION_FAIL_FROZEN** under the predeclared eight-check rule. Preserve the result; do not reselect, flip orientation, retune thresholds, or substitute a replacement feature inside this tournament version.
-7. Keep sealed OOS **2023+ unopened**. The failed F2 candidate does not progress to OOS.
-8. Do **not** change production scoring, weights, thresholds, signal states, alerts, or production methodology unless the owner explicitly asks.
+6. The frozen Phase-1 mean-separation feature tournament is terminal. F2 `DIRECT_VS_INDIRECT` returned **VALIDATION_FAIL_FROZEN**. Preserve that result; do not reinterpret, flip orientation, retune thresholds, or substitute a replacement feature inside that version.
+7. A new, separately versioned research objective is now active: **Monster Winner Enrichment v1**. Gate: `docs/research-monster-winner-enrichment-v1-gate.md`; machine-readable contract: `research/monster-winner-enrichment-v1.json`. Its goal is to concentrate rare future +100%/+200%/+500% opportunities for later technical/fundamental/risk filtering, not to maximize mean-return separation.
+8. Current next task for Monster Winner Enrichment v1: build a **performance-blind MFE/path-feasibility audit** and prove holder-path continuity/data coverage before any monster-tail outcome is computed.
+9. Keep sealed OOS **2023+ unopened**. 2021-2022 may only be used later as `KNOWN_SAMPLE_RETROSPECTIVE_DIAGNOSTIC`, never relabeled as untouched validation.
+10. Do **not** change production scoring, weights, thresholds, signal states, alerts, or production methodology unless the owner explicitly asks.
 
 ---
 
@@ -502,28 +504,35 @@ Do not open OOS until transaction eligibility, transforms, benchmark family, fea
 
 ## NEXT EXECUTION SEQUENCE
 
-1. Treat the Phase-1 feature tournament as **terminal for this frozen version**:
-   the 2021-2022 validation workflow is green, but F2 itself is
-   `VALIDATION_FAIL_FROZEN`.
-2. Preserve the immutable result release
-   `research-phase1-insider-feature-tournament-validation-v1` and
-   `validation-results.json` SHA-256
-   `sha256:1c2b9107b520e360e7251519a5a5a945febeb41cac307d8d5e3e6e05adf1682c`.
-3. Treat final validation continuity as complete: **191 / 191 affected rows
-   classified, zero unresolved**; final contract SHA-256
-   `sha256:16a9814003c232d58d9e0f70a85b72beb7e37d04c81b390dbd3cfd6199c7956a`.
-4. Do not open 2023+ OOS for this failed F2 candidate.
-5. Do not mine 2021-2022 for a replacement rule and then relabel it as
-   untouched validation. Those outcomes are now known.
-6. If a new feature-research round is desired, first create a new,
-   separately versioned predeclared specification stating the new development,
-   validation and untouched OOS boundaries before any new selection work.
-7. Production scoring, alerts and the current live methodology remain
-   unchanged by the research result.
-
-See
-`docs/progress-2026-09-22-feature-tournament-validation-complete.md`
-for the compact terminal checkpoint.
+1. Preserve the terminal Phase-1 mean-separation result: F2
+   `VALIDATION_FAIL_FROZEN`; do not retune or reinterpret it.
+2. Treat **Monster Winner Enrichment v1** as the active research track.
+   Frozen gate:
+   `docs/research-monster-winner-enrichment-v1-gate.md`.
+   Frozen machine contract:
+   `research/monster-winner-enrichment-v1.json`.
+3. Before reading any M50/M100/M200/M500 or MFE outcome, build a
+   **performance-blind holder-path feasibility audit** on the strict B0
+   2016-2020 event universe.
+4. The audit must verify:
+   - exact next-XNYS entry;
+   - 252-session calendar window;
+   - frozen security-continuity transformations;
+   - session-level holder-path availability;
+   - >=95% observable path requirement for a negative label;
+   - no >5-session internal missing run for a negative label;
+   - mandatory unvalued consideration => `MFE_UNKNOWN`;
+   - no nearest/later-bar substitution.
+5. Freeze the exact path/outcome contract before computing monster labels.
+6. Then compute 2016-2018 discovery enrichment using primary
+   `M100_252_CLOSE`, with +50/+200/+500 and top-tail diagnostics secondary.
+7. Apply unchanged selected family candidates to 2019-2020 confirmation under
+   the predeclared lift/capture/review-share rules.
+8. 2021-2022 may later be reported only as
+   `KNOWN_SAMPLE_RETROSPECTIVE_DIAGNOSTIC`; do not call it fresh validation.
+9. Keep 2023+ OOS sealed until a later explicit owner authorization and a
+   separate frozen execution gate.
+10. Production scoring and live signal delivery remain unchanged.
 
 
 ---
