@@ -1,0 +1,104 @@
+name: Freeze F2 validation residual-11 continuity scope
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-validation-residual11-scope.yml"
+      - "scripts/research_phase1_feature_tournament_validation_residual11_scope.py"
+      - "tests/test_research_phase1_feature_tournament_validation_residual11_scope.py"
+      - "docs/research-phase1-feature-tournament-validation-residual11-scope-gate.md"
+
+permissions:
+  contents: write
+
+env:
+  SOURCE_RELEASE: research-phase1-insider-feature-tournament-validation-residual19-scope-v1
+  SOURCE_ASSET: validation-residual19-scope.json
+  SOURCE_DIGEST: sha256:2b2ebcf18d1ab74594141cbbaec00f911f4db4c01e529d34f000a8b24ddfcf67
+  RESOLUTION_RELEASE: research-phase1-insider-feature-tournament-validation-spac-share-exchange-resolution-v1
+  RESOLUTION_ASSET: validation-spac-share-exchange-primary-resolution.json
+  RESOLUTION_DIGEST: sha256:ebc41a7a0e65c6bcb696330f6e6121deff55e954bcafde6fe4fe83ea59ca4581
+  RESULT_RELEASE: research-phase1-insider-feature-tournament-validation-residual11-scope-v1
+  RESULT_ASSET: validation-residual11-scope.json
+
+jobs:
+  freeze:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+
+      - name: Lint and test residual-11 freezer
+        run: |
+          uv run ruff check scripts/research_phase1_feature_tournament_validation_residual11_scope.py tests/test_research_phase1_feature_tournament_validation_residual11_scope.py
+          uv run pytest -q tests/test_research_phase1_feature_tournament_validation_residual11_scope.py
+
+      - name: Download and verify immutable inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/input work/output
+          gh release download "$SOURCE_RELEASE" --repo "$GITHUB_REPOSITORY" --pattern "$SOURCE_ASSET" --dir work/input
+          gh release download "$RESOLUTION_RELEASE" --repo "$GITHUB_REPOSITORY" --pattern "$RESOLUTION_ASSET" --dir work/input
+          test "sha256:$(sha256sum "work/input/$SOURCE_ASSET" | cut -d' ' -f1)" = "$SOURCE_DIGEST"
+          test "sha256:$(sha256sum "work/input/$RESOLUTION_ASSET" | cut -d' ' -f1)" = "$RESOLUTION_DIGEST"
+
+      - name: Freeze residual-11 scope
+        run: >-
+          uv run python scripts/research_phase1_feature_tournament_validation_residual11_scope.py
+          --source "work/input/$SOURCE_ASSET"
+          --resolution "work/input/$RESOLUTION_ASSET"
+          --output "work/output/$RESULT_ASSET"
+
+      - name: Assert residual-11 partition and closed validation boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=json.loads(Path("work/output/validation-residual11-scope.json").read_text())
+          assert p["status"]=="PHASE1_FEATURE_TOURNAMENT_VALIDATION_RESIDUAL11_SCOPE_FROZEN"
+          assert p["sourceResidualRows"]==19
+          assert p["subtractedSpacRows"]==8
+          assert p["residualRows"]==11
+          assert p["scopeKeySha256"]=="sha256:46381d68c3ad51f9d6d9d7a934d88d807c599f78712f34d4e210c9f4248e5d55"
+          assert p["categoryCounts"]=={
+              "LONG_GAP_NEW_PRIMARY_EVIDENCE_REQUIRED":10,
+              "PROVIDER_NEW_PRIMARY_EVIDENCE_REQUIRED":1,
+          }
+          assert p["performanceRead"] is False
+          assert p["featureOutcomesRead"] is False
+          assert p["validationOpened"] is False
+          assert p["validationPerformanceOpened"] is False
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          PY
+
+      - name: Publish immutable residual-11 scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 F2 validation residual-11 continuity scope v1"               --notes "Performance-blind 11-row validation continuity residual after eight SPAC share-exchange resolutions. Validation performance and 2023+ OOS remain closed."               --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE" "work/output/$RESULT_ASSET" --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase1-insider-feature-tournament-validation-residual11-scope-${{ github.run_id }}
+          path: work/output
+          retention-days: 90
