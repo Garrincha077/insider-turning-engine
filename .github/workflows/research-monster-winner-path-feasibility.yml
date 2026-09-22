@@ -31,8 +31,13 @@ env:
   FINAL_CONTINUITY_ASSET: stage-b-final-continuity.json
   FINAL_CONTINUITY_DIGEST: sha256:24947122c8fa776dc6f5e8f628c5b45cdbec6551cf15df334421b405439b4518
 
+  PROVIDER_AMENDMENT_RELEASE: research-phase1-feature-tournament-provider-completeness-amendment-v1
+  PROVIDER_AMENDMENT_ASSET: provider-completeness-amendment.json
+  PROVIDER_AMENDMENT_DIGEST: sha256:faf787e918b953dcffbcc2b714c34873d6228031e25a09e509ee58e1a067fbb2
+
   MARKET_RELEASE: research-market-alpaca-v1
   DISCOVERY_HELPER_BLOB: 4bf0717f1d866dfbd282dd365f6e466f0cc92900
+  CONFIRMATION_HELPER_BLOB: 3928f68552b19ccb5da1459ba5ba78f48ae2d0f4
   MONSTER_CONTRACT_BLOB: 89864635996f6665f3ab0512c377ddf26d8f3689
 
   RESULT_RELEASE: research-monster-winner-enrichment-path-feasibility-v1
@@ -61,6 +66,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git hash-object scripts/research_phase1_feature_tournament_discovery.py)" = "$DISCOVERY_HELPER_BLOB"
+          test "$(git hash-object scripts/research_phase1_feature_tournament_confirmation.py)" = "$CONFIRMATION_HELPER_BLOB"
           test "$(git hash-object research/monster-winner-enrichment-v1.json)" = "$MONSTER_CONTRACT_BLOB"
 
       - name: Lint and test path-feasibility semantics
@@ -143,6 +149,7 @@ jobs:
           --ledger work/continuity/ledger/continuity-ledger.csv
           --corporate-actions work/continuity/ca/corporate-actions.json
           --final-contract "work/continuity/$FINAL_CONTINUITY_ASSET"
+          --provider-amendment "work/continuity/$PROVIDER_AMENDMENT_ASSET"
           --market-root work/market
           --output work/output
 
@@ -168,6 +175,7 @@ jobs:
           assert p["monsterLabelsComputed"] is False
           assert p["thresholdCrossingsRead"] is False
           assert p["mfeValuesComputed"] is False
+          assert p["providerCompletenessAmendmentRows"]==13
           assert p["knownSampleDiagnosticOpened"] is False
           assert p["oosOpened"] is False
           assert p["productionScoringChanged"] is False
