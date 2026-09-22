@@ -123,6 +123,8 @@ def _load_actions(path: Path) -> dict[str, dict[str, Any]]:
 
 def _candidate_ids(row: dict[str, Any]) -> list[str]:
     value = row.get("candidateActionIds")
+    if value in (None, "", []):
+        value = row.get("sourceActionIds")
     if isinstance(value, list):
         return sorted(str(item) for item in value if str(item))
     return sorted(item for item in str(value or "").split(";") if item)
