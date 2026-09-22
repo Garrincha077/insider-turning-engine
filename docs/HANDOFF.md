@@ -15,8 +15,9 @@ This is the operational continuation point for a new ChatGPT/Codex session. Read
 7. **Monster Winner Enrichment v1 development is now confirmed.** The separately predeclared objective is to concentrate rare future +100%/+200%/+500% opportunities for later technical/fundamental/risk filtering, not to maximize mean-return separation.
 8. The performance-blind path audit is complete (run **35729304894**). Discovery 2016-2018 is complete (run **35730351909**). Chronological confirmation 2019-2020 is complete (run **35730954896**).
 9. Two definitions are frozen as `MONSTER_CONFIRMED_DEVELOPMENT_CANDIDATE`: **F3_DRAWDOWN_252** and **F4_DISTANCE_BELOW**. F1 and F2 have no Monster candidate. Do not reselect, retune or fit a post-hoc F3+F4 composite inside this version.
-10. Keep sealed OOS **2023+ unopened**. 2021-2022 may only be used as `KNOWN_SAMPLE_RETROSPECTIVE_DIAGNOSTIC`, never relabeled as untouched validation. A complete 252-session diagnostic for late 2021/2022 would require 2023+ data, so do not open it implicitly.
-11. Do **not** change production scoring, weights, thresholds, signal states, alerts, or production methodology unless the owner explicitly asks.
+10. **Maximum existing-data extension is complete.** The comparable corpus supports primary M100/252 through **2021** and secondary M100/126 through evaluation date **2022-06-30**. Extension outcome run **35757195887** is immutable under `research-monster-winner-max-existing-outcomes-v1`. F3 remains enriched in 2021 (M100/252 lift 1.7809×); F4 weakens to 1.1364× and is <1 on 2021 M200/M500 tail metrics.
+11. Keep sealed OOS **2023+ unopened**. A complete primary 252-session 2022 result requires 2023 market data and must not be opened implicitly.
+12. Do **not** change production scoring, weights, thresholds, signal states, alerts, or production methodology unless the owner explicitly asks.
 
 ---
 
@@ -508,37 +509,51 @@ Do not open OOS until transaction eligibility, transforms, benchmark family, fea
 1. Preserve the terminal Phase-1 mean-separation result: F2
    `VALIDATION_FAIL_FROZEN`; it is a different research objective and must
    not be rewritten from the Monster result.
-2. Treat Monster Winner Enrichment v1 development as **confirmed**:
+2. Treat Monster Winner Enrichment v1 development as confirmed and its
+   **maximum existing-data extension as complete**:
    - path-feasibility run **35729304894**;
    - discovery run **35730351909**;
-   - confirmation run **35730954896**.
-3. Preserve immutable Monster confirmation release
-   `research-monster-winner-enrichment-confirmation-v1`:
+   - confirmation run **35730954896**;
+   - raw 2021-2022 feature-context extension run **35754695209**;
+   - max-existing feature scope run **35755092335**;
+   - max-existing continuity run **35756167797**;
+   - max-existing outcome run **35757195887**.
+3. Preserve immutable max-existing outcome release
+   `research-monster-winner-max-existing-outcomes-v1`:
    - result SHA-256
-     `sha256:c3fdae404172c30be4853d7cf8cc9b2bac946b7ffa30246b4527d8b383a92d2b`;
+     `sha256:198bf4f6219bcdf19bfa69bef78f477a54ee0283e16a61cec157f187ca8c1f45`;
    - archive SHA-256
-     `sha256:3a41a59ec050cb64d5ea265e3000a1b801be98f4ca252d133e51e2dfc6a08430`.
-4. Frozen confirmed development candidates:
-   - **F3_DRAWDOWN_252** — deepest trailing-252-session drawdown quintile;
-   - **F4_DISTANCE_BELOW** — lowest quintile of price distance to the frozen
-     90-calendar-day insider purchase basis.
-5. F1 and F2 do not advance under Monster Winner v1. Do not substitute a
-   rejected family or flip F2.
-6. Do not fit a combined F3+F4 rule after observing development confirmation
-   unless it is created as a separately versioned exploratory/predeclared
-   research track with honest post-selection status.
-7. 2021-2022 is no longer untouched validation. It may only be reported under
-   an explicitly labelled `KNOWN_SAMPLE_RETROSPECTIVE_DIAGNOSTIC` gate.
-8. Do not open 2023+ implicitly to finish a 252-session 2021-2022 path.
-   A complete clean OOS program for the fixed candidates requires explicit
-   owner authorization and a separately frozen 2023+ execution gate.
-9. Keep technical/fundamental review and the owner’s risk-management layer
-   separate from Monster Winner v1 at this stage.
+     `sha256:9eeb44d5c8632493d0b6a2139a13f9905cda13e30d3a8eec1fef9bae9008c3fb`.
+4. Frozen candidates remain:
+   - **F3_DRAWDOWN_252**;
+   - **F4_DISTANCE_BELOW**.
+5. Maximum comparable outcome span with current frozen data:
+   - full primary M100/252: **2016-2021**;
+   - secondary M100/126: through evaluation date **2022-06-30**;
+   - 2013-2015 remain warm-up only because matching market corpus is absent;
+   - no 2023+ data have been opened.
+6. Key latest evidence:
+   - F3 2021 M100/252 lift **1.7809×**, M200 lift **2.8411×**,
+     M500 lift **4.6758×**;
+   - F4 2021 M100/252 lift **1.1364×**, M200 lift **0.8844×**,
+     M500 lift **0.2603×**;
+   - partial 2022 M100/126 lift: F3 **9.3013×**, F4 **2.1089×**,
+     evaluation dates only through 2022-06-30.
+7. Descriptive pooled 2016-2021 primary M100/252 aggregation:
+   - F3 lift **4.2628×**, capture **61.9594%**, review share **27.6458%**;
+   - F4 lift **1.6636×**, capture **31.6375%**, review share **21.7644%**.
+   These pooled figures are descriptive aggregation, not a newly fitted rule.
+8. Do not fit a combined F3+F4 rule after seeing these outcomes unless it is
+   explicitly created as a separately versioned post-selection/exploratory
+   track.
+9. A full 2022 primary M100/252 result requires opening **2023** market data.
+   Do not do that without explicit owner authorization and a separately frozen
+   OOS/data-opening gate.
 10. Production scoring, alerts and live methodology remain unchanged.
 
 See
-`docs/progress-2026-09-22-monster-winner-development-confirmed.md`
-for the compact current checkpoint.
+`docs/progress-2026-09-22-monster-winner-max-existing-data-complete.md`
+for the current compact checkpoint.
 
 
 ---
