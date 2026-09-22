@@ -1,0 +1,129 @@
+name: Resolve F2 validation SPAC share-exchange primary evidence
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-validation-spac-share-exchange-resolution.yml"
+      - "scripts/research_phase1_feature_tournament_validation_spac_share_exchange_resolution.py"
+      - "tests/test_research_phase1_feature_tournament_validation_spac_share_exchange_resolution.py"
+      - "research/validation-spac-share-exchange-primary-evidence-v1.json"
+      - "docs/research-phase1-feature-tournament-validation-spac-share-exchange-resolution-gate.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-feature-tournament-validation-spac-share-exchange-resolution-v1
+  cancel-in-progress: true
+
+env:
+  SCOPE_RELEASE: research-phase1-insider-feature-tournament-validation-residual19-scope-v1
+  SCOPE_ASSET: validation-residual19-scope.json
+  SCOPE_DIGEST: sha256:2b2ebcf18d1ab74594141cbbaec00f911f4db4c01e529d34f000a8b24ddfcf67
+  EVIDENCE_FILE: research/validation-spac-share-exchange-primary-evidence-v1.json
+  EVIDENCE_GIT_BLOB: d9425ecc097c44f8bb970d482e74d63cb24588fe
+  RESULT_RELEASE: research-phase1-insider-feature-tournament-validation-spac-share-exchange-resolution-v1
+  RESULT_ASSET: validation-spac-share-exchange-primary-resolution.json
+
+jobs:
+  resolve:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+
+      - name: Lint and test SPAC share-exchange resolver
+        run: |
+          uv run ruff check scripts/research_phase1_feature_tournament_validation_spac_share_exchange_resolution.py tests/test_research_phase1_feature_tournament_validation_spac_share_exchange_resolution.py
+          uv run pytest -q tests/test_research_phase1_feature_tournament_validation_spac_share_exchange_resolution.py
+
+      - name: Assert frozen primary-evidence blob
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object "$EVIDENCE_FILE")" = "$EVIDENCE_GIT_BLOB"
+
+      - name: Download and verify immutable residual-19 scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/input work/output
+          gh release download "$SCOPE_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$SCOPE_ASSET" --dir work/input
+          test "sha256:$(sha256sum "work/input/$SCOPE_ASSET" | cut -d' ' -f1)" = "$SCOPE_DIGEST"
+
+      - name: Apply frozen primary SEC SPAC exchange terms
+        run: >-
+          uv run python
+          scripts/research_phase1_feature_tournament_validation_spac_share_exchange_resolution.py
+          --scope "work/input/$SCOPE_ASSET"
+          --evidence "$EVIDENCE_FILE"
+          --output "work/output/$RESULT_ASSET"
+
+      - name: Assert eight-row resolution and closed validation boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from collections import Counter
+          from pathlib import Path
+
+          p=json.loads(Path("work/output/validation-spac-share-exchange-primary-resolution.json").read_text())
+          assert p["status"]=="PHASE1_FEATURE_TOURNAMENT_VALIDATION_SPAC_SHARE_EXCHANGE_PRIMARY_RESOLUTION_COMPLETE"
+          assert p["sourceResidualRows"]==19
+          assert p["resolvedRows"]==8
+          assert p["remainingUnresolvedRows"]==11
+          assert p["resolvedKeySha256"]=="sha256:f08070c07a6bb411490e8f97b6413c5b498496d4f178067ceab5059db4d159c0"
+          assert Counter(r["ticker"] for r in p["resolutionRows"])=={
+              "TBA":1,"SAII":2,"LEGO":2,"DDMX":1,"VOSO":1,"SV":1
+          }
+          expected={
+              "TBA":("2021-06-28","IS"),
+              "SAII":("2021-08-13","OTMO"),
+              "LEGO":("2021-10-19","ASTL"),
+              "DDMX":("2021-11-30","CDRO"),
+              "VOSO":("2021-11-18","WEJO"),
+              "SV":("2022-04-29","SMR"),
+          }
+          for r in p["resolutionRows"]:
+              assert (r["effectiveDate"],r["successorSymbol"])==expected[r["ticker"]]
+              assert r["successorSharesPerEntryShare"]=="1"
+              assert r["cashPerEntryShare"]=="0"
+              assert r["transformationKind"]=="PRIMARY_SEC_SPAC_STOCK_EXCHANGE"
+              assert r["classificationSource"]=="VALIDATION_PRIMARY_SPAC_SHARE_EXCHANGE_TERMS"
+          assert p["performanceRead"] is False
+          assert p["featureOutcomesRead"] is False
+          assert p["validationOpened"] is False
+          assert p["validationPerformanceOpened"] is False
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          PY
+
+      - name: Publish immutable SPAC share-exchange resolution
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp "$EVIDENCE_FILE" work/output/
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 F2 validation SPAC share-exchange primary resolution v1"               --notes "Performance-blind primary SEC resolution of eight validation SPAC/common-share exchange rows. 11 rows remain unresolved; validation performance and 2023+ OOS remain closed."               --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE"             "work/output/$RESULT_ASSET"             "work/output/validation-spac-share-exchange-primary-evidence-v1.json"             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase1-insider-feature-tournament-validation-spac-share-exchange-resolution-${{ github.run_id }}
+          path: work/output
+          retention-days: 90
