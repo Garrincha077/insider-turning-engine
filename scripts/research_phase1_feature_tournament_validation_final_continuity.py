@@ -475,7 +475,6 @@ def run(
         "resolutionRows": merged,
         "resolutionComplete": True,
         "finalResolutionContractCreated": True,
-        "validationPerformanceOpened": False,
     }
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(
