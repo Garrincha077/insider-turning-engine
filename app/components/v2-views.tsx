@@ -23,6 +23,17 @@ function priorDate(day: string, offset: number): string {
   return value.toISOString().slice(0, 10);
 }
 
+function percentile(values: number[], quantile: number): number | null {
+  if (!values.length) return null;
+  const sorted = values.toSorted((left, right) => left - right);
+  const position = (sorted.length - 1) * quantile;
+  const lower = Math.floor(position);
+  const fraction = position - lower;
+  return sorted[lower + 1] == null
+    ? sorted[lower]
+    : sorted[lower] + fraction * (sorted[lower + 1] - sorted[lower]);
+}
+
 /** Factual event-count barometer inspired by the common monthly buy/sell ratio. */
 export function InsiderRatioV2({ data }: { data: ResearchSnapshot }) {
   const companies = new Map(data.companies.map((row) => [row.issuerCik, row]));
@@ -70,6 +81,15 @@ export function InsiderRatioV2({ data }: { data: ResearchSnapshot }) {
   const average = valid.length ? valid.reduce((sum, value) => sum + value, 0) / valid.length : null;
   const chartValid = shown.flatMap((row) => row.ratio == null ? [] : [row.ratio]);
   const chartAverage = chartValid.length ? chartValid.reduce((sum, value) => sum + value, 0) / chartValid.length : null;
+  const sellBoundary = valid.length >= 20 ? percentile(valid, 0.2) : null;
+  const buyBoundary = valid.length >= 20 ? percentile(valid, 0.8) : null;
+  const bandsAvailable = sellBoundary != null && buyBoundary != null && buyBoundary > sellBoundary;
+  const currentZone = current?.ratio == null ? 'Unavailable — no sale denominator'
+    : !bandsAvailable ? 'Needs 20 varied observations'
+    : current.ratio >= buyBoundary ? 'Historical BUY zone'
+    : current.ratio <= sellBoundary ? 'Historical SELL zone'
+    : 'Observed middle range';
+  const chartMaximum = Math.max(1, ...chartValid, buyBoundary ?? 0) * 1.08;
   const tooltip = (params: unknown) => {
     const list = Array.isArray(params) ? params : [params];
     const index = Number((list[0] as { dataIndex?: number } | undefined)?.dataIndex ?? -1);
@@ -82,8 +102,9 @@ export function InsiderRatioV2({ data }: { data: ResearchSnapshot }) {
     <section className="rounded-xl border border-emerald-400/30 bg-emerald-400/5 p-5">
       <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-semibold">SEC insider buy/sell event ratio</h2><p className="mt-2 max-w-4xl text-sm leading-6 text-muted-foreground">Purchase events divided by sale events. The current reading is a rolling 30-calendar-day window recalculated after each complete SEC daily-index cycle, without a three-month publication delay.</p></div><span className="rounded-full border border-emerald-400/40 px-3 py-1 text-xs text-emerald-200">Daily refreshed · not intraday</span></div>
     </section>
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{[
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">{[
       ['Current 30D ratio', current?.ratio == null ? '—' : `${metric(current.ratio, 2)}×`, 'insider-ratio-current'],
+      ['Current historical zone', currentZone, 'insider-ratio-zone'],
       ['Buy events · 30D', current ? String(current.buys) : '—', undefined],
       ['Sale events · 30D', current ? String(current.sales) : '—', undefined],
       ['Observed 30D average', average == null ? '—' : `${metric(average, 2)}×`, undefined],
@@ -92,9 +113,10 @@ export function InsiderRatioV2({ data }: { data: ResearchSnapshot }) {
     <section className="rounded-xl border border-border bg-card p-5">
       <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-base font-semibold">Observed ratio history</h2><p className="mt-1 text-xs text-muted-foreground">Event counts, not transaction dollars</p></div><div className="flex flex-wrap gap-2"><select aria-label="Ratio sector" className={controlClass} value={selectedSector} onChange={(event) => setSelectedSector(event.target.value)}><option>All sectors</option>{sectors.map((sector) => <option key={sector}>{sector}</option>)}</select><button aria-pressed={mode === 'rolling'} className={controlClass} onClick={() => setMode('rolling')}>Daily rolling 30D</button><button aria-pressed={mode === 'monthly'} className={controlClass} onClick={() => setMode('monthly')}>Calendar months</button></div></div>
       <p className="my-3 text-sm leading-6 text-muted-foreground">{mode === 'rolling' ? 'Each point uses transactions in the preceding 30 calendar days that were available by that SEC day. This prevents later filings from leaking backward into earlier points.' : 'Calendar-month observations use transaction dates and all filings available by the latest complete SEC day. An asterisk marks a partial boundary month.'}</p>
-      {!shown.length ? <p className="py-8 text-sm text-muted-foreground">No complete SEC-day history is available for this selection.</p> : <EChart style={{ height: 390 }} option={{ textStyle: { color: '#cbd5e1' }, tooltip: { trigger: 'axis', formatter: tooltip }, grid: { left: 62, right: 24, top: 36, bottom: 55 }, xAxis: { type: 'category', data: shown.map((row) => `${row.label}${row.partial ? ' *' : ''}`), axisLabel: { hideOverlap: true } }, yAxis: { type: 'value', min: 0, name: 'Buy / sell events', axisLabel: { formatter: (value: number) => `${metric(value, 1)}×` }, splitLine: { lineStyle: { color: '#263446' } } }, series: [{ type: mode === 'monthly' ? 'bar' : 'line', name: 'Buy / sell event ratio', data: shown.map((row) => row.ratio), connectNulls: false, showSymbol: mode === 'monthly', smooth: false, itemStyle: { color: '#34d399' }, lineStyle: { color: '#34d399', width: 2 }, areaStyle: mode === 'rolling' ? { color: 'rgba(52, 211, 153, 0.10)' } : undefined, markLine: chartAverage == null ? undefined : { silent: true, symbol: 'none', label: { formatter: `Observed average ${metric(chartAverage, 2)}×`, color: '#94a3b8' }, lineStyle: { type: 'dashed', color: '#64748b' }, data: [{ yAxis: chartAverage }] } }] }} />}
+      <div className="mb-3 flex flex-wrap gap-x-5 gap-y-2 text-xs"><span className="text-emerald-200">BUY zone {bandsAvailable ? `≥ ${metric(buyBoundary, 2)}× (80th percentile)` : '—'}</span><span className="text-rose-300">SELL zone {bandsAvailable ? `≤ ${metric(sellBoundary, 2)}× (20th percentile)` : '—'}</span><span className="text-sky-200">Event parity: 1×</span>{!bandsAvailable && <span className="text-amber-200">At least 20 valid, varied rolling observations are required.</span>}</div>
+      {!shown.length ? <p className="py-8 text-sm text-muted-foreground">No complete SEC-day history is available for this selection.</p> : <EChart style={{ height: 390 }} option={{ textStyle: { color: '#cbd5e1' }, tooltip: { trigger: 'axis', formatter: tooltip }, grid: { left: 62, right: 24, top: 36, bottom: 55 }, xAxis: { type: 'category', data: shown.map((row) => `${row.label}${row.partial ? ' *' : ''}`), axisLabel: { hideOverlap: true } }, yAxis: { type: 'value', min: 0, max: chartMaximum, name: 'Buy / sell events', axisLabel: { formatter: (value: number) => `${metric(value, 1)}×` }, splitLine: { lineStyle: { color: '#263446' } } }, series: [{ type: mode === 'monthly' ? 'bar' : 'line', name: 'Buy / sell event ratio', data: shown.map((row) => row.ratio), connectNulls: false, showSymbol: mode === 'monthly', smooth: false, itemStyle: { color: '#34d399' }, lineStyle: { color: '#34d399', width: 2 }, areaStyle: mode === 'rolling' ? { color: 'rgba(52, 211, 153, 0.10)' } : undefined, markArea: !bandsAvailable ? undefined : { silent: true, label: { color: '#cbd5e1', fontSize: 10 }, data: [[{ name: 'Historical SELL zone', yAxis: 0, itemStyle: { color: 'rgba(251, 113, 133, 0.08)' } }, { yAxis: sellBoundary }], [{ name: 'Historical BUY zone', yAxis: buyBoundary, itemStyle: { color: 'rgba(52, 211, 153, 0.08)' } }, { yAxis: chartMaximum }]] }, markLine: { silent: true, symbol: 'none', label: { color: '#94a3b8', position: 'insideEndTop' }, data: [{ name: '1× event parity', yAxis: 1, label: { formatter: '1× parity', color: '#7dd3fc' }, lineStyle: { color: '#38bdf8', type: 'solid' } }, ...(chartAverage == null ? [] : [{ name: 'Observed average', yAxis: chartAverage, label: { formatter: `Average ${metric(chartAverage, 2)}×` }, lineStyle: { color: '#64748b', type: 'dashed' } }]), ...(!bandsAvailable ? [] : [{ name: 'Historical BUY boundary', yAxis: buyBoundary, label: { formatter: `BUY ≥ ${metric(buyBoundary, 2)}×`, color: '#6ee7b7' }, lineStyle: { color: '#34d399', type: 'dashed' } }, { name: 'Historical SELL boundary', yAxis: sellBoundary, label: { formatter: `SELL ≤ ${metric(sellBoundary, 2)}×`, color: '#fda4af' }, lineStyle: { color: '#fb7185', type: 'dashed' } }])] } }] }} />}
     </section>
-    <section className="rounded-xl border border-border bg-card p-5 text-sm leading-6 text-muted-foreground"><h2 className="text-base font-semibold text-foreground">How to read it</h2><p className="mt-3">Each economic event is counted once, even when a filing has joint reporting owners. Only effective, qualified, non-derivative open-market P and S events with resolved eligible-company identity enter the ratio. A higher value means more observed purchase events relative to sale events; it is context, not a trading signal.</p><p className="mt-3">A missing sale denominator is shown as <strong className="text-foreground">—</strong>, never 0× or infinity. {unavailableForHistory ? `${unavailableForHistory.toLocaleString('en-US')} otherwise eligible events lack SEC-day lineage and are excluded from the historical curve. ` : ''}{data.coverage.scope}. The observed universe and history differ from GuruFocus, so the levels are not expected to match.</p></section>
+    <section className="rounded-xl border border-border bg-card p-5 text-sm leading-6 text-muted-foreground"><h2 className="text-base font-semibold text-foreground">How to read it</h2><p className="mt-3">Each economic event is counted once, even when a filing has joint reporting owners. Only effective, qualified, non-derivative open-market P and S events with resolved eligible-company identity enter the ratio. The BUY and SELL zones are the upper and lower 20% of this selection’s available rolling history; they describe unusual historical activity, not validated trading signals. The 1× line means equal observed purchase and sale event counts.</p><p className="mt-3">A missing sale denominator is shown as <strong className="text-foreground">—</strong>, never 0× or infinity. {unavailableForHistory ? `${unavailableForHistory.toLocaleString('en-US')} otherwise eligible events lack SEC-day lineage and are excluded from the historical curve. ` : ''}{data.coverage.scope}. The observed universe and history differ from GuruFocus, so its fixed thresholds are not copied as if directly comparable.</p></section>
   </div>;
 }
 

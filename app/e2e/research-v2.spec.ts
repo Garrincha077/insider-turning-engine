@@ -111,10 +111,47 @@ test('Insider Ratio counts economic events once and exposes live and monthly vie
   await section(page, 'Insider Ratio');
   await expect(page.getByText('Latest complete SEC day', { exact: true })).toBeVisible();
   await expect(page.getByTestId('insider-ratio-current')).toHaveText('2×');
+  await expect(page.getByTestId('insider-ratio-zone')).toHaveText('Needs 20 varied observations');
+  await expect(page.getByText('At least 20 valid, varied rolling observations are required.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Daily rolling 30D' })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'Calendar months' }).click();
   await expect(page.getByRole('button', { name: 'Calendar months' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByText(/Each economic event is counted once/)).toBeVisible();
+});
+
+test('Insider Ratio derives historical BUY and SELL boundaries from its own observations', async ({ page }) => {
+  await v2(page, (value) => {
+    const research = value as unknown as ResearchSnapshot;
+    const days: string[] = [];
+    for (const cursor = new Date('2026-08-03T00:00:00Z'); cursor <= new Date('2026-08-31T00:00:00Z'); cursor.setUTCDate(cursor.getUTCDate() + 1)) {
+      if (![0, 6].includes(cursor.getUTCDay())) days.push(cursor.toISOString().slice(0, 10));
+    }
+    research.coverage.expectedSecDays = days;
+    research.coverage.days = days.map((day) => ({ day, discoveredFilings: 1,
+      storedFilings: 1, parseRows: 1, quarantinedRows: 0, failures: 0, complete: true }));
+    research.economicTransactions.forEach((row) => {
+      row.transactionDate = '2026-08-03'; row.secDay = '2026-08-03';
+      row.acceptedAt = '2026-08-03T20:00:00Z'; row.knownAt = '2026-08-03T20:00:00Z';
+    });
+    const template = research.economicTransactions[0];
+    const add = (id: string, side: 'BUY' | 'SELL', day: string) => research.economicTransactions.push({ ...template,
+      eventId: `evt_ratio_${id}`, accession: `0001234567-26-${id.padStart(6, '0')}`,
+      transactionDate: day, secDay: day, acceptedAt: `${day}T20:00:00Z`, knownAt: `${day}T20:00:00Z`,
+      code: side === 'BUY' ? 'P' : 'S', side, owners: [template.owners[0]] });
+    add('10', 'SELL', '2026-08-03');
+    add('11', 'SELL', '2026-08-12'); add('12', 'SELL', '2026-08-12');
+    for (const id of ['20', '21', '22', '23']) add(id, 'BUY', '2026-08-24');
+    research.coverage.economicEvents = research.economicTransactions.length;
+    research.coverage.canonicalOwnerRows += 7;
+  });
+  await ready(page);
+  await section(page, 'Insider Ratio');
+  await expect(page.getByTestId('insider-ratio-current')).toHaveText('2×');
+  await expect(page.getByTestId('insider-ratio-zone')).toHaveText('Historical BUY zone');
+  await expect(page.getByText('BUY zone ≥ 2× (80th percentile)')).toBeVisible();
+  await expect(page.getByText('SELL zone ≤ 0.67× (20th percentile)')).toBeVisible();
+  await expect(page.getByText('Event parity: 1×')).toBeVisible();
+  await expect(page.locator('canvas').first()).toBeVisible();
 });
 
 test('v2 semantic corruption cannot fall back to the legacy snapshot', async ({ page }) => {
