@@ -88,8 +88,9 @@ def _load_evidence(path: Path) -> dict[frozenset[str], dict[str, Any]]:
         "expectedKeySha256":EXPECTED_TARGET_DIGEST,
         "resolutionApplied":False,
     }
-    for k,v in required.items():
-        if p.get(k)!=v: raise ValueError(f"SPAC evidence mismatch: {k}")
+    for key, expected in required.items():
+        if p.get(key) != expected:
+            raise ValueError(f"SPAC evidence mismatch: {key}")
     rows=p.get("evidence")
     if not isinstance(rows,list) or len(rows)!=6:
         raise ValueError("SPAC evidence identity count changed")
@@ -108,13 +109,17 @@ def _resolution(row: dict[str, Any], fact: dict[str, Any]) -> dict[str, Any]:
     ids=frozenset(str(x) for x in row.get("candidateActionIds") or [])
     if ids!=frozenset(str(x) for x in fact["actionIds"]):
         raise ValueError("SPAC action set changed")
-    if sorted(str(x) for x in row.get("candidateActionTypes") or []) != ["name_changes","stock_mergers"]:
+    action_types = sorted(str(x) for x in row.get("candidateActionTypes") or [])
+    if action_types != ["name_changes", "stock_mergers"]:
         raise ValueError("SPAC source action types changed")
     if str(row.get("resolutionSource") or "")!="provider":
         raise ValueError("SPAC source classification changed")
-    if str((row.get("evidenceAudit") or {}).get("category") or "")!="PROVIDER_NEW_PRIMARY_EVIDENCE_REQUIRED":
+    category = str((row.get("evidenceAudit") or {}).get("category") or "")
+    if category != "PROVIDER_NEW_PRIMARY_EVIDENCE_REQUIRED":
         raise ValueError("SPAC evidence category changed")
-    if str(row["issuerCik"])!=str(fact["issuerCik"]) or str(row["ticker"]).upper()!=str(fact["ticker"]).upper():
+    same_issuer = str(row["issuerCik"]) == str(fact["issuerCik"])
+    same_ticker = str(row["ticker"]).upper() == str(fact["ticker"]).upper()
+    if not same_issuer or not same_ticker:
         raise ValueError("SPAC identity changed")
 
     effective=str(fact["effectiveDate"])
@@ -156,7 +161,8 @@ def run(*, scope_path: Path, evidence_path: Path, output_path: Path) -> dict[str
     evidence=_load_evidence(evidence_path)
     targets=[
         r for r in scope
-        if sorted(str(x) for x in r.get("candidateActionTypes") or [])==["name_changes","stock_mergers"]
+        if sorted(str(x) for x in r.get("candidateActionTypes") or [])
+        == ["name_changes", "stock_mergers"]
     ]
     if len(targets)!=EXPECTED_TARGET_ROWS: raise ValueError("SPAC target count changed")
     if _digest(targets)!=EXPECTED_TARGET_DIGEST: raise ValueError("SPAC target digest changed")
