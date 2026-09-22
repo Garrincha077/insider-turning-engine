@@ -1,0 +1,164 @@
+{
+  "schemaVersion": "1.0.0",
+  "contractId": "phase1-feature-tournament-validation-spac-share-exchange-primary-evidence-v1",
+  "frozenAt": "2026-09-22",
+  "researchOnly": true,
+  "performanceRead": false,
+  "priceFieldsRead": [],
+  "featureOutcomesRead": false,
+  "validationOpened": false,
+  "validationPerformanceOpened": false,
+  "oosOpened": false,
+  "productionScoringChanged": false,
+  "sourceResidualRelease": "research-phase1-insider-feature-tournament-validation-residual19-scope-v1",
+  "sourceResidualAsset": "validation-residual19-scope.json",
+  "sourceResidualAssetDigest": "sha256:2b2ebcf18d1ab74594141cbbaec00f911f4db4c01e529d34f000a8b24ddfcf67",
+  "expectedRows": 8,
+  "expectedIdentities": 6,
+  "expectedKeySha256": "sha256:f08070c07a6bb411490e8f97b6413c5b498496d4f178067ceab5059db4d159c0",
+  "evidence": [
+    {
+      "issuerCik": "0001832459",
+      "ticker": "TBA",
+      "actionIds": [
+        "a33f3f0f-e808-4faf-a6b4-e0a56c782d3f",
+        "d8a77a16-b367-4f25-8714-1585be10007d"
+      ],
+      "effectiveDate": "2021-06-28",
+      "successorSymbol": "IS",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "resolutionDecision": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "transformationKind": "PRIMARY_SEC_SPAC_STOCK_EXCHANGE",
+      "resultState": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "primaryEvidence": [
+        {
+          "accession": "0001193125-21-202203",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1832459/000119312521202203/d167191d8k.htm",
+          "fact": "Closing Form 8-K states each outstanding TBA Class A share converted automatically into one ironSource Class A ordinary share; IS began trading 2021-06-29."
+        }
+      ]
+    },
+    {
+      "issuerCik": "0001816048",
+      "ticker": "SAII",
+      "actionIds": [
+        "344b2f16-c6ea-40e8-acad-7093c0829a50",
+        "4188dc51-ae75-40e0-9358-4d1640e10637"
+      ],
+      "effectiveDate": "2021-08-13",
+      "successorSymbol": "OTMO",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "resolutionDecision": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "transformationKind": "PRIMARY_SEC_SPAC_STOCK_EXCHANGE",
+      "resultState": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "primaryEvidence": [
+        {
+          "accession": "0001193125-21-246267",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1816048/000119312521246267/d213544d8k.htm",
+          "fact": "Closing Form 8-K states each outstanding SAII Class A share was exchanged for one Otonomo ordinary share."
+        }
+      ]
+    },
+    {
+      "issuerCik": "0001820272",
+      "ticker": "LEGO",
+      "actionIds": [
+        "39f62f90-dc40-45e1-8223-edc7c56ed673",
+        "b4923e68-6a58-48ba-b087-7d8d8af98ead"
+      ],
+      "effectiveDate": "2021-10-19",
+      "successorSymbol": "ASTL",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "resolutionDecision": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "transformationKind": "PRIMARY_SEC_SPAC_STOCK_EXCHANGE",
+      "resultState": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "primaryEvidence": [
+        {
+          "accession": "0001213900-21-053600",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1820272/000121390021053600/ea149101-8k_legatomerger.htm",
+          "fact": "Closing Form 8-K states each outstanding Legato common share was exchanged for one newly issued Algoma common share; ASTL trading began 2021-10-20."
+        }
+      ]
+    },
+    {
+      "issuerCik": "0001828957",
+      "ticker": "DDMX",
+      "actionIds": [
+        "5d099e1c-ebe1-4044-8785-2673b24b9b63",
+        "b30f7ee9-28a2-4313-8560-9f7840390007"
+      ],
+      "effectiveDate": "2021-11-30",
+      "successorSymbol": "CDRO",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "resolutionDecision": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "transformationKind": "PRIMARY_SEC_SPAC_STOCK_EXCHANGE",
+      "resultState": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "primaryEvidence": [
+        {
+          "accession": "0001829126-21-015613",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1828957/000182912621015613/codereonlineus_8k.htm",
+          "fact": "Closing Form 8-K states DD3 common shares were contributed to Codere Online Holdco and CDRO trading began 2021-12-01."
+        },
+        {
+          "accession": "0001829126-22-009210",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1866782/000182912622009210/codereonline_20f.htm",
+          "fact": "2021 Form 20-F states each DD3 Class A share outstanding at the merger effective time was exchanged for one validly issued and fully paid Codere Online ordinary share."
+        }
+      ]
+    },
+    {
+      "issuerCik": "0001822888",
+      "ticker": "VOSO",
+      "actionIds": [
+        "097d2474-4ca9-4b46-ab1d-922f952d4d7f",
+        "fde2c7ad-5f13-4632-a64e-c5b977b0ca25"
+      ],
+      "effectiveDate": "2021-11-18",
+      "successorSymbol": "WEJO",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "resolutionDecision": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "transformationKind": "PRIMARY_SEC_SPAC_STOCK_EXCHANGE",
+      "resultState": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "primaryEvidence": [
+        {
+          "accession": "0001104659-21-093068",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1864448/000110465921093068/tm2121431-1_s4.htm",
+          "fact": "Registration statement states each outstanding Virtuoso common share converts into and is entitled to receive one Wejo Group common share."
+        },
+        {
+          "accession": "0001104659-21-143665",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1864448/000110465921143665/tm2133093d2_8k.htm",
+          "fact": "Closing Form 8-K states the business combination closed 2021-11-18 and WEJO began trading 2021-11-19."
+        }
+      ]
+    },
+    {
+      "issuerCik": "0001822966",
+      "ticker": "SV",
+      "actionIds": [
+        "83812a9e-1791-427d-aa51-33a7f370aa02",
+        "ae7458a5-4ec9-45e5-86ff-e8746a358cd2"
+      ],
+      "effectiveDate": "2022-04-29",
+      "successorSymbol": "SMR",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "resolutionDecision": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "transformationKind": "PRIMARY_SEC_SPAC_STOCK_EXCHANGE",
+      "resultState": "TRANSFORMED_HOLDER_CONSIDERATION",
+      "primaryEvidence": [
+        {
+          "accession": "0001104659-22-056493",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1822966/000110465922056493/tm2213736d7_8k.htm",
+          "fact": "Closing Form 8-K states each Spring Valley Class A ordinary share converted one-for-one into NuScale Class A common stock upon the 2022-04-29 domestication; SMR trading began 2022-05-03 after the 2022-05-02 closing."
+        }
+      ]
+    }
+  ],
+  "resolutionApplied": false
+}
