@@ -68,7 +68,7 @@ jobs:
           assert p["validationPerformanceOpened"] is False and p["oosOpened"] is False
           PY
       - name: Publish immutable residual-10
-        env: {GH_TOKEN: ${{ github.token }}}
+        env:\n          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
