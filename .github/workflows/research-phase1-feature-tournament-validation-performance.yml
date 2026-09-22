@@ -1,0 +1,200 @@
+name: Run frozen F2 validation performance
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-validation-performance.yml"
+      - "scripts/research_phase1_feature_tournament_validation_performance.py"
+      - "tests/test_research_phase1_feature_tournament_validation_performance.py"
+      - "docs/research-phase1-feature-tournament-validation-execution-gate.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-phase1-feature-tournament-validation-performance-v1
+  cancel-in-progress: false
+
+env:
+  CONFIRMATION_RELEASE: research-phase1-insider-feature-tournament-confirmation-v1
+  CONFIRMATION_ASSET: confirmation-results.json
+  CONFIRMATION_DIGEST: sha256:5776b17b452c23aaccf481b1484460c9ab8d860187eb554bef31f6a0387d234f
+
+  SCOPE_RELEASE: research-phase1-insider-feature-tournament-validation-scope-v1
+  SCOPE_ARCHIVE: phase1-insider-feature-tournament-validation-scope-v1.tar.gz
+  SCOPE_ARCHIVE_DIGEST: sha256:fd95e01b1ca13e08f3cb5baac03dd2f695aded9805bdea5c0a4eb4aaf5a2db16
+  SCOPE_SUMMARY_DIGEST: sha256:c30fe291ddab95f9022c4d7e9b6c11655c6bf34822bae0d8fe94a417d51b021b
+
+  CONTRACT_RELEASE: research-phase1-insider-feature-tournament-validation-final-continuity-v1
+  CONTRACT_ASSET: validation-final-continuity.json
+  CONTRACT_DIGEST: sha256:16a9814003c232d58d9e0f70a85b72beb7e37d04c81b390dbd3cfd6199c7956a
+
+  MARKET_RELEASE: research-market-alpaca-v1
+  DISCOVERY_HELPER_BLOB: 4bf0717f1d866dfbd282dd365f6e466f0cc92900
+
+  RESULT_RELEASE: research-phase1-insider-feature-tournament-validation-v1
+
+jobs:
+  validate:
+    name: Frozen 2021-2022 F2 validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --all-groups --frozen
+
+      - name: Verify frozen aggregation helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object scripts/research_phase1_feature_tournament_discovery.py)" = "$DISCOVERY_HELPER_BLOB"
+
+      - name: Lint and test validation performance semantics
+        run: |
+          uv run ruff check scripts/research_phase1_feature_tournament_validation_performance.py tests/test_research_phase1_feature_tournament_validation_performance.py
+          uv run pytest -q tests/test_research_phase1_feature_tournament_validation_performance.py
+
+      - name: Download and verify frozen candidate, scope and continuity
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/confirmation work/scope work/download work/contract work/output
+
+          gh release download "$CONFIRMATION_RELEASE" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$CONFIRMATION_ASSET" --dir work/confirmation
+          test "sha256:$(sha256sum "work/confirmation/$CONFIRMATION_ASSET" | cut -d' ' -f1)" = "$CONFIRMATION_DIGEST"
+
+          gh release download "$SCOPE_RELEASE" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$SCOPE_ARCHIVE" --dir work/download
+          test "sha256:$(sha256sum "work/download/$SCOPE_ARCHIVE" | cut -d' ' -f1)" = "$SCOPE_ARCHIVE_DIGEST"
+          tar -xzf "work/download/$SCOPE_ARCHIVE" -C work/scope \
+            summary.json validation-scope.csv
+          test "sha256:$(sha256sum work/scope/summary.json | cut -d' ' -f1)" = "$SCOPE_SUMMARY_DIGEST"
+
+          gh release download "$CONTRACT_RELEASE" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$CONTRACT_ASSET" --dir work/contract
+          test "sha256:$(sha256sum "work/contract/$CONTRACT_ASSET" | cut -d' ' -f1)" = "$CONTRACT_DIGEST"
+
+      - name: Download and verify frozen 2021-2022 market data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          declare -A DIGESTS=(
+            [2021]=550ff3456ad16a045692a5d9d567d13ef2b8788283f4c39c3baa5d8aecd7a704
+            [2022]=8a71037090cda77bc3937409ffa9fcb9c463545b5f3a7d9a73995a92759d187a
+          )
+          mkdir -p work/download/market work/market
+          for year in 2021 2022; do
+            asset="alpaca-market-$year.tar.gz"
+            gh release download "$MARKET_RELEASE" --repo "$GITHUB_REPOSITORY" \
+              --pattern "$asset" --dir work/download/market
+            test "$(sha256sum "work/download/market/$asset" | cut -d' ' -f1)" = "${DIGESTS[$year]}"
+            mkdir -p "work/market/$year"
+            tar -xzf "work/download/market/$asset" -C "work/market/$year" \
+              "canonical-market-$year.csv"
+          done
+          test ! -e work/market/2023
+
+      - name: Run frozen F2 validation
+        run: >-
+          uv run python
+          scripts/research_phase1_feature_tournament_validation_performance.py
+          --confirmation "work/confirmation/$CONFIRMATION_ASSET"
+          --scope-csv work/scope/validation-scope.csv
+          --scope-summary work/scope/summary.json
+          --contract "work/contract/$CONTRACT_ASSET"
+          --market-root work/market
+          --output work/output
+
+      - name: Assert frozen validation decision boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import csv
+          import json
+
+          p=json.load(open("work/output/validation-results.json"))
+          assert p["status"]=="PHASE1_INSIDER_FEATURE_TOURNAMENT_VALIDATION_COMPLETE"
+          assert p["sourceValidationScopeRows"]==7493
+          assert p["continuityContractRows"]==191
+          assert p["continuityUnresolvedRows"]==0
+          assert p["continuityKeySha256"]=="sha256:fe81e31a04a4e5f69eb07778685bc8799860eef37653af5479d79c5aefc1c18f"
+          assert p["validatedCandidateCount"] in {0,1}
+          r=p["candidateResult"]
+          assert r["family"]=="F2"
+          assert r["variantId"]=="F2_DIRECT_VS_INDIRECT"
+          assert r["status"] in {"VALIDATED_CANDIDATE","VALIDATION_FAIL_FROZEN"}
+          assert r["validated"] == (r["status"]=="VALIDATED_CANDIDATE")
+          assert len(r["validationChecks"])==8
+          assert r["validated"] == all(r["validationChecks"].values())
+          assert p["noReselection"] is True
+          assert p["noAlternateOrientation"] is True
+          assert p["noAlternateThreshold"] is True
+          assert p["validationOpened"] is True
+          assert p["validationEventOutcomesRead"] is True
+          assert p["validationPerformanceOpened"] is True
+          assert p["validationComplete"] is True
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+
+          with open("work/output/validation-event-outcomes.csv", newline="") as f:
+              rows=list(csv.DictReader(f))
+          assert len(rows)==7493
+          assert min(row["evaluationSession"] for row in rows)>="2021-01-01"
+          assert max(row["evaluationSession"] for row in rows)<="2022-12-31"
+          assert max(row["targetExitSession"] for row in rows)<="2022-12-31"
+
+          print(json.dumps({
+              "status":r["status"],
+              "validated":r["validated"],
+              "preferred":r["preferred"],
+              "complement":r["complement"],
+              "primary126":r["primary126"],
+              "validationChecks":r["validationChecks"],
+              "maturity":p["maturity"],
+          },indent=2,sort_keys=True))
+          PY
+
+      - name: Publish immutable validation result
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp docs/research-phase1-feature-tournament-validation-execution-gate.md work/output/
+          tar -C work/output -czf work/phase1-insider-feature-tournament-validation-v1.tar.gz \
+            validation-results.json validation-event-outcomes.csv \
+            research-phase1-feature-tournament-validation-execution-gate.md
+
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" \
+              --title "Phase-1 insider feature tournament F2 validation v1" \
+              --notes "Frozen 2021-2022 validation of the already-confirmed F2 direct-vs-indirect candidate after zero-unresolved continuity. 2023+ OOS remains sealed and production scoring is unchanged." \
+              --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE" \
+            work/phase1-insider-feature-tournament-validation-v1.tar.gz \
+            work/output/validation-results.json \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase1-insider-feature-tournament-validation-${{ github.run_id }}
+          path: work/output
+          retention-days: 90
