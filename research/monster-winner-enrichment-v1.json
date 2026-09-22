@@ -1,0 +1,167 @@
+{
+  "schemaVersion": "1.0.0",
+  "definitionId": "MONSTER_WINNER_ENRICHMENT_V1",
+  "status": "PREDECLARED_BEFORE_MONSTER_OUTCOMES",
+  "frozenAt": "2026-09-22",
+  "researchOnly": true,
+  "productionScoringChanged": false,
+  "oosOpened": false,
+  "objective": "Concentrate rare extreme future winners for later human technical/fundamental/risk filtering; not average-return separation.",
+  "eventUniverse": {
+    "base": "strict B0 feature-tournament exact-entry issuer events",
+    "evaluationStart": "2016-01-01",
+    "evaluationEnd": "2020-12-31",
+    "events": 24190,
+    "distinctIssuers": 4729,
+    "issuerDedupSessions": 20,
+    "entry": "exact next XNYS regular-session open"
+  },
+  "timeBoundary": {
+    "discovery": [
+      "2016-01-01",
+      "2018-12-31"
+    ],
+    "confirmation": [
+      "2019-01-01",
+      "2020-12-31"
+    ],
+    "knownSampleDiagnosticYears": [
+      2021,
+      2022
+    ],
+    "knownSampleMayBeCalledValidation": false,
+    "sealedOosStartYear": 2023
+  },
+  "primaryLabel": {
+    "id": "M100_252_CLOSE",
+    "horizonSessions": 252,
+    "thresholdReturn": 1,
+    "valuation": "max exact-session holder-value close relative to exact entry-open holder value",
+    "terminalReturnOnly": false
+  },
+  "secondaryLabels": [
+    {
+      "id": "M50_252_CLOSE",
+      "horizonSessions": 252,
+      "thresholdReturn": 0.5
+    },
+    {
+      "id": "M200_252_CLOSE",
+      "horizonSessions": 252,
+      "thresholdReturn": 2
+    },
+    {
+      "id": "M500_252_CLOSE",
+      "horizonSessions": 252,
+      "thresholdReturn": 5
+    },
+    {
+      "id": "M100_126_CLOSE",
+      "horizonSessions": 126,
+      "thresholdReturn": 1
+    },
+    {
+      "id": "M200_126_CLOSE",
+      "horizonSessions": 126,
+      "thresholdReturn": 2
+    }
+  ],
+  "missingPathRule": {
+    "positiveIfObservedThresholdCrossing": true,
+    "negativeRequiresPathCoverageAtLeast": 0.95,
+    "maximumConsecutiveMissingSessions": 5,
+    "unresolvedContinuityAllowed": false,
+    "unvaluedMandatoryConsiderationAllowed": false,
+    "otherwise": "MFE_UNKNOWN"
+  },
+  "primaryMetrics": [
+    "monsterHitRate",
+    "monstersPer100Reviewed",
+    "candidatesPerMonster",
+    "m100Lift",
+    "m100Capture",
+    "reviewShare",
+    "reviewReduction",
+    "captureEfficiency"
+  ],
+  "tailDiagnostics": [
+    "m50LiftCapture",
+    "m200LiftCapture",
+    "m500LiftCapture",
+    "top10PctMfeEnrichment",
+    "top5PctMfeEnrichment",
+    "top1PctMfeEnrichment",
+    "top0_5PctMfeEnrichment",
+    "distinctMonsterIssuers",
+    "distinctMonsterEntrySessions",
+    "monsterCountsByYear",
+    "largestIssuerMonsterShare",
+    "largestEntrySessionMonsterShare",
+    "terminal252RawAndSpyExcessDescriptive"
+  ],
+  "featureFamilies": {
+    "F1": [
+      "F1_ABS_DOLLARS",
+      "F1_FRACTION_POST",
+      "F1_FRACTION_PRE",
+      "F1_OWNER_HISTORY_PERCENTILE",
+      "F1_ABS_PLUS_FRACTION_POST"
+    ],
+    "F2": [
+      "F2_INDIRECT_VS_DIRECT",
+      "F2_DIRECT_VS_INDIRECT"
+    ],
+    "F3": [
+      "F3_RETURN_21",
+      "F3_RETURN_63",
+      "F3_RETURN_126",
+      "F3_RETURN_252",
+      "F3_DRAWDOWN_252",
+      "F3_NEW_52W_LOW"
+    ],
+    "F4": [
+      "F4_ABOVE_BASIS",
+      "F4_DISTANCE_ABOVE",
+      "F4_DISTANCE_BELOW",
+      "F4_TRUE_RECLAIM",
+      "F4_RECLAIM_PERSIST_2",
+      "F4_RECLAIM_PERSIST_5"
+    ]
+  },
+  "discoveryGate": {
+    "preferredEvaluableNMin": 200,
+    "preferredDistinctIssuersMin": 100,
+    "preferredM100HitsMin": 20,
+    "reviewShareMax": 0.5,
+    "m100LiftMin": 1.5,
+    "m100CaptureMin": 0.2,
+    "yearsWithLiftAbove1Min": 2,
+    "discoveryYears": 3,
+    "outsideBottomAdvM100LiftMin": 1.25,
+    "m200LiftMinIfComparableM200CountAtLeast10": 1,
+    "maxSingleIssuerShareOfPreferredM100Hits": 0.15
+  },
+  "confirmationGate": {
+    "preferredEvaluableNMin": 150,
+    "preferredDistinctIssuersMin": 75,
+    "preferredM100HitsMin": 10,
+    "m100LiftMin": 1.25,
+    "m100CaptureMin": 0.15,
+    "require2019LiftAbove1": true,
+    "require2020LiftAbove1": true,
+    "outsideBottomAdvM100LiftMin": 1,
+    "maxSingleIssuerShareOfPreferredM100Hits": 0.2
+  },
+  "familyTieBreak": [
+    "captureEfficiencyDesc",
+    "m100LiftDesc",
+    "m200LiftDescWhenEvaluable",
+    "m100CaptureDesc",
+    "reviewShareAsc",
+    "variantIdAsc"
+  ],
+  "technicalTurningFeaturesIncluded": false,
+  "compositeWeightsAllowed": false,
+  "phase1F2FailReinterpreted": false,
+  "nextGate": "PERFORMANCE_BLIND_MFE_PATH_FEASIBILITY_AUDIT"
+}
