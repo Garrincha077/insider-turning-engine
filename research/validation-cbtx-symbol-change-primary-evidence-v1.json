@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "1.0.0",
+  "contractId": "phase1-feature-tournament-validation-cbtx-symbol-change-primary-evidence-v1",
+  "frozenAt": "2026-09-22",
+  "researchOnly": true,
+  "performanceRead": false,
+  "priceFieldsRead": [],
+  "featureOutcomesRead": false,
+  "validationOpened": false,
+  "validationPerformanceOpened": false,
+  "oosOpened": false,
+  "productionScoringChanged": false,
+  "sourceResidualAssetDigest": "sha256:9f240f9c4fd4f565449ef5261d6a696bc70beb9725213f4a7c5f73d01781915d",
+  "targetKeySha256": "sha256:a8705b17cd9f57eab966148e2ecaef12126e7010698ee812090b26151bed0e75",
+  "evidence": [
+    {
+      "eventNumber": 7087,
+      "issuerCik": "0001473844",
+      "ticker": "CBTX",
+      "evaluationSession": "2022-06-08",
+      "entrySession": "2022-06-09",
+      "horizon": 126,
+      "targetExitSession": "2022-12-08",
+      "actionId": "a3cb78f9-b741-4301-93d4-6bfa64c30882",
+      "effectiveDate": "2022-10-01",
+      "resolutionDecision": "SYMBOL_CHANGED_SAME_SECURITY",
+      "transformationKind": "SAME_SECURITY_SYMBOL_CHANGE",
+      "resultState": "SYMBOL_CHANGED_SAME_SECURITY",
+      "successorSymbol": "STEL",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "primaryEvidence": [
+        {
+          "accession": "0001104659-22-104952",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1473844/000110465922104952/tm2227178d1_8k.htm",
+          "fact": "Closing Form 8-K states Allegiance merged into CBTX, CBTX survived, was renamed Stellar Bancorp, and changed ticker to STEL effective 2022-10-01."
+        },
+        {
+          "accession": "0001558370-22-015589",
+          "secUrl": "https://www.sec.gov/Archives/edgar/data/1473844/000155837022015589/stel-20220930x10q.htm",
+          "fact": "Q3 2022 Form 10-Q confirms CBTX was the surviving corporation and the 1.4184 exchange ratio applied to Allegiance common shares."
+        }
+      ]
+    }
+  ],
+  "resolutionApplied": false
+}
