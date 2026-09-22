@@ -117,6 +117,9 @@ jobs:
           gh release download "$FINAL_CONTINUITY_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$FINAL_CONTINUITY_ASSET" --dir work/continuity
           test "sha256:$(sha256sum "work/continuity/$FINAL_CONTINUITY_ASSET" | cut -d' ' -f1)" = "$FINAL_CONTINUITY_DIGEST"
 
+          gh release download "$PROVIDER_AMENDMENT_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$PROVIDER_AMENDMENT_ASSET" --dir work/continuity
+          test "sha256:$(sha256sum "work/continuity/$PROVIDER_AMENDMENT_ASSET" | cut -d' ' -f1)" = "$PROVIDER_AMENDMENT_DIGEST"
+
       - name: Download and verify frozen 2016-2022 market-presence inputs
         env:
           GH_TOKEN: ${{ github.token }}
