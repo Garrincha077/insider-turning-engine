@@ -1,0 +1,110 @@
+name: Resolve F2 validation CBTX symbol change
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-validation-cbtx-symbol-change.yml"
+      - "scripts/research_phase1_feature_tournament_validation_cbtx_symbol_change.py"
+      - "tests/test_research_phase1_feature_tournament_validation_cbtx_symbol_change.py"
+      - "research/validation-cbtx-symbol-change-primary-evidence-v1.json"
+      - "docs/research-phase1-feature-tournament-validation-cbtx-symbol-change-gate.md"
+
+permissions:
+  contents: write
+
+env:
+  SCOPE_RELEASE: research-phase1-insider-feature-tournament-validation-residual11-scope-v1
+  SCOPE_ASSET: validation-residual11-scope.json
+  SCOPE_DIGEST: sha256:9f240f9c4fd4f565449ef5261d6a696bc70beb9725213f4a7c5f73d01781915d
+  EVIDENCE_FILE: research/validation-cbtx-symbol-change-primary-evidence-v1.json
+  EVIDENCE_GIT_BLOB: 0da6d310db37ad24518d5d56a0bfe7d9d4a92e4e
+  RESULT_RELEASE: research-phase1-insider-feature-tournament-validation-cbtx-symbol-change-v1
+  RESULT_ASSET: validation-cbtx-symbol-change-resolution.json
+
+jobs:
+  resolve:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+
+      - name: Lint and test CBTX resolver
+        run: |
+          uv run ruff check scripts/research_phase1_feature_tournament_validation_cbtx_symbol_change.py tests/test_research_phase1_feature_tournament_validation_cbtx_symbol_change.py
+          uv run pytest -q tests/test_research_phase1_feature_tournament_validation_cbtx_symbol_change.py
+
+      - name: Assert frozen evidence blob
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object "$EVIDENCE_FILE")" = "$EVIDENCE_GIT_BLOB"
+
+      - name: Download and verify residual-11
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/input work/output
+          gh release download "$SCOPE_RELEASE" --repo "$GITHUB_REPOSITORY" --pattern "$SCOPE_ASSET" --dir work/input
+          test "sha256:$(sha256sum "work/input/$SCOPE_ASSET" | cut -d' ' -f1)" = "$SCOPE_DIGEST"
+
+      - name: Apply frozen CBTX continuity resolution
+        run: >-
+          uv run python scripts/research_phase1_feature_tournament_validation_cbtx_symbol_change.py
+          --scope "work/input/$SCOPE_ASSET"
+          --evidence "$EVIDENCE_FILE"
+          --output "work/output/$RESULT_ASSET"
+
+      - name: Assert one-row resolution and closed validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=json.loads(Path("work/output/validation-cbtx-symbol-change-resolution.json").read_text())
+          assert p["status"]=="PHASE1_FEATURE_TOURNAMENT_VALIDATION_CBTX_SYMBOL_CHANGE_RESOLUTION_COMPLETE"
+          assert p["sourceResidualRows"]==11
+          assert p["resolvedRows"]==1
+          assert p["remainingUnresolvedRows"]==10
+          assert p["resolvedKeySha256"]=="sha256:a8705b17cd9f57eab966148e2ecaef12126e7010698ee812090b26151bed0e75"
+          r=p["resolutionRows"][0]
+          assert r["ticker"]=="CBTX"
+          assert r["effectiveDate"]=="2022-10-01"
+          assert r["resolutionDecision"]=="SYMBOL_CHANGED_SAME_SECURITY"
+          assert r["successorSymbol"]=="STEL"
+          assert r["successorSharesPerEntryShare"]=="1"
+          assert r["cashPerEntryShare"]=="0"
+          assert p["performanceRead"] is False
+          assert p["validationOpened"] is False
+          assert p["validationPerformanceOpened"] is False
+          assert p["oosOpened"] is False
+          PY
+
+      - name: Publish immutable CBTX resolution
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp "$EVIDENCE_FILE" work/output/
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 F2 validation CBTX symbol change v1"               --notes "Performance-blind SEC-primary CBTX-to-STEL same-security symbol-change resolution. Ten long-gap rows remain; validation performance and 2023+ OOS remain closed."               --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE" "work/output/$RESULT_ASSET"             "work/output/validation-cbtx-symbol-change-primary-evidence-v1.json"             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase1-insider-feature-tournament-validation-cbtx-${{ github.run_id }}
+          path: work/output
+          retention-days: 90
