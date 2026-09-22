@@ -49,7 +49,11 @@ def _scope_digest(rows: list[dict[str, Any]]) -> str:
         "targetExitSession",
         "F2_DIRECT_VS_INDIRECT",
     )
-    material = [{field: row[field] for field in fields} for row in rows]
+    material = []
+    for row in rows:
+        item = {field: row[field] for field in fields}
+        item["eventNumber"] = int(item["eventNumber"])
+        material.append(item)
     raw = json.dumps(
         material,
         sort_keys=True,
