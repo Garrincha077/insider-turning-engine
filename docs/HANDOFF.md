@@ -1,6 +1,6 @@
 # Insider Turning Engine — HANDOFF
 
-_Last updated: 2026-09-20_
+_Last updated: 2026-09-22_
 
 This is the operational continuation point for a new ChatGPT/Codex session. Read this file first, then `docs/research-log.md`, `docs/research-predeclared-spec.md`, and `docs/P0_PHASE1_IMPLEMENTATION.md`.
 
@@ -11,8 +11,8 @@ This is the operational continuation point for a new ChatGPT/Codex session. Read
 3. Treat the exact-calendar P0 market audit as the authoritative market-data gate. Current tier: **C_EXPLORATORY**.
 4. Treat Phase-1 B0, B1, B2 and B4 development outputs as completed descriptive/research benchmarks, not production evidence.
 5. Treat the B3 P/S history, B3 amendment reconciliation, and B3 definition freeze as completed data/methodology gates.
-6. Current active task: complete the pinned 2016-2020 raw formation-context release, freeze outcome-blind Stage A feature coverage/cutpoints on the exact B0 event scope, then complete a zero-unresolved performance-blind continuity audit before any feature outcome is opened.
-7. Keep sealed OOS **2023+ unopened**.
+6. Current active state: the frozen feature tournament has completed 2021-2022 validation. F2 `DIRECT_VS_INDIRECT` returned **VALIDATION_FAIL_FROZEN** under the predeclared eight-check rule. Preserve the result; do not reselect, flip orientation, retune thresholds, or substitute a replacement feature inside this tournament version.
+7. Keep sealed OOS **2023+ unopened**. The failed F2 candidate does not progress to OOS.
 8. Do **not** change production scoring, weights, thresholds, signal states, alerts, or production methodology unless the owner explicitly asks.
 
 ---
@@ -502,27 +502,28 @@ Do not open OOS until transaction eligibility, transforms, benchmark family, fea
 
 ## NEXT EXECUTION SEQUENCE
 
-1. Complete and immutably publish the Alpaca SIP `adjustment=raw` 2016-2020
-   formation-context release. Do not introduce a replacement provider for the
-   unavailable 2015 raw probe.
-2. Pin every raw annual asset SHA-256 in
-   `research/phase1-feature-tournament-stage-a-inputs-v1.json` and only then
-   set `stageARunAllowed=true`.
-3. Run Stage A on the exact reproduced B0 scope: **24,192 exact-entry events /
-   4,729 issuers**. Stage A may read PIT SEC revisions and formation-market
-   context only; forward returns/MAE/robustness remain unread.
-4. Freeze 2016-2018 discovery quintile cutpoints and feature coverage classes;
-   apply those cutpoints unchanged later.
-5. Freeze the exact Stage-B event-horizon scope from the Stage A event matrix.
-6. Run a performance-blind security-continuity audit on that exact scope and
-   require **zero unresolved rows** before any feature outcome is opened.
-7. Only then compute 2016-2018 discovery feature outcomes under the already
-   frozen tournament advancement rules.
-8. Freeze at most one candidate per feature family; apply it unchanged to
-   2019-2020 confirmation with no reselection.
-9. Keep 2021-2022 untouched by feature selection/tuning and keep 2023+ sealed.
-10. HAC remains closed while the frozen benchmark progression rules block it;
-    Turning/technical confirmation remains a later separate layer.
+1. Treat the Phase-1 feature tournament as **terminal for this frozen version**:
+   the 2021-2022 validation workflow is green, but F2 itself is
+   `VALIDATION_FAIL_FROZEN`.
+2. Preserve the immutable result release
+   `research-phase1-insider-feature-tournament-validation-v1` and
+   `validation-results.json` SHA-256
+   `sha256:1c2b9107b520e360e7251519a5a5a945febeb41cac307d8d5e3e6e05adf1682c`.
+3. Treat final validation continuity as complete: **191 / 191 affected rows
+   classified, zero unresolved**; final contract SHA-256
+   `sha256:16a9814003c232d58d9e0f70a85b72beb7e37d04c81b390dbd3cfd6199c7956a`.
+4. Do not open 2023+ OOS for this failed F2 candidate.
+5. Do not mine 2021-2022 for a replacement rule and then relabel it as
+   untouched validation. Those outcomes are now known.
+6. If a new feature-research round is desired, first create a new,
+   separately versioned predeclared specification stating the new development,
+   validation and untouched OOS boundaries before any new selection work.
+7. Production scoring, alerts and the current live methodology remain
+   unchanged by the research result.
+
+See
+`docs/progress-2026-09-22-feature-tournament-validation-complete.md`
+for the compact terminal checkpoint.
 
 
 ---
