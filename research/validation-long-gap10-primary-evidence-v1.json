@@ -1,0 +1,414 @@
+{
+  "schemaVersion": "1.0.0",
+  "contractId": "phase1-feature-tournament-validation-long-gap10-primary-evidence-v1",
+  "frozenAt": "2026-09-22",
+  "researchOnly": true,
+  "performanceRead": false,
+  "priceFieldsRead": [],
+  "featureOutcomesRead": false,
+  "validationOpened": false,
+  "validationPerformanceOpened": false,
+  "oosOpened": false,
+  "productionScoringChanged": false,
+  "sourceScope": {
+    "release": "research-phase1-insider-feature-tournament-validation-residual10-long-gap-scope-v1",
+    "asset": "validation-residual10-long-gap-scope.json",
+    "sha256": "sha256:a1db8f513116f57d30a4ab07c32ccbc66a6868c52cd58250f240703011832f22",
+    "scopeKeySha256": "sha256:bba1bd1512a8ab6b8009e477689e189c2bd5ebf3033801f50753b023d5d6a426",
+    "rows": 10
+  },
+  "gapSource": {
+    "release": "research-phase1-insider-feature-tournament-validation-gap-diagnostics-v1",
+    "asset": "gap-diagnostics.csv",
+    "sha256": "sha256:1e7d783cee4bdd3a5c64fc42cb0cc7a8e1a41e14f36220809aa0ba5d80af75b7",
+    "rows": 11
+  },
+  "identities": [
+    {
+      "issuerCik": "0001855447",
+      "ticker": "ROCGU",
+      "securityKind": "SPAC_UNIT",
+      "unitComposition": "one common share plus one-half redeemable warrant",
+      "evidenceClass": "PRIMARY_SEC_EXACT_GAP_BRACKETING_SAME_SPAC_UNIT",
+      "resolutionDecision": "SAME_SECURITY_CONTINUITY",
+      "transformationKind": "",
+      "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+      "successorIssuerCik": "0001855447",
+      "successorSymbol": "ROCGU",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "effectiveDatePolicy": "NEXT_OBSERVED_SESSION_AFTER_FROZEN_GAP",
+      "primaryEvidence": [
+        {
+          "form": "10-K",
+          "period": "2021-12-31",
+          "accession": "0001410578-22-000842",
+          "document": "https://www.sec.gov/Archives/edgar/data/1855447/000141057822000842/rocg-20211231x10k.htm",
+          "facts": [
+            "ROCGU units, ROCG common stock and ROCGW warrants were concurrently registered on Nasdaq",
+            "the units began trading on August 6, 2021 and the component common stock and warrants began separate trading on August 31, 2021"
+          ]
+        },
+        {
+          "form": "10-Q",
+          "period": "2022-06-30",
+          "accession": "0001410578-22-002450",
+          "document": "https://www.sec.gov/Archives/edgar/data/1855447/000141057822002450/rocg-20220630x10q.htm",
+          "facts": [
+            "ROCGU units remained registered on Nasdaq after the frozen gap and target exit",
+            "ROCG common stock and ROCGW warrants remained separately registered alongside ROCGU"
+          ]
+        }
+      ]
+    },
+    {
+      "issuerCik": "0001857662",
+      "ticker": "APMIU",
+      "securityKind": "SPAC_UNIT",
+      "unitComposition": "one Class A common share plus one-third redeemable warrant",
+      "evidenceClass": "PRIMARY_SEC_EXACT_GAP_BRACKETING_SAME_SPAC_UNIT",
+      "resolutionDecision": "SAME_SECURITY_CONTINUITY",
+      "transformationKind": "",
+      "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+      "successorIssuerCik": "0001857662",
+      "successorSymbol": "APMIU",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "effectiveDatePolicy": "NEXT_OBSERVED_SESSION_AFTER_FROZEN_GAP",
+      "primaryEvidence": [
+        {
+          "form": "8-K",
+          "eventDate": "2021-10-01",
+          "accession": "0001140361-21-033289",
+          "document": "https://www.sec.gov/Archives/edgar/data/1857662/000114036121033289/brhc10029475_8k.htm",
+          "facts": [
+            "holders could elect separate trading of APMI common stock and APMIW warrants",
+            "units not separated continued to trade on Nasdaq as APMIU"
+          ]
+        },
+        {
+          "form": "10-K",
+          "period": "2021-12-31",
+          "accession": "0001140361-22-012282",
+          "document": "https://www.sec.gov/Archives/edgar/data/1857662/000114036122012282/form10k.htm",
+          "facts": [
+            "APMIU units remained listed on Nasdaq through year-end 2021",
+            "the annual report reiterates that unseparated units continue under APMIU"
+          ]
+        }
+      ]
+    },
+    {
+      "issuerCik": "0001768910",
+      "ticker": "GRCY",
+      "securityKind": "ORDINARY_SHARE",
+      "evidenceClass": "PRIMARY_SEC_EXACT_GAP_BRACKETING_SAME_COMMON_SECURITY",
+      "resolutionDecision": "SAME_SECURITY_CONTINUITY",
+      "transformationKind": "",
+      "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+      "successorIssuerCik": "0001768910",
+      "successorSymbol": "GRCY",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "effectiveDatePolicy": "NEXT_OBSERVED_SESSION_AFTER_FROZEN_GAP",
+      "primaryEvidence": [
+        {
+          "form": "10-K",
+          "period": "2021-12-31",
+          "accession": "0001410578-22-000763",
+          "document": "https://www.sec.gov/Archives/edgar/data/1768910/000141057822000763/grcyu-20211231x10k.htm",
+          "facts": [
+            "Greencity ordinary shares remained registered on Nasdaq under GRCY across the frozen gap",
+            "the same registrant CIK and ordinary-share class are reported"
+          ]
+        },
+        {
+          "form": "8-K",
+          "eventDate": "2022-04-19",
+          "accession": "0001104659-22-047927",
+          "document": "https://www.sec.gov/Archives/edgar/data/1768910/000110465922047927/tm2213182d1_8k.htm",
+          "facts": [
+            "GRCY ordinary shares remained registered on Nasdaq before the frozen target exit",
+            "the business-combination deadline was extended from April 28 to October 28, 2022, so no business-combination holder transformation had occurred by the May 5 target"
+          ]
+        }
+      ]
+    },
+    {
+      "issuerCik": "0001859035",
+      "ticker": "MCAGU",
+      "securityKind": "SPAC_UNIT",
+      "unitComposition": "one common share plus one right",
+      "evidenceClass": "PRIMARY_SEC_EXACT_GAP_BRACKETING_SAME_SPAC_UNIT",
+      "resolutionDecision": "SAME_SECURITY_CONTINUITY",
+      "transformationKind": "",
+      "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+      "successorIssuerCik": "0001859035",
+      "successorSymbol": "MCAGU",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "effectiveDatePolicy": "NEXT_OBSERVED_SESSION_AFTER_FROZEN_GAP",
+      "primaryEvidence": [
+        {
+          "form": "8-K",
+          "eventDate": "2021-11-30",
+          "accession": "0001829126-21-015085",
+          "document": "https://www.sec.gov/Archives/edgar/data/1859035/000182912621015085/mountaincrest5_8k.htm",
+          "facts": [
+            "MCAG common stock and MCAGR rights could begin separate trading",
+            "units not separated continued to trade as MCAGU and components could be recombined into units"
+          ]
+        },
+        {
+          "form": "10-Q",
+          "period": "2022-03-31",
+          "accession": "0001829126-22-010980",
+          "document": "https://www.sec.gov/Archives/edgar/data/1859035/000182912622010980/mountaincrestacq_10q.htm",
+          "facts": [
+            "MCAGU units remained registered on Nasdaq through the frozen gap",
+            "MCAG common stock and MCAGR rights remained concurrently registered"
+          ]
+        }
+      ]
+    },
+    {
+      "issuerCik": "0001854458",
+      "ticker": "NETC.U",
+      "securityKind": "SPAC_UNIT",
+      "unitComposition": "one Class A common share plus one-half redeemable warrant",
+      "evidenceClass": "PRIMARY_SEC_EXACT_GAP_BRACKETING_SAME_SPAC_UNIT",
+      "resolutionDecision": "SAME_SECURITY_CONTINUITY",
+      "transformationKind": "",
+      "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+      "successorIssuerCik": "0001854458",
+      "successorSymbol": "NETC.U",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "effectiveDatePolicy": "NEXT_OBSERVED_SESSION_AFTER_FROZEN_GAP",
+      "primaryEvidence": [
+        {
+          "form": "8-K",
+          "eventDate": "2022-01-06",
+          "accession": "0001104659-22-001979",
+          "document": "https://www.sec.gov/Archives/edgar/data/1854458/000110465922001979/tm222122d1_8k.htm",
+          "facts": [
+            "holders could elect to separately trade NETC common stock and NETC.WS warrants",
+            "units not separated explicitly continued to trade on NYSE as NETC.U"
+          ]
+        },
+        {
+          "form": "10-Q",
+          "period": "2022-03-31",
+          "accession": "0001558370-22-008586",
+          "document": "https://www.sec.gov/Archives/edgar/data/1854458/000155837022008586/netc-20220331x10q.htm",
+          "facts": [
+            "NETC.U units remained registered on NYSE during the frozen gap",
+            "NETC Class A common stock remained separately registered alongside the unit"
+          ]
+        }
+      ]
+    },
+    {
+      "issuerCik": "0001865468",
+      "ticker": "KACLU",
+      "securityKind": "SPAC_UNIT",
+      "unitComposition": "one ordinary share plus one-half redeemable warrant plus one right",
+      "evidenceClass": "PRIMARY_SEC_EXACT_GAP_BRACKETING_SAME_SPAC_UNIT",
+      "resolutionDecision": "SAME_SECURITY_CONTINUITY",
+      "transformationKind": "",
+      "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+      "successorIssuerCik": "0001865468",
+      "successorSymbol": "KACLU",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "effectiveDatePolicy": "NEXT_OBSERVED_SESSION_AFTER_FROZEN_GAP",
+      "primaryEvidence": [
+        {
+          "form": "10-Q",
+          "period": "2022-03-31",
+          "accession": "0001493152-22-014800",
+          "document": "https://www.sec.gov/Archives/edgar/data/1865468/000149315222014800/form10-q.htm",
+          "facts": [
+            "KACLU units remained a registered Nasdaq security during the frozen gap",
+            "the same unit consists of one ordinary share, one-half warrant and one right"
+          ]
+        },
+        {
+          "form": "10-K",
+          "period": "2022-06-30",
+          "accession": "0001493152-22-028332",
+          "document": "https://www.sec.gov/Archives/edgar/data/1865468/000149315222028332/form10-k.htm",
+          "facts": [
+            "KACLU units remained listed through the frozen June 24 target",
+            "ordinary shares, warrants and rights had begun separate trading on January 21, 2022 while the original unit remained a registered security"
+          ]
+        }
+      ]
+    },
+    {
+      "issuerCik": "0001844417",
+      "ticker": "UPTD",
+      "securityKind": "COMMON_STOCK",
+      "evidenceClass": "PRIMARY_SEC_EXACT_GAP_BRACKETING_SAME_COMMON_SECURITY",
+      "resolutionDecision": "SAME_SECURITY_CONTINUITY",
+      "transformationKind": "",
+      "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+      "successorIssuerCik": "0001844417",
+      "successorSymbol": "UPTD",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "effectiveDatePolicy": "NEXT_OBSERVED_SESSION_AFTER_FROZEN_GAP",
+      "primaryEvidence": [
+        {
+          "form": "8-K",
+          "eventDate": "2022-07-25",
+          "accession": "0001104659-22-083036",
+          "document": "https://www.sec.gov/Archives/edgar/data/1844417/000110465922083036/tm2221809d1_8k.htm",
+          "facts": [
+            "TradeUP common stock was registered on Nasdaq as UPTD immediately before the frozen gap",
+            "the same registrant also listed UPTDU units and UPTDW warrants as separate securities"
+          ]
+        },
+        {
+          "form": "8-K",
+          "eventDate": "2022-09-30",
+          "accession": "0001575872-22-000912",
+          "document": "https://www.sec.gov/Archives/edgar/data/1844417/000157587222000912/uptd-20220930.htm",
+          "facts": [
+            "UPTD common stock remained registered on Nasdaq after the frozen gap and target exit",
+            "the same registrant continued to list its unit and warrant securities separately"
+          ]
+        }
+      ]
+    },
+    {
+      "issuerCik": "0001585608",
+      "ticker": "JAGX",
+      "securityKind": "COMMON_STOCK",
+      "evidenceClass": "PRIMARY_SEC_EXACT_GAP_BRACKETING_SAME_COMMON_SECURITY",
+      "resolutionDecision": "SAME_SECURITY_CONTINUITY",
+      "transformationKind": "",
+      "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+      "successorIssuerCik": "0001585608",
+      "successorSymbol": "JAGX",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "effectiveDatePolicy": "NEXT_OBSERVED_SESSION_AFTER_FROZEN_GAP",
+      "primaryEvidence": [
+        {
+          "form": "10-Q",
+          "period": "2022-03-31",
+          "accession": "0001558370-22-007961",
+          "document": "https://www.sec.gov/Archives/edgar/data/1585608/000155837022007961/jagx-20220331x10q.htm",
+          "facts": [
+            "the same Jaguar Health voting common stock existed entering the frozen gap",
+            "the disclosed 1-for-3 reverse split had already become effective on September 8, 2021, well before the April-June 2022 frozen gap"
+          ]
+        },
+        {
+          "form": "10-Q",
+          "period": "2022-06-30",
+          "accession": "0001558370-22-013831",
+          "document": "https://www.sec.gov/Archives/edgar/data/1585608/000155837022013831/jagx-20220630x10q.htm",
+          "facts": [
+            "the same common-stock class continued after the frozen gap",
+            "the filing again identifies the only disclosed reverse split relevant to this period as the September 8, 2021 split and reflects it retrospectively"
+          ]
+        }
+      ]
+    },
+    {
+      "issuerCik": "0001635077",
+      "ticker": "ACON",
+      "securityKind": "COMMON_STOCK",
+      "evidenceClass": "PRIMARY_SEC_EXACT_GAP_BRACKETING_SAME_COMMON_SECURITY",
+      "resolutionDecision": "SAME_SECURITY_CONTINUITY",
+      "transformationKind": "",
+      "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+      "successorIssuerCik": "0001635077",
+      "successorSymbol": "ACON",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "effectiveDatePolicy": "NEXT_OBSERVED_SESSION_AFTER_FROZEN_GAP",
+      "primaryEvidence": [
+        {
+          "form": "424B4",
+          "filed": "2022-04-21",
+          "accession": "0001683168-22-002903",
+          "document": "https://www.sec.gov/Archives/edgar/data/1635077/000168316822002903/aclarion_424b4.htm",
+          "facts": [
+            "the April 2022 IPO issued common stock and warrants as immediately separable securities",
+            "Aclarion common stock began Nasdaq trading as ACON"
+          ]
+        },
+        {
+          "form": "10-Q",
+          "period": "2022-06-30",
+          "accession": "0001654954-22-011263",
+          "document": "https://www.sec.gov/Archives/edgar/data/1635077/000165495422011263/aclarion_10q.htm",
+          "facts": [
+            "ACON common stock remained registered on Nasdaq after the frozen gap",
+            "the filing states that common stock and warrants started trading separately as ACON and ACONW at the IPO"
+          ]
+        }
+      ]
+    },
+    {
+      "issuerCik": "0001836875",
+      "ticker": "NVVE",
+      "securityKind": "COMMON_STOCK",
+      "evidenceClass": "PRIMARY_SEC_EXACT_GAP_BRACKETING_SAME_COMMON_SECURITY",
+      "resolutionDecision": "SAME_SECURITY_CONTINUITY",
+      "transformationKind": "",
+      "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+      "successorIssuerCik": "0001836875",
+      "successorSymbol": "NVVE",
+      "successorSharesPerEntryShare": 1,
+      "cashPerEntryShare": 0,
+      "effectiveDatePolicy": "NEXT_OBSERVED_SESSION_AFTER_FROZEN_GAP",
+      "primaryEvidence": [
+        {
+          "form": "10-K",
+          "period": "2021-12-31",
+          "accession": "0001836875-22-000020",
+          "document": "https://www.sec.gov/Archives/edgar/data/1836875/000183687522000020/nvve-20211231.htm",
+          "facts": [
+            "Nuvve Holding Corp. remained the same SEC registrant before the frozen gap",
+            "the public-company common-stock security remained the registrant's listed common equity"
+          ]
+        },
+        {
+          "form": "10-Q",
+          "period": "2022-06-30",
+          "accession": "0001836875-22-000062",
+          "document": "https://www.sec.gov/Archives/edgar/data/1836875/000183687522000062/nvve-20220630.htm",
+          "facts": [
+            "common stock remained registered on Nasdaq as NVVE immediately before the July 2022 frozen gap",
+            "NVVEW warrants remained a distinct separately registered security"
+          ]
+        },
+        {
+          "form": "8-K",
+          "eventDate": "2022-12-14",
+          "accession": "0001836875-22-000115",
+          "document": "https://www.sec.gov/Archives/edgar/data/1836875/000183687522000115/nvve-20221214.htm",
+          "facts": [
+            "NVVE common stock remained registered on Nasdaq through December 2022 near the frozen target exit",
+            "the filing concerns bid-price compliance rather than any holder transformation"
+          ]
+        }
+      ]
+    }
+  ],
+  "interpretation": {
+    "exactGapRows": 10,
+    "providerCorporateActionCandidates": 0,
+    "sameIssuerAndSecurityAcrossPrimaryEvidence": true,
+    "holderTransformationEvidenceFound": false,
+    "decision": "SAME_SECURITY_CONTINUITY",
+    "resultState": "PRICE_CONTINUOUS_ADJUSTED",
+    "successorSharesPerEntryShare": "1",
+    "cashPerEntryShare": "0",
+    "resolutionApplied": false
+  }
+}
