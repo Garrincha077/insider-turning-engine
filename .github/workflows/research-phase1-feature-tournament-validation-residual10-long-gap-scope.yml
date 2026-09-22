@@ -1,0 +1,83 @@
+name: Freeze F2 validation residual-10 long-gap scope
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-phase1-feature-tournament-validation-residual10-long-gap-scope.yml"
+      - "scripts/research_phase1_feature_tournament_validation_residual10_long_gap_scope.py"
+      - "tests/test_research_phase1_feature_tournament_validation_residual10_long_gap_scope.py"
+      - "docs/research-phase1-feature-tournament-validation-residual10-long-gap-scope-gate.md"
+
+permissions:
+  contents: write
+
+env:
+  SOURCE_RELEASE: research-phase1-insider-feature-tournament-validation-residual11-scope-v1
+  SOURCE_ASSET: validation-residual11-scope.json
+  SOURCE_DIGEST: sha256:9f240f9c4fd4f565449ef5261d6a696bc70beb9725213f4a7c5f73d01781915d
+  RESOLUTION_RELEASE: research-phase1-insider-feature-tournament-validation-cbtx-symbol-change-v1
+  RESOLUTION_ASSET: validation-cbtx-symbol-change-resolution.json
+  RESOLUTION_DIGEST: sha256:bf074cb873959b5da66fdb98af015349a1ec09bf6e5192785bac1e23699cdf5f
+  RESULT_RELEASE: research-phase1-insider-feature-tournament-validation-residual10-long-gap-scope-v1
+  RESULT_ASSET: validation-residual10-long-gap-scope.json
+
+jobs:
+  freeze:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - uses: astral-sh/setup-uv@v5
+        with: {enable-cache: true}
+      - run: uv sync --all-groups --frozen
+      - name: Lint and test residual-10 freezer
+        run: |
+          uv run ruff check scripts/research_phase1_feature_tournament_validation_residual10_long_gap_scope.py tests/test_research_phase1_feature_tournament_validation_residual10_long_gap_scope.py
+          uv run pytest -q tests/test_research_phase1_feature_tournament_validation_residual10_long_gap_scope.py
+      - name: Download and verify inputs
+        env: {GH_TOKEN: ${{ github.token }}}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/input work/output
+          gh release download "$SOURCE_RELEASE" --repo "$GITHUB_REPOSITORY" --pattern "$SOURCE_ASSET" --dir work/input
+          gh release download "$RESOLUTION_RELEASE" --repo "$GITHUB_REPOSITORY" --pattern "$RESOLUTION_ASSET" --dir work/input
+          test "sha256:$(sha256sum "work/input/$SOURCE_ASSET" | cut -d' ' -f1)" = "$SOURCE_DIGEST"
+          test "sha256:$(sha256sum "work/input/$RESOLUTION_ASSET" | cut -d' ' -f1)" = "$RESOLUTION_DIGEST"
+      - name: Freeze final long-gap scope
+        run: >-
+          uv run python scripts/research_phase1_feature_tournament_validation_residual10_long_gap_scope.py
+          --source "work/input/$SOURCE_ASSET" --resolution "work/input/$RESOLUTION_ASSET"
+          --output "work/output/$RESULT_ASSET"
+      - name: Assert final residual boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=json.loads(Path("work/output/validation-residual10-long-gap-scope.json").read_text())
+          assert p["status"]=="PHASE1_FEATURE_TOURNAMENT_VALIDATION_RESIDUAL10_LONG_GAP_SCOPE_FROZEN"
+          assert p["residualRows"]==10
+          assert p["scopeKeySha256"]=="sha256:bba1bd1512a8ab6b8009e477689e189c2bd5ebf3033801f50753b023d5d6a426"
+          assert p["performanceRead"] is False and p["validationOpened"] is False
+          assert p["validationPerformanceOpened"] is False and p["oosOpened"] is False
+          PY
+      - name: Publish immutable residual-10
+        env: {GH_TOKEN: ${{ github.token }}}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Phase-1 F2 validation residual-10 long-gap scope v1"               --notes "Final performance-blind 10-row validation continuity residual, all long-gap primary-evidence cases. Validation performance and 2023+ OOS remain closed." --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE" "work/output/$RESULT_ASSET" --repo "$GITHUB_REPOSITORY" --clobber
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase1-insider-feature-tournament-validation-residual10-${{ github.run_id }}
+          path: work/output
+          retention-days: 90
