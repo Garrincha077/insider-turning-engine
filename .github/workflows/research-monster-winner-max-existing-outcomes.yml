@@ -1,0 +1,175 @@
+name: Run Monster max-existing-data outcomes
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/b3-ps-pit-history]
+    paths:
+      - ".github/workflows/research-monster-winner-max-existing-outcomes.yml"
+      - "scripts/research_monster_winner_max_existing_outcomes.py"
+      - "tests/test_research_monster_winner_max_existing_outcomes.py"
+      - "docs/research-monster-winner-max-existing-outcome-gate.md"
+
+permissions:
+  contents: write
+
+env:
+  SCOPE_RELEASE: research-monster-winner-max-existing-feature-scope-v1
+  SCOPE_ARCHIVE: monster-winner-max-existing-feature-scope-v1.tar.gz
+  SCOPE_ARCHIVE_DIGEST: sha256:6c139ff5d2efcdb8dfdfc5d7023c875ff96385f6ccb27eb327fcb66b8336c27a
+  SCOPE_SUMMARY_DIGEST: sha256:df8e763163943464f258f6c99997848d856f9ce9cab1a7148e56b3f06e563703
+
+  CONT_RELEASE: research-monster-winner-max-existing-continuity-v1
+  CONT_ARCHIVE: monster-winner-max-existing-continuity-v1.tar.gz
+  CONT_ARCHIVE_DIGEST: sha256:9a28b8d0f1de2d9a8aa602caa28eb6abbf6e84982821f511efe8badde76e3ca6
+  CONT_SUMMARY_DIGEST: sha256:bc9e3880651121f6b943ed27c592a9c187d08515f3c5baa2ccece077bf7dff5a
+
+  FINAL126_RELEASE: research-phase1-insider-feature-tournament-validation-final-continuity-v1
+  FINAL126_ASSET: validation-final-continuity.json
+  FINAL126_DIGEST: sha256:16a9814003c232d58d9e0f70a85b72beb7e37d04c81b390dbd3cfd6199c7956a
+
+  MARKET_RELEASE: research-market-alpaca-v1
+  RESULT_RELEASE: research-monster-winner-max-existing-outcomes-v1
+  RESULT_ARCHIVE: monster-winner-max-existing-outcomes-v1.tar.gz
+  RESULT_JSON: monster-max-existing-results.json
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+
+      - name: Lint and test max-existing outcome semantics
+        run: |
+          uv run ruff check scripts/research_monster_winner_max_existing_outcomes.py tests/test_research_monster_winner_max_existing_outcomes.py
+          uv run pytest -q tests/test_research_monster_winner_max_existing_outcomes.py
+
+      - name: Assert no intraday-high or 2023 data logic
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          source=Path("scripts/research_monster_winner_max_existing_outcomes.py").read_text()
+          for token in ('index["high"]','index["low"]','["high"]','["low"]'):
+              assert token not in source, token
+          assert 'SEALED_YEAR = 2023' in source
+          assert 'DATA_BOUNDARY = "2022-12-30"' in source
+          PY
+
+      - name: Download immutable feature and continuity inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/download/scope work/scope             work/download/cont work/cont work/final126 work/output
+
+          gh release download "$SCOPE_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$SCOPE_ARCHIVE" --dir work/download/scope
+          test "sha256:$(sha256sum "work/download/scope/$SCOPE_ARCHIVE" | cut -d' ' -f1)" = "$SCOPE_ARCHIVE_DIGEST"
+          tar -xzf "work/download/scope/$SCOPE_ARCHIVE" -C work/scope             summary.json monster-extension-feature-matrix-2021-2022.csv
+          test "sha256:$(sha256sum work/scope/summary.json | cut -d' ' -f1)" = "$SCOPE_SUMMARY_DIGEST"
+
+          gh release download "$CONT_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$CONT_ARCHIVE" --dir work/download/cont
+          test "sha256:$(sha256sum "work/download/cont/$CONT_ARCHIVE" | cut -d' ' -f1)" = "$CONT_ARCHIVE_DIGEST"
+          tar -xzf "work/download/cont/$CONT_ARCHIVE" -C work/cont             summary.json monster-extension-continuity-audit.csv corporate-actions.json
+          test "sha256:$(sha256sum work/cont/summary.json | cut -d' ' -f1)" = "$CONT_SUMMARY_DIGEST"
+
+          gh release download "$FINAL126_RELEASE" --repo "$GITHUB_REPOSITORY"             --pattern "$FINAL126_ASSET" --dir work/final126
+          test "sha256:$(sha256sum "work/final126/$FINAL126_ASSET" | cut -d' ' -f1)" = "$FINAL126_DIGEST"
+
+      - name: Download only frozen 2021-2022 adjusted market outcomes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/download/market work/market
+          declare -A DIGESTS=(
+            [2021]=550ff3456ad16a045692a5d9d567d13ef2b8788283f4c39c3baa5d8aecd7a704
+            [2022]=8a71037090cda77bc3937409ffa9fcb9c463545b5f3a7d9a73995a92759d187a
+          )
+          for year in 2021 2022; do
+            asset="alpaca-market-${year}.tar.gz"
+            gh release download "$MARKET_RELEASE" --repo "$GITHUB_REPOSITORY"               --pattern "$asset" --dir work/download/market
+            test "$(sha256sum "work/download/market/$asset" | cut -d' ' -f1)" = "${DIGESTS[$year]}"
+            mkdir -p "work/market/$year"
+            tar -xzf "work/download/market/$asset" -C "work/market/$year"               "canonical-market-${year}.csv"
+          done
+          test ! -e work/market/2023
+
+      - name: Evaluate maximum existing-data Monster outcomes
+        run: >-
+          uv run python scripts/research_monster_winner_max_existing_outcomes.py
+          --feature-csv work/scope/monster-extension-feature-matrix-2021-2022.csv
+          --feature-summary work/scope/summary.json
+          --audit-csv work/cont/monster-extension-continuity-audit.csv
+          --audit-summary work/cont/summary.json
+          --corporate-actions work/cont/corporate-actions.json
+          --final-126-contract "work/final126/$FINAL126_ASSET"
+          --market-root work/market
+          --output work/output
+
+      - name: Assert extension outcome boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import csv,json
+          from pathlib import Path
+
+          p=json.loads(Path("work/output/monster-max-existing-results.json").read_text())
+          assert p["status"]=="MONSTER_MAX_EXISTING_DATA_EXTENSION_OUTCOMES_COMPLETE"
+          assert p["definitionId"]=="MONSTER_WINNER_ENRICHMENT_V1"
+          assert p["dataPeriodAvailable"]==["2016-01-01","2022-12-30"]
+          assert p["mature126Events"]==7493
+          assert p["mature252Events"]==4582
+          assert p["unresolved252RowsConservative"]==68
+          assert p["priceFieldsRead"]==["entry_open","exact_path_close"]
+          assert p["intradayHighRead"] is False
+          assert p["knownSampleOnly"] is True
+          assert p["knownSampleLabel"]=="KNOWN_SAMPLE_MAX_AVAILABLE_EXTENSION"
+          assert p["oosOpened"] is False
+          assert p["productionScoringChanged"] is False
+          assert p["retuningPerformed"] is False
+          assert p["compositeFit"] is False
+
+          with Path("work/output/monster-max-existing-event-outcomes.csv").open(newline="") as f:
+              rows=list(csv.DictReader(f))
+          assert len(rows)==12075
+          assert max(r["targetExitSession"] for r in rows)<="2022-12-30"
+          assert {r["horizon"] for r in rows}=={"126","252"}
+
+          print(json.dumps({
+              "latestMature2022EvaluationSessionFor126":p["latestMature2022EvaluationSessionFor126"],
+              "candidateResults":p["candidateResults"],
+          },indent=2,sort_keys=True))
+          PY
+
+      - name: Publish immutable maximum existing-data result
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp docs/research-monster-winner-max-existing-outcome-gate.md work/output/
+          tar -C work/output -czf "work/$RESULT_ARCHIVE"             monster-max-existing-results.json             monster-max-existing-event-outcomes.csv             research-monster-winner-max-existing-outcome-gate.md
+
+          if ! gh release view "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RESULT_RELEASE" --repo "$GITHUB_REPOSITORY"               --title "Monster Winner maximum existing-data outcomes v1"               --notes "Frozen F3/F4 extension through the maximum comparable pre-2023 data. Full 252-session evidence extends through 2021; available 2022 evidence is 126-session only. No 2023+ data, retuning, composite fitting or production change."               --prerelease
+          fi
+          gh release upload "$RESULT_RELEASE"             "work/$RESULT_ARCHIVE" "work/output/$RESULT_JSON"             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: monster-max-existing-outcomes-${{ github.run_id }}
+          path: work/output
+          retention-days: 90
