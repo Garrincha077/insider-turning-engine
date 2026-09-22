@@ -63,20 +63,16 @@ def run(*,source_path:Path,resolution_path:Path,output_path:Path)->dict[str,Any]
     _boundary(resolution,"CBTX resolution")
     if source.get("status")!="PHASE1_FEATURE_TOURNAMENT_VALIDATION_RESIDUAL11_SCOPE_FROZEN":
         raise ValueError("residual-11 status changed")
-    if source.get("residualRows")!=11 or source.get("scopeKeySha256")!=EXPECTED_SOURCE_DIGEST:
-        raise ValueError("residual-11 scope changed")
-    if resolution.get("status")!="PHASE1_FEATURE_TOURNAMENT_VALIDATION_CBTX_SYMBOL_CHANGE_RESOLUTION_COMPLETE":
-        raise ValueError("CBTX resolution status changed")
-    if resolution.get("resolvedRows")!=1 or resolution.get("resolvedKeySha256")!=EXPECTED_RESOLUTION_DIGEST:
-        raise ValueError("CBTX resolution key changed")
+    if (\n        source.get("residualRows") != 11\n        or source.get("scopeKeySha256") != EXPECTED_SOURCE_DIGEST\n    ):\n        raise ValueError("residual-11 scope changed")
+    if resolution.get("status") != (\n        "PHASE1_FEATURE_TOURNAMENT_VALIDATION_"\n        "CBTX_SYMBOL_CHANGE_RESOLUTION_COMPLETE"\n    ):\n        raise ValueError("CBTX resolution status changed")
+    if (\n        resolution.get("resolvedRows") != 1\n        or resolution.get("resolvedKeySha256") != EXPECTED_RESOLUTION_DIGEST\n    ):\n        raise ValueError("CBTX resolution key changed")
     source_rows=source.get("rows")
     resolution_rows=resolution.get("resolutionRows")
     if not isinstance(source_rows,list) or len(source_rows)!=11:
         raise ValueError("residual-11 rows changed")
     if not isinstance(resolution_rows,list) or len(resolution_rows)!=1:
         raise ValueError("CBTX resolution rows changed")
-    if _digest(source_rows)!=EXPECTED_SOURCE_DIGEST or _digest(resolution_rows)!=EXPECTED_RESOLUTION_DIGEST:
-        raise ValueError("input semantic keys changed")
+    if (\n        _digest(source_rows) != EXPECTED_SOURCE_DIGEST\n        or _digest(resolution_rows) != EXPECTED_RESOLUTION_DIGEST\n    ):\n        raise ValueError("input semantic keys changed")
     resolved={_key(r) for r in resolution_rows}
     residual=[r for r in source_rows if _key(r) not in resolved]
     if len(residual)!=10 or _digest(residual)!=EXPECTED_RESIDUAL_DIGEST:
@@ -84,8 +80,7 @@ def run(*,source_path:Path,resolution_path:Path,output_path:Path)->dict[str,Any]
     if {str(r["ticker"]).upper() for r in residual}!=EXPECTED_TICKERS:
         raise ValueError("residual-10 ticker set changed")
     for row in residual:
-        if str((row.get("evidenceAudit") or {}).get("category") or "")!="LONG_GAP_NEW_PRIMARY_EVIDENCE_REQUIRED":
-            raise ValueError("residual-10 contains non-long-gap row")
+        category = str((row.get("evidenceAudit") or {}).get("category") or "")\n        if category != "LONG_GAP_NEW_PRIMARY_EVIDENCE_REQUIRED":\n            raise ValueError("residual-10 contains non-long-gap row")
         if row.get("candidateActionIds") or row.get("candidateActionTypes"):
             raise ValueError("residual-10 unexpectedly contains provider action")
     residual.sort(key=lambda r:int(r["eventNumber"]))
