@@ -6,6 +6,7 @@ import { isCikList, isTimezone, resetPreferences, usePreference } from '@/lib/lo
 import { AlertCenterView, DataCoverageView, SettingsView, SystemHealthView } from './operations-views';
 import { CompanyLab, CompanyTable, CostBasisView, ClusterView, MethodologyView, PulseView, TapeView, Panel, EmptyState } from './research-views';
 import { ActivityV2, BasisV2, ClustersV2, CoverageV2, InsiderRatioV2 } from './v2-views';
+import { SnapshotAge } from './snapshot-age';
 
 const groups = [
   { label: 'Overview', views: [['radar', 'Radar'], ['market-pulse', 'Market Pulse'], ['insider-ratio', 'Insider Ratio'], ['live-sec-tape', 'Live SEC Tape']] },
@@ -134,7 +135,7 @@ export function EngineDashboard() {
       <section className="min-w-0 space-y-6">
         <div><p className="mb-2 flex items-center gap-2 text-xs text-emerald-300"><Activity className="size-4" />Daily research workspace</p><h1 className="text-3xl font-semibold tracking-tight">{title}</h1><p className="mt-2 max-w-4xl text-sm leading-6 text-muted-foreground">{descriptions[view]}</p></div>
         <div className="flex flex-wrap gap-x-5 gap-y-2 border-y border-border py-3 text-xs text-muted-foreground">
-          <span className="text-amber-200">{scoreLabel}</span><span>{data.scoreVersion}</span><span>Score snapshot: {instant(manifest.asOf, timezone)}</span><span>Market through: {manifest.watermarks.marketSessionThrough ?? 'unavailable'}</span>
+          <span className="text-amber-200">{scoreLabel}</span><span>{data.scoreVersion}</span><span>Score snapshot: {instant(manifest.asOf, timezone)}</span><SnapshotAge asOf={manifest.asOf} /><span>Market through: {manifest.watermarks.marketSessionThrough ?? 'unavailable'}</span>
           {data.status === 'STALE' && <output className="text-rose-300">Source reports stale data. Check System Health.</output>}
         </div>
         {publication.researchAvailable && !data.research && researchViews.has(view) && <output className="block rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-4 text-sm text-emerald-100">Loading and verifying detailed SEC research… The compact dashboard is already available.</output>}
