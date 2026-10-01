@@ -1,5 +1,35 @@
 # Operations runbook
 
+## Current daily factual dashboard (separate from predictive research)
+
+`pages.yml` owns the daily factual flow, scheduled Tuesday–Saturday at 07:15 UTC.
+GitHub may delay scheduled starts. SEC days use immutable Release checkpoints;
+market refresh uses three disjoint shards with four bounded workers each and
+an eight-second provider timeout. Each shard stops starting network requests
+after 20 minutes. Unavailable prices remain explicitly missing; SEC facts and
+the separately gated informational digest do not depend on complete scores.
+
+Market cache is explicitly saved even after a failed refresh. The 75-minute
+job budget includes SEC acquisition, identities, calculation and browser tests;
+it is not permission for unbounded individual market requests.
+
+Inspect the final `report` job and its GitHub run summary for build, deployment
+and digest outcomes. Diagnostic artifacts include `market-status.json`, SEC
+acquisition evidence and `daily-report.json` when materialization completes.
+The report job runs even when publication fails and sends an operational
+Telegram warning on failure, independently of the snapshot and score gates.
+Notice claims are persisted before sending; reruns and uncertain delivery do
+not automatically repeat notices. An execute-mode blocked digest fails its job
+instead of reporting green despite no delivery.
+
+To recover publication without sending a historical backlog, dispatch
+`pages.yml` with `refresh_data=true`, `send_digest=false`. Then check the new
+public manifest's actual source dates. Scheduled runs send only the latest
+eligible SEC day's factual digest. Never rerun an uncertain delivery to retry it.
+
+The sections below describe the older predictive/research CLI and gates, not
+the daily factual dashboard's readiness requirements.
+
 This runbook is for local/reproducible research runs. It does not authorize
 production delivery or imply live validation. Keep alert delivery disabled
 until the release checklist passes.

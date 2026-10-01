@@ -165,7 +165,7 @@ def test_pages_validates_manifest_and_hashes_before_upload() -> None:
     assert "pipeline.daily_research" in text and "pipeline.live_experimental" not in text
     assert '--repository "$GITHUB_REPOSITORY"' in text
     assert '--target "$GITHUB_SHA"' in text
-    assert workflow["jobs"]["build"]["timeout-minutes"] == 45
+    assert workflow["jobs"]["build"]["timeout-minutes"] == 75
     assert workflow["jobs"]["build"]["permissions"]["contents"] == "write"
     assert "GH_TOKEN: ${{ github.token }}" in text
     assert "work/daily-research/identities/identity-manifest.json" in text
@@ -174,6 +174,38 @@ def test_pages_validates_manifest_and_hashes_before_upload() -> None:
         "pipeline.daily_research")
     assert text.index("pipeline.daily_research") < text.index("notifications.state_store sync")
     assert '--expected-head "$EXPECTED_STATE_HEAD"' in text
+
+
+def test_daily_market_progress_is_saved_on_failure_and_diagnostics_are_retained() -> None:
+    workflow, _ = _workflow(PAGES)
+    steps = workflow["jobs"]["build"]["steps"]
+    restore = next(step for step in steps if step.get("id") == "market-cache")
+    save = next(step for step in steps if step.get("uses") == "actions/cache/save@v4")
+    assert restore["uses"] == "actions/cache/restore@v4"
+    assert "always()" in save["if"]
+    assert save["with"]["key"] == "${{ steps.market-cache.outputs.cache-primary-key }}"
+    assert save["with"]["path"] == restore["with"]["path"]
+    diagnostics = next(step for step in steps
+                       if step.get("name", "").startswith("Preserve compact"))
+    assert "always()" in diagnostics["if"]
+    assert "market-status.json" in diagnostics["with"]["path"]
+
+
+def test_daily_status_report_runs_independently_after_failed_publication_or_digest() -> None:
+    workflow, _ = _workflow(PAGES)
+    report = workflow["jobs"]["report"]
+    assert report["needs"] == ["build", "deploy", "digest"]
+    assert "always()" in report["if"] and "inputs.refresh_data == true" in report["if"]
+    assert report["environment"] == "production"
+    assert report["permissions"] == {"contents": "write"}
+    step = next(step for step in report["steps"] if "run" in step
+                and "workflow_status" in step["run"])
+    assert step["env"]["RESULT_BUILD"] == "${{ needs.build.result }}"
+    assert "inputs.send_digest" in step["env"]["DIGEST_EXPECTED"]
+    artifact = next(step for step in report["steps"]
+                    if step.get("uses") == "actions/upload-artifact@v4")
+    assert artifact["if"] == "always()"
+    assert artifact["with"]["path"] == "work/workflow-status.json"
 
 
 def test_factual_digest_is_after_pages_uses_exact_artifact_and_separate_policy() -> None:

@@ -230,6 +230,33 @@ def test_cli_preview_validates_hashes_without_network_or_claim(tmp_path, monkeyp
         digest_cli.main()
 
 
+@pytest.mark.parametrize("execute", [False, True])
+def test_cli_blocked_delivery_cannot_report_green_when_execute_requested(
+    tmp_path, monkeypatch, execute,
+):
+    from test_dashboard_export import _data
+
+    from insider_turning_engine.export.dashboard import export_dashboard
+    from insider_turning_engine.notifications import digest_cli
+
+    data = _data()
+    data["researchSnapshot"] = snapshot(complete=False).model_dump(mode="json", by_alias=True)
+    data["generatedAt"] = NOW.isoformat()
+    root, output = tmp_path / "public", tmp_path / "status.json"
+    export_dashboard(data, root, run_id="run_digest_fixture_001", as_of=NOW)
+    monkeypatch.setattr(digest_cli.httpx, "post", lambda *a, **kw: pytest.fail("blocked HTTP"))
+    monkeypatch.setattr(digest_cli, "restore", lambda *a: pytest.fail("blocked state write"))
+    monkeypatch.setattr("sys.argv", ["digest", "--directory", str(root), "--output", str(output)]
+                        + (["--execute"] if execute else []))
+    if execute:
+        with pytest.raises(SystemExit) as exc:
+            digest_cli.main()
+        assert exc.value.code == 1
+    else:
+        digest_cli.main()
+    assert json.loads(output.read_text())["status"] == "BLOCKED"
+
+
 def test_public_settings_digest_schema_and_day_claim_status(tmp_path):
     import jsonschema
 

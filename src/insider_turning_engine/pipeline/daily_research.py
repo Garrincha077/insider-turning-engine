@@ -69,11 +69,19 @@ def market_shards(
     bars: dict[str, tuple[DailyBar, ...]] = {}
     failures: dict[str, str] = {}
     with ThreadPoolExecutor(max_workers=3) as executor:
-        jobs = [executor.submit(_fetch_market, shard, cache_dir=cache_dir) for shard in shards]
+        jobs = [executor.submit(_fetch_market, shard, cache_dir=cache_dir, max_workers=4,
+                                budget_seconds=1200) for shard in shards]
         for job in jobs:
             batch, failed, _sources, _cross_validated = job.result()
             bars.update(batch)
-            failures.update({symbol: "MARKET_PROVIDER_UNAVAILABLE" for symbol in failed})
+            failures.update({symbol: (reason if reason == "MARKET_REFRESH_BUDGET_EXHAUSTED"
+                                      else "MARKET_PROVIDER_UNAVAILABLE")
+                             for symbol, reason in failed.items()})
+    _write_json(cache_dir.parent / "market-status.json", {
+        "schemaVersion": "1.0.0", "requested": len(selected), "available": len(bars),
+        "failures": dict(sorted(failures.items())),
+        "status": "COMPLETE" if not failures else "PARTIAL",
+    })
     return bars, failures
 
 

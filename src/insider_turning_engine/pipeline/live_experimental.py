@@ -11,8 +11,10 @@ import argparse
 import json
 import os
 import re
+import time
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -204,29 +206,54 @@ def _fetch_sec_records(
 
 
 def _fetch_market(
-    symbols: Iterable[str], *, cache_dir: Path
+    symbols: Iterable[str], *, cache_dir: Path, max_workers: int = 1,
+    budget_seconds: float | None = None,
 ) -> tuple[dict[str, tuple[DailyBar, ...]], dict[str, str], dict[str, str], set[str]]:
+    if not 1 <= max_workers <= 4 or (budget_seconds is not None and budget_seconds <= 0):
+        raise ValueError("market workers must be 1..4 and budget must be positive")
+    deadline = time.monotonic() + budget_seconds if budget_seconds is not None else None
     provider = RedundantEODProvider(
         (
             StooqMarketDataProvider(
                 cache_dir=cache_dir,
                 max_attempts=1,
+                timeout=8.0,
                 cache_ttl_seconds=86_400,
             ),
-            YahooChartProvider(cache_dir=cache_dir),
+            YahooChartProvider(cache_dir=cache_dir, timeout=8.0),
         )
     )
     bars: dict[str, tuple[DailyBar, ...]] = {}
     failures: dict[str, str] = {}
+    selected = sorted(set(symbols))
+
+    def fetch(symbol: str) -> tuple[tuple[DailyBar, ...] | None, str | None]:
+        # Queued requests do not start after the budget. In-flight requests are
+        # bounded by provider timeouts; partial market coverage never hides SEC facts.
+        if deadline is not None and time.monotonic() >= deadline:
+            return None, "MARKET_REFRESH_BUDGET_EXHAUSTED"
+        try:
+            return provider.fetch_daily(symbol), None
+        except (ValueError, RuntimeError, OSError) as exc:
+            return None, str(exc)[:300]
+
     try:
-        for symbol in sorted(set(symbols)):
-            try:
-                bars[symbol] = provider.fetch_daily(symbol)
-            except (ValueError, RuntimeError, OSError) as exc:
-                failures[symbol] = str(exc)[:300]
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            jobs = {executor.submit(fetch, symbol): symbol for symbol in selected}
+            for index, job in enumerate(as_completed(jobs), start=1):
+                symbol = jobs[job]
+                rows, failure = job.result()
+                if rows is not None:
+                    bars[symbol] = rows
+                else:
+                    failures[symbol] = failure or "MARKET_PROVIDER_UNAVAILABLE"
+                if max_workers > 1 and (index % 100 == 0 or index == len(selected)):
+                    print(f"MARKET_PROGRESS: {index}/{len(selected)}, "
+                          f"{len(bars)} available, {len(failures)} unavailable", flush=True)
     finally:
         provider.close()
-    return bars, failures, dict(provider.selected_provider), set(provider.cross_validated_symbols)
+    return (dict(sorted(bars.items())), dict(sorted(failures.items())),
+            dict(sorted(provider.selected_provider.items())), set(provider.cross_validated_symbols))
 
 
 def _company_series(
