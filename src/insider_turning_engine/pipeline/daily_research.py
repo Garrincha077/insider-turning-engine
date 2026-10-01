@@ -61,7 +61,7 @@ def discover_research_days(source: SECDailyIndexSource, *, end: date) -> tuple[d
 
 
 def market_shards(
-    symbols: Sequence[str], *, cache_dir: Path,
+    symbols: Sequence[str], *, cache_dir: Path, priority_symbols: Sequence[str] = (),
 ) -> tuple[dict[str, tuple[DailyBar, ...]], dict[str, str]]:
     """Three deterministic disjoint shards; existing providers/cache/fallback retained."""
     selected = sorted(set(symbols))
@@ -70,7 +70,8 @@ def market_shards(
     failures: dict[str, str] = {}
     with ThreadPoolExecutor(max_workers=3) as executor:
         jobs = [executor.submit(_fetch_market, shard, cache_dir=cache_dir, max_workers=4,
-                                budget_seconds=1200) for shard in shards]
+                                budget_seconds=1200, priority_symbols=priority_symbols)
+                for shard in shards]
         for job in jobs:
             batch, failed, _sources, _cross_validated = job.result()
             bars.update(batch)
@@ -296,7 +297,8 @@ def main() -> None:
     _active, _identity, symbols, benchmarks = _select_market_universe(
         history.records, identities, as_of=point)
     print(f"MARKET_REFRESH: {len(symbols)} stocks, {len(benchmarks)} benchmarks", flush=True)
-    market, failures = market_shards((*symbols, *benchmarks), cache_dir=args.work / "market")
+    market, failures = market_shards((*symbols, *benchmarks), cache_dir=args.work / "market",
+                                    priority_symbols=benchmarks)
     print(f"MARKET_INPUTS: {len(market)} available, {len(failures)} failures", flush=True)
     prior = json.loads(args.prior_state.read_text("utf-8")) \
         if args.prior_state and args.prior_state.exists() else {}

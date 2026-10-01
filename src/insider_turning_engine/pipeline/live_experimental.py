@@ -207,7 +207,7 @@ def _fetch_sec_records(
 
 def _fetch_market(
     symbols: Iterable[str], *, cache_dir: Path, max_workers: int = 1,
-    budget_seconds: float | None = None,
+    budget_seconds: float | None = None, priority_symbols: Iterable[str] = (),
 ) -> tuple[dict[str, tuple[DailyBar, ...]], dict[str, str], dict[str, str], set[str]]:
     if not 1 <= max_workers <= 4 or (budget_seconds is not None and budget_seconds <= 0):
         raise ValueError("market workers must be 1..4 and budget must be positive")
@@ -225,7 +225,8 @@ def _fetch_market(
     )
     bars: dict[str, tuple[DailyBar, ...]] = {}
     failures: dict[str, str] = {}
-    selected = sorted(set(symbols))
+    priority = set(priority_symbols)
+    selected = sorted(set(symbols), key=lambda symbol: (symbol not in priority, symbol))
 
     def fetch(symbol: str) -> tuple[tuple[DailyBar, ...] | None, str | None]:
         # Queued requests do not start after the budget. In-flight requests are

@@ -94,3 +94,41 @@ def test_yahoo_timeout_is_configurable_without_changing_parsing():
     provider = YahooChartProvider(timeout=8)
     assert provider.client.timeout == httpx.Timeout(8)
     provider.close()
+
+
+def test_benchmarks_are_requested_before_stocks_when_budget_expires(tmp_path, monkeypatch):
+    ticks = iter([0.0, 0.1, 0.2, 2.0, 2.0])
+    monkeypatch.setattr(live.time, "monotonic", lambda: next(ticks))
+    requests = []
+
+    class Provider(FakeProvider):
+        def fetch_daily(self, symbol):
+            requests.append(symbol)
+            return ()
+
+    monkeypatch.setattr(live, "RedundantEODProvider", Provider)
+    bars, failed, _, _ = live._fetch_market(
+        ["AAA", "BBB", "XLK", "SPY", "SPY"], cache_dir=tmp_path,
+        priority_symbols=["XLK", "SPY", "NOT_REQUESTED"], budget_seconds=1)
+    assert requests == ["SPY", "XLK"]
+    assert list(bars) == ["SPY", "XLK"]
+    assert failed == dict.fromkeys(["AAA", "BBB"], "MARKET_REFRESH_BUDGET_EXHAUSTED")
+
+
+def test_shards_forward_benchmark_priority_without_changing_requested_inventory(tmp_path,
+                                                                              monkeypatch):
+    calls = []
+
+    def fetch(symbols, **kwargs):
+        assert kwargs["priority_symbols"] == ("SPY", "XLK")
+        assert kwargs["max_workers"] == 4 and kwargs["budget_seconds"] == 1200
+        calls.append(tuple(symbols))
+        return dict.fromkeys(symbols, ()), {}, {}, set()
+
+    monkeypatch.setattr(daily_research, "_fetch_market", fetch)
+    bars, failed = daily_research.market_shards(
+        ["CCC", "AAA", "SPY", "XLK", "AAA"], cache_dir=tmp_path / "market",
+        priority_symbols=("SPY", "XLK"))
+    assert sorted(symbol for shard in calls for symbol in shard) == ["AAA", "CCC", "SPY", "XLK"]
+    assert len(calls) == 3 and set(bars) == {"AAA", "CCC", "SPY", "XLK"}
+    assert not failed

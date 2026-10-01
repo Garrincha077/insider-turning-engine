@@ -8,6 +8,9 @@ market refresh uses three disjoint shards with four bounded workers each and
 an eight-second provider timeout. Each shard stops starting network requests
 after 20 minutes. Unavailable prices remain explicitly missing; SEC facts and
 the separately gated informational digest do not depend on complete scores.
+SPY and the required sector ETFs are queued before ordinary stocks within each
+shard so an exhausted budget does not systematically omit those benchmarks.
+This changes request order only, not the universe or freshness/coverage gates.
 
 Market cache is explicitly saved even after a failed refresh. The 75-minute
 job budget includes SEC acquisition, identities, calculation and browser tests;
