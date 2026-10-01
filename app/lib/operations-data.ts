@@ -83,3 +83,15 @@ export function rateLabel(measurement: QualityMeasurement) {
 export function humanReason(value: string) {
   return value.replaceAll('_', ' ').toLowerCase();
 }
+
+// Elapsed wall-clock time, not a market-session freshness assessment.
+export function snapshotAgeLabel(asOf: string, now: number) {
+  const timestamp = Date.parse(asOf);
+  if (!Number.isFinite(timestamp) || !Number.isFinite(now)) return 'Unavailable';
+  if (timestamp > now) return 'Snapshot is ahead of this device clock';
+  const minutes = Math.floor((now - timestamp) / 60_000);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return `${hours}h`;
+  return `${Math.floor(hours / 24)}d ${hours % 24}h`;
+}

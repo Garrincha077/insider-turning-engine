@@ -33,6 +33,11 @@ consume the text budget; disclosure footers do. The item limit and minimum
 purchase threshold are unchanged. Extremely long visible labels can still
 reduce the number of items that fit in one message.
 
+The dashboard shows elapsed snapshot age, updated once per minute on the
+device. This is not a trading-session freshness gate. The benchmark check in
+System Health describes freshness at snapshot calculation, not the present
+clock; a UI-only deploy never changes those source timestamps.
+
 The sections below describe the older predictive/research CLI and gates, not
 the daily factual dashboard's readiness requirements.
 
