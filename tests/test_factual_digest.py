@@ -328,6 +328,51 @@ def test_public_settings_digest_schema_and_day_claim_status(tmp_path):
         schema, format_checker=jsonschema.FormatChecker()).validate(status)
 
 
+def test_production_ten_item_digest_can_attach_without_changing_source_snapshot(tmp_path):
+    import jsonschema
+    from test_dashboard_export import _data
+
+    from insider_turning_engine.export.dashboard import (
+        export_dashboard,
+        validate_dashboard_directory,
+    )
+    from insider_turning_engine.export.settings import attach_settings
+    from insider_turning_engine.notifications.config import load_notification_policy
+    from insider_turning_engine.notifications.digest import load_digest_policy
+    from insider_turning_engine.notifications.settings import build_settings_status
+
+    research = snapshot(count=12)
+    policy = load_digest_policy()
+    assert policy.maximumItems == 10 and policy.minimumPurchaseUsd == 100000
+    status = build_settings_status(load_notification_policy(), environment="production",
+                                  alerts_allowed=False, blocking_reasons=[], secrets={})
+    status["digest"] = public_digest_status(research, policy, now=NOW, production=True,
+                                            configured=True, outbox=tmp_path / "alerts.sqlite")
+    assert len(status["digest"]["eventIds"]) == 10
+    schema = json.loads(Path("schemas/settings-status.schema.json").read_text())
+    validator = jsonschema.Draft202012Validator(schema, format_checker=jsonschema.FormatChecker())
+    validator.validate(status)
+
+    data = _data()
+    data["generatedAt"] = NOW.isoformat()
+    data["researchSnapshot"] = research.model_dump(by_alias=True, mode="json")
+    root = tmp_path / "public"
+    export_dashboard(data, root, run_id=research.run_id, as_of=NOW)
+    before = (root / "research-v2.json").read_bytes()
+    settings = tmp_path / "settings.json"
+    settings.write_text(json.dumps(status))
+    attach_settings(root, settings)
+    manifest = validate_dashboard_directory(root, require_settings=True)
+    assert manifest["runId"] == research.run_id
+    assert (root / "research-v2.json").read_bytes() == before
+    assert json.loads((root / "settings-status.json").read_text())["digest"] == status["digest"]
+
+    status["digest"]["eventIds"].append("eleventh_event")
+    assert any(error.validator == "maxItems" for error in validator.iter_errors(status))
+    status["digest"]["eventIds"] = ["duplicate", "duplicate"]
+    assert any(error.validator == "uniqueItems" for error in validator.iter_errors(status))
+
+
 def test_derivative_total_value_is_never_invented_as_share_quantity():
     from insider_turning_engine.ingestion.sec.parser import parse_sec_xml
 
