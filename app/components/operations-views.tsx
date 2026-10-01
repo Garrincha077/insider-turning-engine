@@ -12,6 +12,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import type { ResearchSnapshot } from '@/lib/research-v2';
 import { DigestPreviewV2, ReadinessV2 } from './v2-views';
+import { SnapshotAge } from './snapshot-age';
 import {
   type ChannelStatus,
   type PublicationManifest,
@@ -25,7 +26,7 @@ export function SystemHealthView({ manifest, research, settings }: { manifest: P
   const checks = [
     { label: 'Canonical data', pass: quality.canonicalValid, detail: quality.canonicalValid ? 'Schema and hashes valid' : 'Canonical validation blocked' },
     { label: 'Methodology', pass: quality.methodologyComplete, detail: quality.methodologyComplete ? 'Frozen scoring contract' : 'Candidate scoring contract' },
-    { label: 'Benchmark', pass: quality.benchmarkFresh, detail: quality.benchmarkFresh ? 'Fresh through latest session' : 'Stale or unavailable' },
+    { label: 'Benchmark', pass: quality.benchmarkFresh, detail: quality.benchmarkFresh ? 'Fresh at snapshot calculation' : 'Stale or unavailable at snapshot calculation' },
     { label: 'SEC parsing', pass: quality.parseSuccess.result === 'PASS', detail: `${rateLabel(quality.parseSuccess)} · gate ${(quality.parseSuccess.threshold * 100).toFixed(1)}%` },
     { label: 'Market coverage', pass: quality.marketCoverage.result === 'PASS', detail: `${rateLabel(quality.marketCoverage)} · gate ${(quality.marketCoverage.threshold * 100).toFixed(0)}%` },
     { label: 'Core coverage', pass: quality.coreBranchCoverage.result === 'PASS', detail: `${rateLabel(quality.coreBranchCoverage)} · gate ${(quality.coreBranchCoverage.threshold * 100).toFixed(0)}%` },
@@ -41,6 +42,7 @@ export function SystemHealthView({ manifest, research, settings }: { manifest: P
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{checks.map((check) => <div key={check.label} className="rounded-lg border border-border bg-background/35 p-4"><div className="flex items-center gap-2">{check.pass ? <CheckCircle2 className="size-4 text-emerald-300" /> : <AlertTriangle className="size-4 text-amber-300" />}<span className="text-sm font-semibold">{check.label}</span></div><p className="mt-2 text-xs text-muted-foreground">{check.detail}</p></div>)}</div>
     </Panel>
     <Panel title="Workflow evidence" subtitle="The published data is not proof that the latest scheduled refresh succeeded.">
+      <p className="mb-2 text-sm font-semibold"><SnapshotAge asOf={manifest.asOf} /></p>
       <p className="text-sm leading-6 text-muted-foreground">Published snapshot: {formatInstant(manifest.asOf)}. Last attempt and run duration are available in Actions diagnostics, not independently refreshed by this public snapshot. If dates stop advancing, inspect the latest run; do not assume a newly deployed UI refreshed the data.</p>
       <a href="https://github.com/Garrincha077/insider-turning-engine/actions" target="_blank" rel="noreferrer" className="mt-4 inline-block text-sm text-emerald-200 underline">Inspect workflow runs and failures</a>
     </Panel>
