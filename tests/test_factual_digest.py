@@ -15,6 +15,7 @@ from insider_turning_engine.notifications.digest import (
     digest_history,
     preview_digest,
     public_digest_status,
+    telegram_text_units,
 )
 from insider_turning_engine.notifications.models import SendResult
 from insider_turning_engine.pipeline.research_snapshot import build_research_snapshot
@@ -70,6 +71,53 @@ def test_versioned_policy_controls_threshold_and_daily_item_limit():
     assert draft.text.count("Transaction:") == 10
     assert "≥ $100,000; largest 10" in draft.text
     assert not preview_digest(snapshot(value=99999), policy).event_ids
+
+
+@pytest.mark.parametrize("text,expected", [
+    ('<a href="https://example.com/' + 'x' * 2000 + '">SEC</a>', 3),
+    ('<b>&lt;&gt;&amp;</b>', 3),
+    ('<b>😀</b>\n', 3),
+])
+def test_telegram_limit_counts_visible_text_not_html_or_link_destinations(text, expected):
+    assert telegram_text_units(text) == expected
+
+
+def test_ten_long_source_links_do_not_reduce_the_daily_selection():
+    policy = POLICY.model_copy(update={"maximumItems": 10})
+    data = snapshot(count=12)
+    data.reporting_owners[0].name = "Owner with a long legal name " * 7
+    for event in data.economic_transactions:
+        event.source_url = "https://www.sec.gov/Archives/" + "x" * 700 + ".xml"
+    draft = preview_digest(data, policy)
+    expected = tuple(row.event_id for row in sorted(data.economic_transactions,
+                     key=lambda row: (-(row.value or 0), row.event_id))[:10])
+    assert draft.event_ids == expected
+    assert len(draft.text) > 4096 and telegram_text_units(draft.text) <= 4096
+    assert draft.text.count("SEC filing</a>") == 10
+
+
+def test_capacity_check_reserves_exclusion_footer_and_handles_astral_owner_names(monkeypatch):
+    from insider_turning_engine.notifications import digest
+
+    data = snapshot(count=12)
+    data.reporting_owners[0].name = "😀" * 180
+    data.companies.append(data.companies[0].model_copy(update={
+        "issuer_cik": "0009999999", "insider_status": "SOURCE_QUARANTINE"}))
+    data.economic_transactions.append(data.economic_transactions[0].model_copy(update={
+        "event_id": "excluded-event", "issuer_cik": "0009999999"}))
+    checked = []
+
+    def units(text):
+        assert "1 unresolved issuer(s) excluded" in text
+        checked.append(text)
+        return telegram_text_units(text)
+
+    monkeypatch.setattr(digest, "telegram_text_units", units)
+    draft = preview_digest(data, POLICY.model_copy(update={"maximumItems": 10}))
+    assert checked and 0 < len(draft.event_ids) < 10
+    assert draft.excluded_issuers == 1
+    assert telegram_text_units(draft.text) <= 4096
+    assert "<a href=" in draft.text and draft.text.endswith("see Data Coverage.")
 
 
 def test_incomplete_latest_day_does_not_fall_back_or_assert_empty():

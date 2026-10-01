@@ -12,6 +12,7 @@ import sqlite3
 from collections.abc import Callable
 from contextlib import closing
 from datetime import UTC, date, datetime, timedelta
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Literal
 from uuid import uuid4
@@ -25,6 +26,26 @@ from .models import DeliveryStatus, SendResult
 from .state_store import _validate_ledger
 
 SITE = "https://garrincha077.github.io/insider-turning-engine/"
+
+
+class _VisibleTelegramText(HTMLParser):
+    """Telegram applies its message limit after HTML entities are parsed."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.units = 0
+
+    def handle_data(self, data: str) -> None:
+        # Conservatively count UTF-16 units, including astral Unicode labels.
+        # Link destinations and tags are not visible message text.
+        self.units += len(data.encode("utf-16-le")) // 2
+
+
+def telegram_text_units(text: str) -> int:
+    parser = _VisibleTelegramText()
+    parser.feed(text)
+    parser.close()
+    return parser.units
 
 
 class DigestPolicy(BaseModel):
@@ -109,6 +130,8 @@ def preview_digest(
              f"Observed eligible US common-stock purchases ≥ "
              f"${policy.minimumPurchaseUsd:,.0f}; largest {policy.maximumItems}. "
              "Not a market-wide census. No score criteria or trading recommendations."]
+    footer = ([f"{len(excluded)} unresolved issuer(s) excluded; see Data Coverage."]
+              if excluded else [])
     displayed: list[EconomicEvent] = []
     for row in selected:
         company = companies[row.issuer_cik]
@@ -122,15 +145,14 @@ def preview_digest(
                 f'<a href="{html.escape(row.source_url, quote=True)}">SEC filing</a> · '
                 f'<a href="{SITE}#view=company-lab&amp;issuer={row.issuer_cik}">'
                 'Company Lab</a>')
-        candidate = "\n\n".join([*parts, item])
-        if len(candidate.encode("utf-16-le")) // 2 > 4096:
+        candidate = "\n\n".join([*parts, item, *footer])
+        if telegram_text_units(candidate) > 4096:
             break
         parts.append(item)
         displayed.append(row)
     if not selected:
         parts.append("No new qualifying purchases in the resolved eligible universe.")
-    if excluded:
-        parts.append(f"{len(excluded)} unresolved issuer(s) excluded; see Data Coverage.")
+    parts.extend(footer)
     text = "\n\n".join(parts)
     return DigestDraft(run_id=snapshot.run_id, sec_day=day, text=text,
                        event_ids=tuple(row.event_id for row in displayed),
