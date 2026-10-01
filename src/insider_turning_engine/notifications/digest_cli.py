@@ -67,7 +67,8 @@ def main() -> None:
     _write_json(args.output, report)
     # Public SEC facts only; provider configuration is never serialized.
     print(json.dumps(report, sort_keys=True))
-    if report["status"] in {"FAILED", "UNCERTAIN"}:
+    if report["status"] in {"FAILED", "UNCERTAIN"} or (
+            args.execute and report["status"] == "BLOCKED"):
         raise SystemExit(1)
 
 

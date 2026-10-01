@@ -36,8 +36,9 @@ class YahooChartProvider:
         cache_dir: str | Path | None = None,
         max_bytes: int = 5 * 1024 * 1024,
         cache_ttl_seconds: int = 86400,
+        timeout: float = 45.0,
     ) -> None:
-        self.client = client or httpx.Client(timeout=45.0, follow_redirects=False)
+        self.client = client or httpx.Client(timeout=timeout, follow_redirects=False)
         self.cache_dir = Path(cache_dir) if cache_dir is not None else None
         self.max_bytes = max_bytes
         if cache_ttl_seconds < 0:

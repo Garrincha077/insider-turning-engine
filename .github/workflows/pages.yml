@@ -32,7 +32,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 75
     permissions:
       contents: write # immutable normalized Releases and small allow-listed operational state
       pages: write
@@ -67,7 +67,8 @@ jobs:
             echo "SEC_USER_AGENT repository variable is required"
             exit 1
           }
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
+        id: market-cache
         if: github.event_name == 'schedule' || inputs.refresh_data == true
         with:
           path: work/daily-research/market
@@ -75,6 +76,7 @@ jobs:
           restore-keys: daily-market-v2-${{ runner.os }}-
       - name: Acquire latest SEC days and materialize canonical daily research
         if: github.event_name == 'schedule' || inputs.refresh_data == true
+        timeout-minutes: 50 # leave time for cache/diagnostics and the independent report job
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
@@ -94,6 +96,12 @@ jobs:
           --store work/research-state-commit
           --incoming work/daily-research/incoming-state
           --expected-head "$EXPECTED_STATE_HEAD"
+      - name: Preserve market progress even when refresh fails
+        if: always() && (github.event_name == 'schedule' || inputs.refresh_data == true)
+        uses: actions/cache/save@v4
+        with:
+          path: work/daily-research/market
+          key: ${{ steps.market-cache.outputs.cache-primary-key }}
       - name: Preserve compact acquisition and daily diagnostics
         if: always() && (github.event_name == 'schedule' || inputs.refresh_data == true)
         uses: actions/upload-artifact@v4
@@ -103,6 +111,7 @@ jobs:
             work/daily-research/identities/identity-manifest.json
             work/daily-research/acquisition/acquisition-status.json
             work/daily-research/daily-report.json
+            work/daily-research/market-status.json
           if-no-files-found: warn
           retention-days: 90
       - name: Export masked operational settings
@@ -226,3 +235,37 @@ jobs:
             work/digest-status.json
           if-no-files-found: warn
           retention-days: 30
+
+  report:
+    # A failed refresh cannot publish settings, so report independently of Pages.
+    if: >-
+      always() && github.ref == 'refs/heads/main' &&
+      (github.event_name == 'schedule' || inputs.refresh_data == true)
+    needs: [build, deploy, digest]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    permissions:
+      contents: write # durable operational notice claim, never a historical digest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - name: Report final results and notify on operational failure
+        env:
+          RESULT_BUILD: ${{ needs.build.result }}
+          RESULT_DEPLOY: ${{ needs.deploy.result }}
+          RESULT_DIGEST: ${{ needs.digest.result }}
+          DIGEST_EXPECTED: ${{ github.event_name == 'schedule' || inputs.send_digest == true }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: uv run python -m insider_turning_engine.notifications.workflow_status --execute
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: daily-workflow-status-${{ github.run_id }}-${{ github.run_attempt }}
+          path: work/workflow-status.json
+          retention-days: 90
