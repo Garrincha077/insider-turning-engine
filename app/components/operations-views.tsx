@@ -18,6 +18,7 @@ import {
   type ChannelStatus,
   type PublicationManifest,
   type SettingsStatus,
+  digestPolicySummary,
   humanReason,
   rateLabel,
 } from '@/lib/operations-data';
@@ -78,7 +79,7 @@ export function DataCoverageView({ manifest }: { manifest: PublicationManifest }
 export function AlertCenterView({ settings, research }: { settings: SettingsStatus; research?: ResearchSnapshot }) {
   const channels = Object.entries(settings.channels) as Array<[string, ChannelStatus]>;
   return <div className="space-y-6">
-    {research ? <DigestPreviewV2 data={research} digest={settings.digest} /> : <Panel title="Informational daily digest" subtitle="A separate channel policy, independent of experimental scores."><p className="text-sm leading-6 text-muted-foreground">Not enabled by this legacy snapshot. A trustworthy preview needs independent economic transactions, the latest complete SEC day and a durable day-level delivery claim. No message or “no new purchases” assertion is generated from incomplete v1 owner groups.</p><p className="mt-3 text-xs text-muted-foreground">Planned content: up to five new open-market purchases of at least $250,000, with SEC source links. No scores or trade recommendations.</p></Panel>}
+    {research ? <DigestPreviewV2 data={research} digest={settings.digest} /> : <Panel title="Informational daily digest" subtitle="A separate channel policy, independent of experimental scores."><p className="text-sm leading-6 text-muted-foreground">Not enabled by this legacy snapshot. A trustworthy preview needs independent economic transactions, the latest complete SEC day and a durable day-level delivery claim. No message or “no new purchases” assertion is generated from incomplete v1 owner groups.</p><p className="mt-3 text-xs text-muted-foreground">{digestPolicySummary(settings.digest)} Content includes SEC source links. No scores or trade recommendations.</p></Panel>}
     <div className={`rounded-xl border p-5 ${settings.alertsAllowed ? 'border-emerald-400/25 bg-emerald-400/8' : 'border-amber-300/20 bg-amber-300/8'}`}><div className="flex items-start gap-3">{settings.alertsAllowed ? <ShieldCheck className="mt-0.5 size-5 text-emerald-300" /> : <BellOff className="mt-0.5 size-5 text-amber-300" />}<div><h2 className="text-sm font-semibold">{settings.alertsAllowed ? 'Actionable alerts enabled' : 'Actionable alerts blocked'}</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">Delivery requires a PASS snapshot, enabled policy, configured channel, and healthy outbox.</p></div></div></div>
     <div className="grid gap-4 md:grid-cols-2">{channels.map(([name, channel]) => <ChannelCard key={name} name={name} status={channel} />)}</div>
     <Panel title="Suppression reasons" subtitle="No blocked candidate is silently discarded">
@@ -98,7 +99,7 @@ export function SettingsView({ settings }: { settings: SettingsStatus }) {
   return <div className="space-y-6">
     <Panel title="Informational digest policy" subtitle="Separate from predictive alerts · evaluated when this status was exported">
       <p className="text-sm">Telegram digest: {settings.digest ? settings.digest.enabled ? 'ENABLED, subject to daily checks' : 'OFF' : 'Not available in this snapshot'}. Latest SEC day: {settings.digest?.secDay ?? 'unavailable'}.</p>
-      <p className="my-3 text-xs text-muted-foreground">Up to ten purchases ≥ $100,000. A durable channel/day claim prevents automatic redelivery, including uncertain outcomes. Delivery history updates on the next successful publication; check Actions for the latest attempt.</p>
+      <p className="my-3 text-xs text-muted-foreground">{digestPolicySummary(settings.digest)} A durable channel/day claim prevents automatic redelivery, including uncertain outcomes. Delivery history updates on the next successful publication; check Actions for the latest attempt.</p>
       {settings.digest && <ReasonList reasons={settings.digest.reasons} />}
       <a className="mt-4 inline-block text-xs text-emerald-200 underline" href="https://github.com/Garrincha077/insider-turning-engine/blob/main/config/digest.v1.json" target="_blank" rel="noreferrer">Open versioned digest policy</a>
     </Panel>

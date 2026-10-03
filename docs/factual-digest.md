@@ -10,7 +10,7 @@ configured production secrets, and a remotely durable unclaimed day.
 
 - Backend selection: newest inventoried SEC day only, complete acquisition and
   parsing required. No fallback to an older complete day or backfill backlog.
-- At most five resolved, eligible, non-derivative P purchases ≥ $250,000, ranked
+- At most ten resolved, eligible, non-derivative P purchases ≥ $100,000, ranked
   by dollars and stable event ID. Joint-owner economic events count once.
 - No score, market-price or backtest requirements. Unknown purchase amounts or
   unresolved issuers prevent an unsupported empty-day assertion.
@@ -30,6 +30,10 @@ configured production secrets, and a remotely durable unclaimed day.
   A failed claim push means no send. A crash, failed result push, any existing
   claim, or ambiguous receipt means **no automatic resend**, including FAILED.
 - Public Settings/Alert Center share backend selection and suppression. The
+  public digest status carries `minimumPurchaseUsd` and `maximumItems` from the
+  active policy; both views describe those values rather than hardcoded limits.
+  Older snapshots without thresholds label them unavailable. Without an exported
+  server preview the browser does not invent its own digest selection. The
   delivery ledger projects only kind/channel/status/time; no token, recipient,
   free-form provider error or provider message ID is public. History updates on
   the next publication. Current attempt diagnostics live in Actions artifacts.

@@ -314,6 +314,34 @@ test('digest policy and exact suppression are visible independently of predictiv
   await expect(page.getByText(/Delivery: BLOCKED.*latest sec day incomplete/i)).toBeVisible();
 });
 
+for (const policy of [
+  { minimumPurchaseUsd: 100000, maximumItems: 10 },
+  { minimumPurchaseUsd: 250000, maximumItems: 5 },
+]) test(`digest preview and Settings describe the published ${policy.maximumItems}-item policy`, async ({ page }) => {
+  await v2(page, undefined, { enabled: true,
+    secDay: [...fixture.coverage.expectedSecDays].sort((a: string, b: string) => a.localeCompare(b)).at(-1) ?? null,
+    status: 'BLOCKED', reasons: ['LATEST_SEC_DAY_INCOMPLETE'], eventIds: [],
+    excludedIssuers: 0, ...policy });
+  await ready(page);
+  const summary = `Up to ${policy.maximumItems} purchases ≥ $${policy.minimumPurchaseUsd.toLocaleString('en-US')}.`;
+  for (const view of ['Alert Center', 'Settings']) {
+    await section(page, view);
+    await expect(page.getByText(summary, { exact: false })).toBeVisible();
+  }
+});
+
+test('older snapshots do not invent digest thresholds or a local selection', async ({ page }) => {
+  await v2(page);
+  await ready(page);
+  await section(page, 'Alert Center');
+  await expect(page.getByText('The server-generated digest preview is unavailable in this snapshot.')).toBeVisible();
+  for (const view of ['Alert Center', 'Settings']) {
+    await section(page, view);
+    await expect(page.getByText('Selection thresholds are unavailable in this snapshot.', { exact: false })).toBeVisible();
+    await expect(page.getByText(/Up to (five|ten|5|10).*purchases/)).toHaveCount(0);
+  }
+});
+
 test('digest event references from another snapshot fail closed', async ({ page }) => {
   await v2(page, undefined, { enabled: true, secDay: [...fixture.coverage.expectedSecDays].sort((a: string, b: string) => a.localeCompare(b)).at(-1) ?? null,
     status: 'READY', reasons: [], eventIds: ['not-in-this-run'], excludedIssuers: 0 });

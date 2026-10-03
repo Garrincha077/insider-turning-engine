@@ -269,6 +269,8 @@ def public_digest_status(
     if draft.sec_day is not None and any(row["secDay"] >= draft.sec_day.isoformat()
                                         for row in history):
         reasons += ("ALREADY_CLAIMED_OR_OLDER_DAY",)
-    return {"enabled": policy.enabled, "secDay": str(draft.sec_day) if draft.sec_day else None,
+    return {"enabled": policy.enabled, "minimumPurchaseUsd": policy.minimumPurchaseUsd,
+            "maximumItems": policy.maximumItems,
+            "secDay": str(draft.sec_day) if draft.sec_day else None,
             "status": "BLOCKED" if reasons else "READY", "reasons": sorted(set(reasons)),
             "eventIds": list(draft.event_ids), "excludedIssuers": draft.excluded_issuers}
