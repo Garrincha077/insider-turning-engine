@@ -51,6 +51,8 @@ def _safe_payload(payload: dict[str, Any]) -> dict[str, Any]:
         typed = CanonicalTransaction.model_validate(row)
         if payload["parserVersion"] == LEGACY_PARSER_VERSION and typed.schema_version != "1.0.0":
             raise ValueError("legacy parser cannot claim new quantity semantics")
+        if typed.schema_version == "1.2.0" and payload["parserVersion"] != PARSER_VERSION:
+            raise ValueError("older parser cannot claim nullable transaction code semantics")
         key = (typed.transaction_id, typed.revision_id)
         url = urlparse(typed.source.source_url)
         if (typed.source.accession_number != accession or key in keys
@@ -116,7 +118,7 @@ def _validate_repair(payload: dict[str, Any]) -> None:
         raise ValueError("invalid repaired row inventory")
     rows = {row["source"]["sourceRowKey"]: CanonicalTransaction.model_validate(row)
             for row in payload["records"]}
-    if any(key not in rows or rows[key].schema_version != "1.1.0"
+    if any(key not in rows or rows[key].schema_version not in {"1.1.0", "1.2.0"}
            or rows[key].timestamps.recorded_at != point for key in keys):
         raise ValueError("repaired row availability does not match receipt")
 

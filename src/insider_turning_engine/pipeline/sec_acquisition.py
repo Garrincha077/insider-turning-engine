@@ -21,7 +21,7 @@ class CheckpointStore(Protocol):
 def acquire_range(
     source: SECDailyIndexSource, store: CheckpointStore, *, start: date, end: date,
     root: Path, max_days: int = 3, max_filings: int = 750,
-    newest_first: bool = False,
+    newest_first: bool = False, per_day_seconds: float = 240,
 ) -> dict[str, Any]:
     """Restore, extend and verify each day's checkpoint before reporting storage success.
 
@@ -29,7 +29,8 @@ def acquire_range(
     every runner. They still block acquisition completeness and all signal use.
     Explicit parser repair/replay is separate. No score state or cursor is written.
     """
-    if not 1 <= max_days <= 10 or not 1 <= max_filings <= 5000:
+    if (not 1 <= max_days <= 10 or not 1 <= max_filings <= 5000
+            or not 1 <= per_day_seconds <= 900):
         raise ValueError("invalid SEC acquisition budget")
     deadline = time.monotonic() + 900
     root.mkdir(parents=True, exist_ok=True)
@@ -79,7 +80,8 @@ def acquire_range(
                 if previous is not None:
                     restore_checkpoint(previous, day=day, root=day_root)
                 ingest_day(source, day=day, output_root=root / "days",
-                           max_filings=max_filings, retry_quarantined=False, max_seconds=240)
+                           max_filings=max_filings, retry_quarantined=False,
+                           max_seconds=per_day_seconds)
                 checkpoint = build_checkpoint(day_root, day=day)
             receipt = store.persist(checkpoint)
             if receipt.get("storageStatus") != "VERIFIED":

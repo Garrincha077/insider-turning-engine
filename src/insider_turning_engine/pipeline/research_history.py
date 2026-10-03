@@ -4,6 +4,7 @@ This does not weaken the sealed/backtest history contract or create a cursor.
 Completeness evidence remains attached to every day, including zero-row days.
 """
 
+import json
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
@@ -27,12 +28,15 @@ class ResearchHistory:
 def _filing_identity(filing: dict[str, Any]) -> tuple[Any, ...]:
     """Prove a repeated index entry is the same source filing and parse result."""
     return (
-        filing["parserVersion"],
         filing["provenance"]["complete_submission_hash"],
         tuple(sorted(
             (
                 row["transactionId"], row["revisionId"],
                 row["source"]["sourceRowKey"], row["source"]["contentHash"],
+                json.dumps({field: row[field] for field in (
+                    "issuer", "reportingOwner", "relationship", "security",
+                    "transaction", "quality",
+                )}, sort_keys=True, separators=(",", ":")),
             )
             for row in filing["records"]
         )),

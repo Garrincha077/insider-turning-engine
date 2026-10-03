@@ -58,10 +58,26 @@ after 467 Python tests, 32 desktop/mobile checks, and green CI. No canonical
 cursor was advanced. The earlier immutable release remains available.
 
 The September 3 checkpoint stored 750/1,056 filings within its first bounded run.
+
 [The resumed run](https://github.com/Garrincha077/insider-turning-engine/actions/runs/34696916118)
 now has 1,056/1,056 stored, 2,653 owner rows, no pending filings or fetch failures,
 and three quarantined rows. Storage success is not parse completeness. The extra
 facts enter Pages on the next data refresh, not through a UI-only deployment.
+
+The October 2 SEC index contains 1,572 ownership filings. The old 750-filing
+daily cap could not finish that day in one scheduled run. The daily path now
+allows up to 2,500 filings and ten minutes for the newest day, while preserving
+the bounded resumable checkpoint and the SEC request-rate limit. A published
+snapshot can still be partial; no digest is sent until the latest SEC day is
+complete.
+
+[SEC accession 0000912282-26-001338](https://www.sec.gov/Archives/edgar/data/2067674/000091228226001338/form4.xml)
+contains a derivative transaction without a `transactionCoding` element.
+Canonical 1.2 stores its code as `null` with `MISSING_TRANSACTION_CODE`, and
+research 2.2 exposes it as a non-signal derivative. No SEC code is inferred and
+the source filing remains linked. A verified immutable replay of the October 2
+checkpoint is required to clear its old quarantine; a code change alone does
+not rewrite archived evidence.
 
 ## First real daily cycle
 

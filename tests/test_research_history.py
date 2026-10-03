@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 from test_sec_checkpoints import DAY, MemoryStore, checkpoint
 
+from insider_turning_engine.ingestion.sec.daily_history import CODE_REQUIRED_PARSER_VERSION
 from insider_turning_engine.pipeline.research_history import research_history
 from insider_turning_engine.pipeline.sec_acquisition import acquire_range
 
@@ -61,6 +62,25 @@ def test_unchanged_accession_republished_in_later_index_is_counted_once(tmp_path
     assert len(history.records) == sum(len(filing["records"]) for filing in value["filings"])
     assert set(history.sec_day_by_accession.values()) == {DAY}
     assert len(history.evidence) == 2
+
+
+def test_same_source_rows_republished_across_parser_upgrade_count_once(tmp_path):
+    value = checkpoint(tmp_path)
+    later_day = date(2026, 9, 1)
+    duplicate = _republished(value, later_day)
+    duplicate["filings"][0]["parserVersion"] = CODE_REQUIRED_PARSER_VERSION
+    history = research_history([value, duplicate], expected_days=[DAY, later_day])
+    assert len(history.records) == sum(len(filing["records"]) for filing in value["filings"])
+    assert set(history.sec_day_by_accession.values()) == {DAY}
+
+
+def test_republished_accession_with_changed_economics_is_fatal(tmp_path):
+    value = checkpoint(tmp_path)
+    later_day = date(2026, 9, 1)
+    duplicate = _republished(value, later_day)
+    duplicate["filings"][0]["records"][0]["transaction"]["value"] = "999999"
+    with pytest.raises(ValueError, match="conflicting SEC day"):
+        research_history([value, duplicate], expected_days=[DAY, later_day])
 
 
 def test_republished_accession_with_different_source_hash_is_fatal(tmp_path):

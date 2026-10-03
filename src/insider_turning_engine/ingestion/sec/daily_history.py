@@ -22,10 +22,12 @@ from .parser import parse_sec_filing
 
 LEGACY_PARSER_VERSION = "ownership-eastern-v2.1"
 PREVIOUS_PARSER_VERSION = "ownership-eastern-v2.2"
-PARSER_VERSION = "ownership-eastern-v2.3"
+CODE_REQUIRED_PARSER_VERSION = "ownership-eastern-v2.3"
+PARSER_VERSION = "ownership-eastern-v2.4"
 SUPPORTED_PARSER_VERSIONS = {
     LEGACY_PARSER_VERSION,
     PREVIOUS_PARSER_VERSION,
+    CODE_REQUIRED_PARSER_VERSION,
     PARSER_VERSION,
 }
 

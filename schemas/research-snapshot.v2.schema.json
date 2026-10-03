@@ -249,8 +249,15 @@
           "type": "string"
         },
         "code": {
-          "title": "Code",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Code"
         },
         "side": {
           "enum": [
@@ -881,7 +888,8 @@
     "schemaVersion": {
       "enum": [
         "2.0.0",
-        "2.1.0"
+        "2.1.0",
+        "2.2.0"
       ],
       "default": "2.0.0",
       "title": "Schemaversion",

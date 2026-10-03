@@ -7,7 +7,9 @@ export async function section(page: Page, label: string) {
   await expect(page.getByRole('heading', { name: label, exact: true }).first()).toBeVisible();
 }
 
-export async function ready(page: Page) {
+export async function ready(page: Page, { mockWorkflow = true } = {}) {
+  if (mockWorkflow) await page.route('https://api.github.com/repos/Garrincha077/insider-turning-engine/actions/workflows/pages.yml/runs**',
+    (route) => route.fulfill({ json: { workflow_runs: [] } }));
   await page.goto('/');
   await expect(page.locator('html')).toHaveAttribute('data-hydrated', 'true', { timeout: 20_000 });
   await expect(page.locator('html')).not.toHaveAttribute('data-research', /^(pending|loading)$/, { timeout: 20_000 });

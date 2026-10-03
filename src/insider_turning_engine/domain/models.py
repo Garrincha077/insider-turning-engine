@@ -144,7 +144,7 @@ class Security(_Model):
 
 class TransactionFacts(_Model):
     transaction_date: date
-    code: str = Field(pattern=r"^[A-Z]$")
+    code: str | None = Field(pattern=r"^[A-Z]$")
     acquired_disposed: str = Field(pattern=r"^[AD]$")
     shares: Decimal | None
     price_per_share: Decimal | None = None
@@ -198,7 +198,7 @@ class TransactionFacts(_Model):
         return self.acquired_disposed
 
     @property
-    def transaction_code(self) -> str:
+    def transaction_code(self) -> str | None:
         return self.code
 
     @property
@@ -318,7 +318,7 @@ class Quality(_Model):
 
 
 class CanonicalTransaction(_Model):
-    schema_version: str = Field(default="1.0.0", pattern=r"^1\.[01]\.0$")
+    schema_version: str = Field(default="1.0.0", pattern=r"^1\.[012]\.0$")
     run_id: str = Field(
         default="run_parser_default_20260830",
         pattern=r"^run_[A-Za-z0-9_-]{16,64}$",
@@ -341,17 +341,22 @@ class CanonicalTransaction(_Model):
         # Version 1.0 remains byte-compatible for share-denominated rows.  The
         # narrow 1.1 extension represents an SEC derivative reported as money.
         if self.schema_version == "1.0.0":
-            if self.transaction.shares is None:
-                raise ValueError("canonical 1.0.0 requires transaction shares")
-        elif (
-            self.security.table_type is not TableType.DERIVATIVE
-            or self.transaction.shares is not None
-            or self.transaction.value is None
-            or self.transaction.value_derivation is not ValueDerivation.SOURCE
-        ):
-            raise ValueError(
-                "canonical 1.1.0 requires a derivative with null shares and a SOURCE value"
-            )
+            if self.transaction.shares is None or self.transaction.code is None:
+                raise ValueError("canonical 1.0.0 requires shares and a reported code")
+        elif self.schema_version == "1.1.0":
+            if (self.security.table_type is not TableType.DERIVATIVE
+                    or self.transaction.shares is not None
+                    or self.transaction.value is None
+                    or self.transaction.value_derivation is not ValueDerivation.SOURCE
+                    or self.transaction.code is None):
+                raise ValueError(
+                    "canonical 1.1.0 requires a coded derivative with null shares "
+                    "and a SOURCE value"
+                )
+        elif (self.security.table_type is not TableType.DERIVATIVE
+              or self.transaction.shares is None or self.transaction.code is not None
+              or self.transaction.economic_classification is not EconomicClassification.UNKNOWN):
+            raise ValueError("canonical 1.2.0 requires a derivative with missing source code")
         return self
 
     @model_validator(mode="after")

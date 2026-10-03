@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import type { ResearchSnapshot } from '@/lib/research-v2';
 import { DigestPreviewV2, ReadinessV2 } from './v2-views';
 import { SnapshotAge } from './snapshot-age';
+import { WorkflowHealthPanel } from './workflow-health';
 import {
   type ChannelStatus,
   type PublicationManifest,
@@ -32,6 +33,7 @@ export function SystemHealthView({ manifest, research, settings }: { manifest: P
     { label: 'Core coverage', pass: quality.coreBranchCoverage.result === 'PASS', detail: `${rateLabel(quality.coreBranchCoverage)} · gate ${(quality.coreBranchCoverage.threshold * 100).toFixed(0)}%` },
   ];
   return <div className="space-y-6">
+    <WorkflowHealthPanel />
     {research && <ReadinessV2 data={research} digest={settings.digest} />}
     <div className="grid gap-4 md:grid-cols-3">
       <StatusCard label="Dashboard integrity" value="VERIFIED ON LOAD" pass />
@@ -96,7 +98,7 @@ export function SettingsView({ settings }: { settings: SettingsStatus }) {
   return <div className="space-y-6">
     <Panel title="Informational digest policy" subtitle="Separate from predictive alerts · evaluated when this status was exported">
       <p className="text-sm">Telegram digest: {settings.digest ? settings.digest.enabled ? 'ENABLED, subject to daily checks' : 'OFF' : 'Not available in this snapshot'}. Latest SEC day: {settings.digest?.secDay ?? 'unavailable'}.</p>
-      <p className="my-3 text-xs text-muted-foreground">Up to five purchases ≥ $250,000. A durable channel/day claim prevents automatic redelivery, including uncertain outcomes. Delivery history updates on the next successful publication; check Actions for the latest attempt.</p>
+      <p className="my-3 text-xs text-muted-foreground">Up to ten purchases ≥ $100,000. A durable channel/day claim prevents automatic redelivery, including uncertain outcomes. Delivery history updates on the next successful publication; check Actions for the latest attempt.</p>
       {settings.digest && <ReasonList reasons={settings.digest.reasons} />}
       <a className="mt-4 inline-block text-xs text-emerald-200 underline" href="https://github.com/Garrincha077/insider-turning-engine/blob/main/config/digest.v1.json" target="_blank" rel="noreferrer">Open versioned digest policy</a>
     </Panel>

@@ -1,4 +1,4 @@
-"""Explicit, source-verified replay of amount-only derivative quarantines.
+"""Explicit, source-verified replay of recoverable derivative quarantines.
 
 No cursor/marker, fuzzy amendment matching, score changes or automatic retries.
 Unchanged rows retain exact bytes; newly recovered facts become known at repair.
@@ -79,7 +79,7 @@ def repair_checkpoint(
         expected = sorted(q["source_row_key"] for q in filing["quarantines"])
         actual = sorted(row.source.source_row_key for row in recovered)
         if (not actual or actual != expected or len(set(expected)) != len(expected)
-                or any(row.schema_version != "1.1.0" for row in recovered)):
+                or any(row.schema_version not in {"1.1.0", "1.2.0"} for row in recovered)):
             raise ValueError("recovered rows do not exactly resolve derivative quarantines")
         for row in recovered:
             # Do not retroactively inject a repaired row into an older as-of snapshot.
