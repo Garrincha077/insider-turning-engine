@@ -57,6 +57,7 @@ export type SettingsStatus = {
   digest?: {
     enabled: boolean; secDay: string | null; status: 'READY' | 'BLOCKED';
     reasons: string[]; eventIds: string[]; excludedIssuers: number | null;
+    minimumPurchaseUsd?: number; maximumItems?: number;
   };
   deliveryHistory?: Array<{
     kind: 'TEST' | 'SIGNAL' | 'DIGEST'; channel: 'telegram' | 'email';
@@ -75,6 +76,13 @@ export type SettingsStatus = {
     email: ChannelStatus;
   };
 };
+
+export function digestPolicySummary(digest: SettingsStatus['digest']) {
+  if (digest?.minimumPurchaseUsd == null || digest.maximumItems == null) {
+    return 'Selection thresholds are unavailable in this snapshot.';
+  }
+  return `Up to ${digest.maximumItems} purchases ≥ $${digest.minimumPurchaseUsd.toLocaleString('en-US')}.`;
+}
 
 export function rateLabel(measurement: QualityMeasurement) {
   return measurement.rate === null ? 'Not evaluated' : `${(measurement.rate * 100).toFixed(2)}%`;

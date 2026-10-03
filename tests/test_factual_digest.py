@@ -349,6 +349,8 @@ def test_production_ten_item_digest_can_attach_without_changing_source_snapshot(
     status["digest"] = public_digest_status(research, policy, now=NOW, production=True,
                                             configured=True, outbox=tmp_path / "alerts.sqlite")
     assert len(status["digest"]["eventIds"]) == 10
+    assert status["digest"]["minimumPurchaseUsd"] == policy.minimumPurchaseUsd
+    assert status["digest"]["maximumItems"] == policy.maximumItems
     schema = json.loads(Path("schemas/settings-status.schema.json").read_text())
     validator = jsonschema.Draft202012Validator(schema, format_checker=jsonschema.FormatChecker())
     validator.validate(status)
@@ -371,6 +373,11 @@ def test_production_ten_item_digest_can_attach_without_changing_source_snapshot(
     assert any(error.validator == "maxItems" for error in validator.iter_errors(status))
     status["digest"]["eventIds"] = ["duplicate", "duplicate"]
     assert any(error.validator == "uniqueItems" for error in validator.iter_errors(status))
+    status["digest"]["eventIds"] = []
+    status["digest"].pop("maximumItems")
+    assert any(error.validator == "dependentRequired" for error in validator.iter_errors(status))
+    status["digest"].pop("minimumPurchaseUsd")
+    validator.validate(status)  # Existing snapshots do not contain policy thresholds.
 
 
 def test_derivative_total_value_is_never_invented_as_share_quantity():
