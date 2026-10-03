@@ -193,6 +193,15 @@ def test_fresh_runner_resumes_and_third_run_fetches_no_filings(tmp_path: Path) -
     assert not list(tmp_path.rglob("sec-batch-committed.sha256"))
 
 
+def test_daily_budget_can_finish_a_day_larger_than_the_backfill_default(tmp_path: Path) -> None:
+    store = MemoryStore()
+    result = acquire_range(provider(tmp_path / "cache"), store, start=DAY, end=DAY,
+                           root=tmp_path / "run", max_filings=2, per_day_seconds=600)
+    assert result["acquisitionStatus"] == "ACQUIRED"
+    assert result["days"][0]["storedFilings"] == 2
+    assert result["days"][0]["pendingFilings"] == 0
+
+
 def test_remote_storage_failure_preserves_previous_checkpoint(tmp_path: Path) -> None:
     store = MemoryStore()
     acquire_range(provider(tmp_path / "cache1"), store, start=DAY, end=DAY,

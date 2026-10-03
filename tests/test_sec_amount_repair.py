@@ -21,6 +21,7 @@ from insider_turning_engine.ingestion.sec.checkpoint import (
     validate_checkpoint,
 )
 from insider_turning_engine.ingestion.sec.daily_history import (
+    CODE_REQUIRED_PARSER_VERSION,
     LEGACY_PARSER_VERSION,
     PARSER_VERSION,
     PREVIOUS_PARSER_VERSION,
@@ -165,6 +166,52 @@ def test_repair_is_deterministic_immutable_and_known_only_at_repair() -> None:
         "previousRecordCount": 1, "resolvedRowKeys": [ROW_KEY],
     }
     assert decode_checkpoint(*encode_checkpoint(repaired), day=DAY) == repaired
+
+
+def test_v23_missing_derivative_code_replays_with_null_code_and_exact_lineage() -> None:
+    coding = b"<transactionCoding><transactionCode>M</transactionCode></transactionCoding>"
+    index = XML.rfind(coding)
+    assert index > 0
+    xml = XML[:index] + XML[index + len(coding):]
+    index_hash = "sha256:" + hashlib.sha256(INDEX).hexdigest()
+    raw = parse_complete_submission(
+        submission(xml), parse_daily_master_index(INDEX)[0], retrieved_at=OBSERVED,
+        index_url=daily_index_url(DAY), index_hash=index_hash,
+    )
+    parsed = parse_sec_filing(raw.payload, {
+        "accession_number": ACCESSION, "source_url": raw.source_url,
+        "accepted_at": raw.accepted_at, "observed_at": OBSERVED, "recorded_at": OBSERVED,
+        "run_id": "run_missing_code_repair_001",
+    })
+    assert not parsed.quarantines and len(parsed.records) == 2
+    first, recovered = parsed.records
+    assert first.schema_version == "1.1.0" and recovered.schema_version == "1.2.0"
+    old = validate_checkpoint({
+        "schemaVersion": "1.0.0", "day": DAY.isoformat(),
+        "parserVersion": CODE_REQUIRED_PARSER_VERSION, "indexHash": index_hash,
+        "discoveredAccessions": [ACCESSION], "failures": [], "signalReady": False,
+        "filings": [{
+            "schemaVersion": "1.0.0", "source": "sec-daily-index",
+            "parserVersion": CODE_REQUIRED_PARSER_VERSION, "accession": ACCESSION,
+            "indexHash": index_hash, "provenance": dict(raw.provenance),
+            "records": [first.canonical_dump()],
+            "quarantines": [{"reason_code": "INVALID_TRANSACTION",
+                             "message": "Inspect original SEC filing",
+                             "source_row_key": "DERIVATIVE:2:0001999103"}],
+        }],
+    }, day=DAY)
+    source = provider([], xml=xml)
+    try:
+        fixed = repair_checkpoint(old, source, repaired_at=REPAIRED)
+    finally:
+        source.close()
+    assert fixed["filings"][0]["quarantines"] == []
+    assert fixed["filings"][0]["records"][0] == first.canonical_dump()
+    row = CanonicalTransaction.model_validate(fixed["filings"][0]["records"][1])
+    assert row.schema_version == "1.2.0" and row.transaction.code is None
+    assert row.timestamps.accepted_at == first.timestamps.accepted_at
+    assert row.timestamps.knowledge_at == REPAIRED
+    assert decode_checkpoint(*encode_checkpoint(fixed), day=DAY) == fixed
 
 
 def test_already_repaired_checkpoint_is_idempotent_without_source_requests() -> None:

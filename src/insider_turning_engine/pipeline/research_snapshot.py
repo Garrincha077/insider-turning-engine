@@ -260,7 +260,8 @@ def build_research_snapshot(
     missing = sorted(expected - evidence.keys())
     incomplete = missing or any(not row.complete for row in day_evidence) or not expected
     return ResearchSnapshot(
-        schema_version="2.1.0" if any(row.shares is None for row in events) else "2.0.0",
+        schema_version="2.2.0" if any(row.code is None for row in events) else
+            "2.1.0" if any(row.shares is None for row in events) else "2.0.0",
         run_id=run_id, as_of=as_of, score_version="scoring.v1", companies=companies,
         economic_transactions=events, reporting_owners=owners, research_scores=scores,
         clusters=_clusters(events, as_of=as_of), company_series=series,

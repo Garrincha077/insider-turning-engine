@@ -269,6 +269,23 @@ test('v2.1 source amounts with unknown derivative quantity do not enter purchase
   await expect(page.getByText('$2,000.00', { exact: true })).toBeVisible();
 });
 
+test('v2.2 missing derivative code remains a factual non-signal event', async ({ page }) => {
+  await v2(page, (value) => {
+    const research = value as unknown as ResearchSnapshot;
+    research.schemaVersion = '2.2.0';
+    research.economicTransactions.push({ ...research.economicTransactions[0],
+      eventId: 'event_missing_derivative_code', table: 'DERIVATIVE', code: null,
+      side: 'OTHER', qualified: false, aggregateEligible: false });
+    research.coverage.economicEvents += 1;
+    research.coverage.canonicalOwnerRows += 2;
+  });
+  await ready(page);
+  await section(page, 'Live SEC Tape');
+  await expect(page.locator('tbody tr')).toHaveCount(2);
+  await section(page, 'Market Pulse');
+  await expect(page.getByText('$2,000.00', { exact: true })).toBeVisible();
+});
+
 test('unknown non-derivative quantity is rejected, not converted into zero', async ({ page }) => {
   await v2(page, (value) => {
     value.schemaVersion = '2.1.0';

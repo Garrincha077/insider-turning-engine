@@ -95,6 +95,34 @@ def test_amount_disposal_has_no_fabricated_quantity_and_stable_provenance() -> N
     ]
 
 
+def test_missing_derivative_code_is_preserved_as_unknown_without_a_signal() -> None:
+    payload = xml("form4_derivative.xml").replace(
+        "<transactionCoding><transactionFormType>4</transactionFormType>"
+        "<transactionCode>M</transactionCode><equitySwapInvolved>0</equitySwapInvolved>"
+        "</transactionCoding>", "", 1,
+    ).encode()
+    result = parse_sec_xml(payload, METADATA)
+    assert not result.quarantines and len(result.records) == 1
+    row = result.records[0]
+    assert row.schema_version == "1.2.0"
+    assert row.transaction.code is None and row.transaction.shares == 50
+    assert row.transaction.economic_classification.value == "UNKNOWN"
+    assert row.security.table_type.value == "DERIVATIVE"
+    assert any(flag.code == "MISSING_TRANSACTION_CODE" for flag in row.quality.flags)
+    VALIDATOR.validate(row.canonical_dump())
+    assert CanonicalTransaction.model_validate(row.canonical_dump()).canonical_dump() \
+        == row.canonical_dump()
+
+
+def test_missing_non_derivative_code_still_quarantines() -> None:
+    payload = xml("form4_non_derivative.xml").replace(
+        "<transactionCode>P</transactionCode>", "", 1,
+    ).encode()
+    result = parse_sec_xml(payload, METADATA)
+    assert result.quarantines[0].reason_code == "INVALID_TRANSACTION"
+    assert result.quarantines[0].source_row_key.startswith("NON_DERIVATIVE:")
+
+
 @pytest.mark.parametrize("quantity", ["", " ", "bad", "-1", "NaN", "Infinity", "-Infinity"])
 def test_present_invalid_shares_cannot_fall_back_to_total_value(quantity: str) -> None:
     payload = xml().replace(

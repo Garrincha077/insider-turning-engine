@@ -76,6 +76,38 @@ def test_amount_derivative_exports_as_research_21_with_null_quantity(tmp_path: P
         .validate(exported)
 
 
+def test_missing_derivative_code_exports_as_research_22_without_changing_buys(
+    tmp_path: Path,
+) -> None:
+    payload = (FIXTURES / "form4_derivative.xml").read_text().replace(
+        "<transactionCoding><transactionFormType>4</transactionFormType>"
+        "<transactionCode>M</transactionCode><equitySwapInvolved>0</equitySwapInvolved>"
+        "</transactionCoding>", "", 1,
+    ).encode()
+    parsed = parse_sec_xml(payload, {
+        "accession_number": AMOUNT_ACCESSION,
+        "source_url": "https://www.sec.gov/Archives/edgar/data/test.xml",
+        "accepted_at": POINT - timedelta(days=3),
+        "observed_at": POINT - timedelta(days=1),
+        "run_id": "run_missing_code_fixture_001",
+    })
+    assert not parsed.quarantines
+    baseline = _build(_market_rows())
+    snapshot = _build([*_market_rows(), parsed.records[0]])
+    exported = _export(snapshot, tmp_path / "public")
+    assert exported["schemaVersion"] == "2.2.0"
+    event = next(row for row in exported["economicTransactions"]
+                 if row["accession"] == AMOUNT_ACCESSION)
+    assert event["code"] is None and event["side"] == "OTHER"
+    assert event["qualified"] is False and event["aggregateEligible"] is False
+    assert snapshot.clusters == baseline.clusters
+    assert snapshot.coverage.eligible_companies == baseline.coverage.eligible_companies
+    schema = json.loads((Path(__file__).parents[1] / "schemas/research-snapshot.v2.schema.json")
+                        .read_text())
+    jsonschema.Draft202012Validator(schema, format_checker=jsonschema.FormatChecker()) \
+        .validate(exported)
+
+
 def test_amount_derivative_does_not_change_purchase_sale_basis_cluster_or_scores() -> None:
     market = _market_rows()
     before = _build(market)

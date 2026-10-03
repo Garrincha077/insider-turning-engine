@@ -235,7 +235,7 @@ def _within_xml_depth_limit(root: ET.Element) -> bool:
     return True
 
 
-def _classify(code: str) -> TransactionClassification:
+def _classify(code: str | None) -> TransactionClassification:
     return {
         "P": TransactionClassification.OPEN_MARKET_PURCHASE,
         "S": TransactionClassification.OPEN_MARKET_SALE,
@@ -247,7 +247,7 @@ def _classify(code: str) -> TransactionClassification:
         # open-market categories; the canonical v1 bucket is TRANSFER.
         "T": TransactionClassification.TRANSFER,
         "X": TransactionClassification.TRANSFER,
-    }.get(code, TransactionClassification.OTHER)
+    }.get(code or "", TransactionClassification.OTHER)
 
 
 def _economic_classification(
@@ -657,7 +657,7 @@ def parse_sec_ownership_document(
         row_key_base = f"{table_type.value}:{row_seq}"
         security_title = _value_text(row, "securityTitle")
         tx_date_text = _value_text(row, "transactionDate")
-        code = (_text(_first(row, "transactionCoding"), "transactionCode") or "").upper()
+        code = (_text(_first(row, "transactionCoding"), "transactionCode") or "").upper() or None
         amounts = _first(row, "transactionAmounts")
         shares_text = _value_text(amounts, "transactionShares")
         total_value_text = _value_text(amounts, "transactionTotalValue")
@@ -692,11 +692,13 @@ def parse_sec_ownership_document(
                 if (
                     not security_title
                     or not tx_date_text
-                    or not code
-                    or code == " "
+                    or (code is None and table_type is not TableType.DERIVATIVE)
                     or not acquired
                 ):
-                    raise ValueError("security title, transaction date, code, and A/D are required")
+                    raise ValueError(
+                        "security title, transaction date, non-derivative code, "
+                        "and A/D are required"
+                    )
                 tx_date = _xsd_date(tx_date_text)
                 shares = _decimal(shares_text)
                 reported_value = None
@@ -747,7 +749,8 @@ def parse_sec_ownership_document(
                     indirect_ownership_nature=indirect_nature,
                     classification=_classify(code),
                     ten_b5_1=row_10b5_1,
-                    economic_classification=_economic_classification(_classify(code), acquired),
+                    economic_classification=(EconomicClassification.UNKNOWN if code is None else
+                                             _economic_classification(_classify(code), acquired)),
                     rule_10b51=_rule_10b51(row_10b5_1),
                     footnotes=row_footnotes,
                 )
@@ -757,6 +760,13 @@ def parse_sec_ownership_document(
                         code="UNRESOLVED_ISSUER_TICKER", severity=QualitySeverity.WARNING,
                         message="SEC symbol is unavailable or ambiguous; use PIT CIK mapping",
                         path="issuer.ticker",
+                    ))
+                if code is None:
+                    flags.append(QualityFlag(
+                        code="MISSING_TRANSACTION_CODE", severity=QualitySeverity.WARNING,
+                        message=("Derivative transaction code is absent in the SEC filing; "
+                                 "no P/S signal is inferred"),
+                        path="transaction.code",
                     ))
                 if price is None:
                     flags.append(
@@ -795,7 +805,8 @@ def parse_sec_ownership_document(
                 )
                 records.append(
                     CanonicalTransaction(
-                        schema_version="1.1.0" if shares is None else "1.0.0",
+                        schema_version="1.2.0" if code is None else
+                            "1.1.0" if shares is None else "1.0.0",
                         run_id=run_id,
                         ingested_at=recorded_at,
                         transaction_id=transaction_id,

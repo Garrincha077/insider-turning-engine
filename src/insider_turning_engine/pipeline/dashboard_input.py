@@ -91,7 +91,7 @@ def _filings(
 ) -> list[dict[str, Any]]:
     grouped: dict[tuple[str, str, str, str], dict[str, Any]] = {}
     for record in records:
-        code = record.transaction.code.upper()
+        code = (record.transaction.code or "").upper()
         if (
             code not in {"P", "S"}
             or record.transaction.value is None

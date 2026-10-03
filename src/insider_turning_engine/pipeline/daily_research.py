@@ -267,7 +267,8 @@ def main() -> None:
     try:
         # Only current days are acquired here. Older gaps belong to resumable backfill.
         acquire_range(with_source, store, start=end - timedelta(days=6), end=end,
-                      root=args.work / "acquisition", newest_first=True)
+                      root=args.work / "acquisition", newest_first=True,
+                      max_filings=2500, per_day_seconds=600)
         days = discover_research_days(with_source, end=end)
     finally:
         with_source.close()

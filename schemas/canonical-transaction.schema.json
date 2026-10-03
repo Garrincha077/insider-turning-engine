@@ -23,7 +23,7 @@
   ],
   "properties": {
     "schemaVersion": {
-      "enum": ["1.0.0", "1.1.0"]
+      "enum": ["1.0.0", "1.1.0", "1.2.0"]
     },
     "runId": {
       "type": "string",
@@ -75,6 +75,7 @@
         "schemaVersion": {"const": "1.0.0"},
         "transaction": {
           "properties": {
+            "code": {"type": "string"},
             "shares": {"$ref": "#/$defs/decimalNonNegative"}
           }
         }
@@ -88,9 +89,25 @@
         },
         "transaction": {
           "properties": {
+            "code": {"type": "string"},
             "shares": {"type": "null"},
             "value": {"$ref": "#/$defs/decimalNonNegative"},
             "valueDerivation": {"const": "SOURCE"}
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "schemaVersion": {"const": "1.2.0"},
+        "security": {
+          "properties": {"tableType": {"const": "DERIVATIVE"}}
+        },
+        "transaction": {
+          "properties": {
+            "code": {"type": "null"},
+            "shares": {"$ref": "#/$defs/decimalNonNegative"},
+            "economicClassification": {"const": "UNKNOWN"}
           }
         }
       }
@@ -242,8 +259,10 @@
           "format": "date"
         },
         "code": {
-          "type": "string",
-          "pattern": "^[A-Z]$"
+          "oneOf": [
+            {"type": "string", "pattern": "^[A-Z]$"},
+            {"type": "null"}
+          ]
         },
         "acquiredDisposed": {
           "enum": [
