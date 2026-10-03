@@ -93,6 +93,42 @@ test('v2 facts drive scoreless Radar, real clusters, basis and source-linked tap
   expect(chartErrors).toEqual([]);
 });
 
+test('company and basis tables page the full sorted selection without truncating CSV', async ({ page }) => {
+  await v2(page, (value) => {
+    const research = value as unknown as ResearchSnapshot;
+    const company = research.companies[0];
+    for (let index = 1; index < 65; index++) research.companies.push({ ...company,
+      issuerCik: String(8000000 + index).padStart(10, '0'),
+      ticker: `PAGE${String(index).padStart(3, '0')}`, name: `Page company ${index}` });
+  });
+  await ready(page);
+  for (const view of ['Radar', 'Cost Basis']) {
+    await section(page, view);
+    await expect(page.locator('tbody tr')).toHaveCount(25);
+    const nav = page.getByRole('navigation', { name: view === 'Radar' ? 'Company pages (top)' : 'Basis pages (top)' });
+    await nav.getByRole('button', { name: 'Last', exact: true }).click();
+    await expect(page.locator('tbody tr')).toHaveCount(15);
+    await expect(nav.getByRole('status')).toHaveText('Showing 51–65 of 65 · page 3 of 3');
+    await expect(nav.getByRole('button', { name: 'Next', exact: true })).toBeDisabled();
+    const download = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Export filtered CSV' }).click();
+    const stream = await (await download).createReadStream();
+    let csv = ''; for await (const chunk of stream!) csv += chunk;
+    expect(csv.trim().split('\r\n')).toHaveLength(66);
+    await page.getByLabel('Sort by').selectOption('ticker');
+    await expect(nav.getByRole('status')).toHaveText('Showing 1–25 of 65 · page 1 of 3');
+    await expect(page.locator('tbody tr').first()).toContainText('PAGE064');
+    await nav.getByRole('button', { name: 'Next', exact: true }).click();
+    await page.getByLabel(view === 'Radar' ? 'Ticker or company' : 'Filter basis company').fill('PAGE001');
+    await expect(page.locator('tbody tr')).toHaveCount(1);
+    await expect(nav.getByRole('status')).toHaveText('Showing 1–1 of 1 · page 1 of 1');
+    await page.getByLabel(view === 'Radar' ? 'Ticker or company' : 'Filter basis company').fill('');
+    await page.getByLabel(view === 'Radar' ? 'Company rows per page (top)' : 'Basis rows per page (top)').selectOption('50');
+    await expect(page.locator('tbody tr')).toHaveCount(50);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+});
+
 test('Insider Ratio counts economic events once and exposes live and monthly views', async ({ page }) => {
   await v2(page, (value) => {
     const research = value as unknown as ResearchSnapshot;
