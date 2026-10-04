@@ -308,11 +308,13 @@ class ReleaseIdentityStore:
                     "Public issuer metadata only; no raw/cache payloads or credentials. "
                     "Current observations, not historical identity or signal validation.",
                 )
-            existing = json.loads(self.transport._gh(
-                "api", f"repos/{self.transport.repository}/releases/tags/{tag}",
-            ))
-            if self.transport._inventory is not None:
-                self.transport._inventory.append(existing)
+            # GitHub's tag endpoint omits unpublished drafts (HTTP 404).
+            # The authenticated inventory includes them, with a stable Release ID.
+            self.transport._inventory = None
+            existing = next((item for item in self.transport._releases()
+                             if item["tag_name"] == tag), None)
+            if existing is None:
+                raise ValueError("created identity release missing from authenticated inventory")
         if sharded and existing["draft"]:
             present = {asset["name"] for asset in existing["assets"]}
             if not present <= set(files):
@@ -327,13 +329,13 @@ class ReleaseIdentityStore:
                                          for name in missing[index:index + 16]),
                                        "--repo", self.transport.repository)
             existing = json.loads(self.transport._gh(
-                "api", f"repos/{self.transport.repository}/releases/tags/{tag}"))
+                "api", f"repos/{self.transport.repository}/releases/{existing['id']}"))
             if encode_identity_bundle(self._download(existing, allow_draft=True)) != (tag, files):
                 raise ValueError("remote identity draft differs from local history")
             self.transport._gh("release", "edit", tag, "--draft=false",
                                "--repo", self.transport.repository)
             existing = json.loads(self.transport._gh(
-                "api", f"repos/{self.transport.repository}/releases/tags/{tag}"))
+                "api", f"repos/{self.transport.repository}/releases/{existing['id']}"))
         if encode_identity_bundle(self._download(existing)) != (tag, files):
             raise ValueError("remote identity evidence differs from local history")
         self.transport._inventory = None  # A draft's cached inventory is no longer authoritative.

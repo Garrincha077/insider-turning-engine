@@ -30,6 +30,17 @@ class ShardReleases(FakeReleases):
         self.fail_upload = False
 
     def _gh(self, *args):
+        if args[0] == "api" and "--paginate" not in args:
+            self.commands.append(args)
+            if "/releases/tags/" in args[1]:
+                release = next(row for row in self.releases
+                               if args[1].endswith(row["tag_name"]))
+                if release["draft"]:
+                    raise RuntimeError("GitHub draft by tag: HTTP 404")
+            else:
+                release = next(row for row in self.releases
+                               if args[1].endswith("/" + str(row["id"])))
+            return json.dumps(release)
         if args[:2] == ("release", "create"):
             result = super()._gh(*args)
             if "--draft" in args:
@@ -117,6 +128,10 @@ def test_legacy_read_transition_draft_resume_and_complete_publication(monkeypatc
     assert store.persist(list(reversed(rows))) == receipt
     assert len(remote.releases) == 2
     assert all("--clobber" not in args and "--force" not in args for args in remote.commands)
+    assert any(args[:2] == ("api", "repos/owner/repo/releases/2")
+               for args in remote.commands)
+    assert not any(args[0] == "api" and "/releases/tags/" in args[1]
+                   for args in remote.commands)
     with pytest.raises(ValueError, match="discard"):
         store.persist(rows[1:])
     tag = receipt["tag"]
