@@ -78,6 +78,9 @@ export function EngineDashboard() {
     return () => window.removeEventListener('hashchange', listener);
   }, []);
   useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [route.view, route.issuer, route.ticker]);
+  useEffect(() => {
     const controller = new AbortController();
     loadPublication(controller.signal).then((value) => {
       setPublication(value);

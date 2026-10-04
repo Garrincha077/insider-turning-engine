@@ -205,3 +205,9 @@ without an observed ledger/provider result.
 - In the small monthly range, one-decimal axis formatting incorrectly repeated
   0.1x for different tick levels. Three significant digits keep these labels
   distinct without changing observations, chart coordinates or calculations.
+- Mobile route changes also preserved a deep prior scroll position, leaving the
+  next view's title and primary facts off-screen. Tab/company route changes now
+  begin at the top; local filters, watchlists and same-tab interactions persist.
+- Type/lint/build, 28 barometer cases and six focused desktop/mobile
+  candidate/navigation/transfer cases pass. Rendered local mobile navigation
+  confirms scroll reset without whole-page overflow. Full CI covers this package.

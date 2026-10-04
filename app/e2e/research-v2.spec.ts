@@ -153,6 +153,21 @@ test('candidate evidence stays factual through Radar, Company Lab and watchlist'
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
+test('section navigation starts at the top without clearing saved company filters', async ({ page }) => {
+  await v2(page);
+  await ready(page);
+  await page.getByLabel('Ticker or company').fill('ACME');
+  await page.getByRole('button', { name: 'Open ACME in Company Lab' }).click();
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  await section(page, 'Insider Ratio');
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+  await expect(page.getByTestId('insider-ratio-current')).toBeVisible();
+  await section(page, 'Radar');
+  await expect(page.getByLabel('Ticker or company')).toHaveValue('ACME');
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+});
+
 test('Radar factual shortlist works without scores, excludes missing prices and exports only its selection', async ({ page }) => {
   await v2(page, (value) => {
     const research = value as unknown as ResearchSnapshot;
