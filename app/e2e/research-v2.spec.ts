@@ -129,6 +129,53 @@ test('company and basis tables page the full sorted selection without truncating
   }
 });
 
+test('candidate evidence stays factual through Radar, Company Lab and watchlist', async ({ page }) => {
+  await v2(page);
+  await ready(page);
+  const row = page.locator('tbody tr').first();
+  await expect(row).toContainText('2 observed purchases');
+  await expect(row).toContainText('1 verified cluster in 30D');
+  await row.getByText('Evidence & limitations').click();
+  await expect(row).toContainText('reported by 3 distinct reporting owners');
+  await expect(row).toContainText('Partial observed SEC window');
+  await page.getByRole('button', { name: 'Add ACME to watchlist' }).click();
+  await page.getByRole('button', { name: 'Open ACME in Company Lab' }).click();
+  await expect(page.getByTestId('company-factual-summary')).toContainText('2 observed qualified purchases totaling $2K');
+  await expect(page.getByText('Investment idea · evidence to review', { exact: true })).toBeVisible();
+  await expect(page.getByText('Price above observed 50-close average', { exact: false })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Remove ACME from watchlist' })).toBeVisible();
+  await page.getByRole('button', { name: '3M', exact: true }).click();
+  await expect(page.getByTestId('company-chart-window')).toContainText('2026-06-03–2026-08-31');
+  await page.getByRole('button', { name: '← Back to Radar' }).click();
+  await page.getByRole('checkbox', { name: 'Watchlist only' }).check();
+  await expect(page.locator('tbody tr')).toHaveCount(1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('turning phases expose met and missing evidence without inventing transitions', async ({ page }) => {
+  await v2(page, (value) => {
+    const research = value as unknown as ResearchSnapshot;
+    research.researchScores = [{ issuerCik: research.companies[0].issuerCik,
+      total: 75, insider: 80, divergence: 70, turn: 65, cluster: 70, marketRs: -2, sectorRs: null,
+      state: 'BASE_FORMING', stateChangedAt: '2026-08-28T21:00:00Z',
+      reasons: ['TOP_CONTRIBUTION_CLUSTER'], scoreVersion: research.scoreVersion,
+      methodologyHash: null, configHash: null, runId: research.runId, asOf: research.asOf }];
+  });
+  await ready(page);
+  await section(page, 'Turning Stocks');
+  const row = page.locator('tbody tr');
+  await expect(row).toContainText('A base is recorded');
+  await row.getByText('Evidence & limitations').click();
+  await expect(row).toContainText('Needs confirmation · Market relative strength');
+  await expect(row).toContainText('Unavailable · Sector relative strength');
+  await page.getByRole('button', { name: /Early turn \(0\)/i }).click();
+  await expect(page.getByText('No companies match these filters')).toBeVisible();
+  await section(page, 'Divergence');
+  await expect(page.locator('tbody tr')).toContainText('2 observed purchases');
+  await page.getByLabel('Minimum Divergence').fill('75');
+  await expect(page.getByText('No companies match these filters')).toBeVisible();
+});
+
 test('Insider Ratio counts economic events once and exposes live and monthly views', async ({ page }) => {
   await v2(page, (value) => {
     const research = value as unknown as ResearchSnapshot;
@@ -281,7 +328,7 @@ test('Company Lab reserves a top legend band away from date labels', async ({ pa
       .map((element) => engine.getInstanceByDom(element))
       .find((instance) => (instance?.getOption() as { series?: Array<{ name?: string }> } | undefined)?.series?.some((item) => item.name === 'Adjusted price'));
     const option = chart!.getOption() as { legend: Array<{ top: number; bottom: number | null }>; grid: Array<{ top: number; bottom: number }>; xAxis: Array<{ axisLabel: { hideOverlap: boolean } }> };
-    return { legend: option.legend[0], grid: option.grid[0], xAxis: option.xAxis[0] };
+    return { legend: option.legend[0], grid: { top: option.grid[0].top, bottom: option.grid.at(-1)!.bottom }, xAxis: option.xAxis.at(-1)! };
   });
   expect(layout.legend.top).toBe(8);
   expect(layout.legend.bottom).toBeNull();

@@ -7,6 +7,8 @@ import { AlertCenterView, DataCoverageView, SettingsView, SystemHealthView } fro
 import { CompanyLab, CompanyTable, CostBasisView, ClusterView, MethodologyView, PulseView, TapeView, Panel, EmptyState } from './research-views';
 import { ActivityV2, BasisV2, ClustersV2, CoverageV2, InsiderRatioV2 } from './v2-views';
 import { SnapshotAge } from './snapshot-age';
+import { buildCandidateInsights } from '@/lib/candidate-insights';
+import { buildTechnicalEvidence } from '@/lib/technical-evidence';
 
 const groups = [
   { label: 'Overview', views: [['radar', 'Radar'], ['market-pulse', 'Market Pulse'], ['insider-ratio', 'Insider Ratio'], ['live-sec-tape', 'Live SEC Tape']] },
@@ -51,6 +53,8 @@ export function EngineDashboard() {
   const [previousView, setPreviousView] = useState('radar');
   const [selected, setSelected] = useState('');
   const catalog = useMemo(() => publication ? companyCatalog(publication.data) : [], [publication]);
+  const insights = useMemo(() => publication ? buildCandidateInsights(publication.data) : new Map(), [publication]);
+  const technical = useMemo(() => publication ? buildTechnicalEvidence(publication.data) : new Map(), [publication]);
 
   useEffect(() => {
     const listener = () => setRoute(readRoute());
@@ -113,7 +117,7 @@ export function EngineDashboard() {
   const view = route.view;
   const company = catalog.find((item) => route.issuer ? item.issuerCik === route.issuer : item.ticker === (route.ticker || selected)) ?? (!route.issuer && !route.ticker ? catalog[0] : undefined);
   const title = views.find(([id]) => id === view)?.[1] ?? 'Radar';
-  const tableProps = { data, catalog, watchlist, toggleWatch, openCompany, timezone };
+  const tableProps = { data, catalog, watchlist, toggleWatch, openCompany, timezone, insights, technical };
 
   return <main className="min-h-screen text-foreground">
     <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur-xl">
