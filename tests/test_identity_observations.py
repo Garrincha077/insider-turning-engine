@@ -81,11 +81,122 @@ def test_unconfirmed_profile_is_not_a_usable_listing(changes, reason):
 
 
 def test_multiple_classes_missing_listing_and_missing_sector_are_explicit():
-    assert "AMBIGUOUS_LISTING" in _observation(tickers=("ACME", "ACME.B"))["quality_flags"]
+    assert "AMBIGUOUS_LISTING" in _observation(
+        _profile(tickers=["ACME", "ACME.B"]),
+        tickers=("ACME", "ACME.B"))["quality_flags"]
     assert "NO_CURRENT_LISTING" in _observation(tickers=())["quality_flags"]
     row = _observation(_profile(sic="9999"))
     assert row["sector_etf"] == "UNKNOWN"
     assert "SECTOR_UNMAPPED" in row["quality_flags"]
+
+
+def _common_filing(ticker="ACME", title="Common Stock"):
+    from test_live_experimental import _record
+
+    record = _record().model_copy(deep=True)
+    record.issuer.cik = CIK
+    record.issuer.ticker = ticker
+    record.security.title = title
+    return record
+
+
+def _multi_listing_observation(records, *, tickers=("ACME", "ACME-WT"), metadata=None):
+    return identity_observation(
+        CIK, parse_company_tickers_exchange(_map(tickers), retrieved_at=NOW),
+        metadata=metadata or _profile(tickers=list(tickers)), observed_at=NOW,
+        map_observed_at=NOW, map_hash="sha256:" + "a" * 64, run_id=RUN,
+        filing_records=records)
+
+
+def test_multi_listing_resolution_requires_point_in_time_common_stock_filing_proof():
+    record = _common_filing()
+    row = _multi_listing_observation([record, record])
+    assert row["identity_status"] == "RESOLVED" and row["ticker"] == "ACME"
+    proof = row["provenance"]["common_stock_listing_evidence"]
+    assert proof["accession"] == record.source.accession_number
+    assert proof["source_hash"] == record.source.content_hash
+    assert proof["source_url"] == record.source.source_url
+    assert proof["security_title"] == "Common Stock"
+    assert row["knowledge_at"] == NOW.isoformat()  # no historical backdating
+    assert "COMMON_STOCK_LISTING_CONFIRMED" in row["quality_flags"]
+    assert _multi_listing_observation([])["identity_status"] == "UNRESOLVED"
+
+
+@pytest.mark.parametrize("change", ["future", "undurable", "old", "derivative", "preferred",
+                                   "warrant", "wrong_cik", "missing_ticker", "future_transaction"])
+def test_unusable_filings_cannot_resolve_a_multi_listing(change):
+    from insider_turning_engine.domain.models import TableType
+
+    record = _common_filing()
+    if change == "future":
+        record.timestamps.knowledge_at = NOW + timedelta(seconds=1)
+    elif change == "undurable":
+        record.timestamps.recorded_at = NOW + timedelta(seconds=1)
+    elif change == "old":
+        record.timestamps.accepted_at = NOW - timedelta(days=366)
+    elif change == "derivative":
+        record.security.table_type = TableType.DERIVATIVE
+    elif change == "preferred":
+        record.security.title = "Preferred Stock convertible to Common Stock"
+    elif change == "warrant":
+        record.security.title = "Warrant to acquire Common Stock"
+    elif change == "wrong_cik":
+        record.issuer.cik = "0000000008"
+    elif change == "missing_ticker":
+        record.issuer.ticker = None
+    else:
+        record.transaction.transaction_date = (NOW + timedelta(days=1)).date()
+    assert _multi_listing_observation([record])["ticker"] is None
+
+
+def test_two_evidenced_common_classes_and_source_disagreement_remain_unresolved():
+    records = [_common_filing("ACME"), _common_filing("ACME.B", "Class B Common Stock")]
+    row = _multi_listing_observation(records, tickers=("ACME", "ACME.B"))
+    assert row["ticker"] is None and "AMBIGUOUS_LISTING" in row["quality_flags"]
+    row = _multi_listing_observation([records[0]], metadata=_profile(tickers=["ACME", "OTHER"]))
+    assert "SOURCE_LISTING_DISAGREEMENT" in row["quality_flags"]
+
+
+def test_acquisition_passes_canonical_listing_proof_into_fresh_observation(tmp_path):
+    def handler(request):
+        payload = (_map(("ACME", "ACME-WT")) if str(request.url) == COMPANY_TICKERS_EXCHANGE_URL
+                   else _profile(tickers=["ACME", "ACME-WT"]))
+        return httpx.Response(200, content=payload, headers={"Content-Type": "application/json"},
+                              request=request)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        report = acquire_identity_observations(
+            [CIK], user_agent="ITE test@example.com", run_id=RUN, output=tmp_path / "out",
+            client=client, clock=lambda: NOW, filing_records=[_common_filing()])
+    assert report["resolvedIssuerCount"] == 1 and not report["unresolved"]
+    rows = json.loads((tmp_path / "out/identities.json").read_bytes())
+    assert rows[0]["ticker"] == "ACME"
+    assert rows[0]["provenance"]["common_stock_listing_evidence"]["source_hash"]
+
+
+def test_resolved_listing_enables_factual_digest_without_market_or_score():
+    from decimal import Decimal
+
+    from insider_turning_engine.domain.research import DayEvidence
+    from insider_turning_engine.notifications.digest import load_digest_policy, preview_digest
+    from insider_turning_engine.pipeline.research_snapshot import build_research_snapshot
+
+    record = _common_filing()
+    record.transaction.shares = Decimal("100000")
+    record.transaction.price_per_share = Decimal("1")
+    record.transaction.value = Decimal("100000")
+    identity = _multi_listing_observation([record])
+    day = record.timestamps.accepted_at.date()
+    snapshot = build_research_snapshot(
+        [record], as_of=NOW, run_id=RUN, identities={CIK: identity}, expected_sec_days=[day],
+        sec_day_by_accession={record.source.accession_number: day},
+        day_evidence=[DayEvidence(day=day, discovered_filings=1, stored_filings=1,
+                                 parse_rows=1, quarantined_rows=0, failures=0, complete=True)])
+    draft = preview_digest(snapshot, load_digest_policy())
+    assert len(draft.event_ids) == 1 and not draft.reasons
+    assert "$100,000" in draft.text and "ACME" in draft.text
+    assert snapshot.companies[0].current_price is None
+    assert snapshot.research_scores[0].total is None
 
 
 def test_merge_is_replayable_and_never_mutates_old_observations():

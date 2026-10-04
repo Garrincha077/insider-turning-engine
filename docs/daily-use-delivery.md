@@ -53,6 +53,19 @@ Unresolved identities and non-common-stock transactions remain inspectable but
 are excluded from common-stock aggregates. No-market and stale-benchmark cases
 retain valid SEC facts; predictive delivery remains blocked.
 
+Multiple current SEC listings are resolved only when a recent, already-known
+non-derivative common-stock filing corroborates exactly one current ticker.
+The observation retains the filing accession, source hash, URL and knowledge
+timestamp. Conflicting common-class evidence, source disagreement, foreign
+incorporation and unsupported securities still fail closed. No ticker is chosen
+by suffix, alphabetical order or transaction value.
+
+Market caches are checksum/source validated and reusable while they contain the
+latest closed XNYS session, including over weekends and holidays. A missing new
+session forces refresh despite an unexpired TTL. Each of the three bounded
+market shards has 30 minutes; the producer has a 60-minute workflow limit.
+The 90% coverage target and benchmark freshness checks are unchanged.
+
 The existing per-day immutable SEC checkpoint ledger tracks resumable progress.
 Publishing a partial factual snapshot does **not** advance the older global
 canonical cursor or claim that the full 90-day window is complete. The manual
@@ -65,8 +78,9 @@ the live integration, not inferred from offline fixtures.
 
 ## Package 3 — factual digest and operational acceptance
 
-Separate policy and preview: latest complete SEC day, up to five new qualified
-open-market purchases >= $250,000, largest first, no score predicate or advice.
+Separate policy and preview: latest complete SEC day, up to ten new qualified
+open-market purchases >= $100,000 (`config/digest.v1.json`), largest first,
+no score predicate or advice.
 Durably persist channel/day claim before sending; uncertain delivery is never
 retried automatically. Initial enablement never sends historical backlog. Existing
 email configuration stays optional and predictive kill switch stays off.

@@ -13,12 +13,13 @@ import os
 import re
 import tempfile
 from collections.abc import Callable, Iterable, Mapping
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import httpx
 
+from insider_turning_engine.domain.models import CanonicalTransaction, TableType
 from insider_turning_engine.ingestion.sec.identity import (
     COMPANY_TICKERS_EXCHANGE_URL,
     CompanyTickerIdentity,
@@ -29,6 +30,7 @@ from insider_turning_engine.ingestion.sec.incremental import (
     SECIncrementalSource,
 )
 from insider_turning_engine.normalization.identity import (
+    _EXCLUDED_TEXT,
     DEFAULT_SIC_MAPPING_PATH,
     evaluate_security_universe,
     map_sic_to_sector_etf,
@@ -40,6 +42,7 @@ _US_STATES = frozenset(
     "NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY DC".split()
 )
 LIVE_SIC_MAPPING_PATH = DEFAULT_SIC_MAPPING_PATH.with_name("sic-sector.v1.1.yaml")
+_COMMON = re.compile(r"\b(?:common(?: stock| shares?)?|ordinary shares?)\b", re.IGNORECASE)
 
 
 def _cik(value: object) -> str:
@@ -74,7 +77,7 @@ def _write(path: Path, payload: bytes) -> None:
 def identity_observation(
     cik: str, listings: Iterable[CompanyTickerIdentity], *,
     metadata: bytes | None, observed_at: datetime, map_observed_at: datetime,
-    map_hash: str, run_id: str,
+    map_hash: str, run_id: str, filing_records: Iterable[CanonicalTransaction] = (),
 ) -> dict[str, Any]:
     """Reconcile two official current sources without guessing ticker-array alignment."""
     cik = _cik(cik)
@@ -113,24 +116,37 @@ def identity_observation(
                 reason = "US_INCORPORATION_UNCONFIRMED"
             elif not re.fullmatch(r"\d{4}", str(profile.get("sic", ""))):
                 reason = "MISSING_SIC"
-            elif len({(item.ticker, item.exchange.upper()) for item in matches}) != 1:
-                reason = "AMBIGUOUS_LISTING" if matches else "NO_CURRENT_LISTING"
             else:
-                ticker, exchange = matches[0].ticker, matches[0].exchange.upper()
                 tickers, exchanges = profile.get("tickers"), profile.get("exchanges")
+                pairs = {(item.ticker, item.exchange.upper()) for item in matches}
                 # No arbitrary pairing of independent multi-valued arrays.
-                if (not isinstance(tickers, list) or not isinstance(exchanges, list)
+                if not matches:
+                    reason = "NO_CURRENT_LISTING"
+                elif (not isinstance(tickers, list) or not isinstance(exchanges, list)
                     or any(not isinstance(value, str) for value in [*tickers, *exchanges])
-                    or set(tickers) != {ticker}
-                    or {value.upper() for value in exchanges} != {exchange}
-                    or normalize_ticker(ticker) is None):
+                    or set(tickers) != {item[0] for item in pairs}
+                    or {value.upper() for value in exchanges} != {item[1] for item in pairs}):
                     reason = "SOURCE_LISTING_DISAGREEMENT"
                 else:
+                    if len(pairs) > 1:
+                        proofs = _common_listing_proofs(cik, filing_records, as_of=observed)
+                        pairs = {pair for pair in pairs if pair[0] in proofs}
+                        if len(pairs) == 1:
+                            row["provenance"]["common_stock_listing_evidence"] = proofs[
+                                next(iter(pairs))[0]]
+                            row["quality_flags"].append("COMMON_STOCK_LISTING_CONFIRMED")
+                    if len(pairs) != 1:
+                        reason = "AMBIGUOUS_LISTING"
+                    else:
+                        ticker, exchange = next(iter(pairs))
+                        if normalize_ticker(ticker) is None:
+                            raise ValueError("invalid current ticker")
+                        row.update(ticker=ticker, exchange=exchange)
+                if not reason:
                     sector = map_sic_to_sector_etf(
                         profile["sic"], mapping_path=LIVE_SIC_MAPPING_PATH,
                     )
-                    row.update(ticker=ticker, exchange=exchange, sic=profile["sic"],
-                               country="US", sector_etf=sector.sector_etf)
+                    row.update(sic=profile["sic"], country="US", sector_etf=sector.sector_etf)
                     row["provenance"]["sector_mapping_version"] = sector.mapping_version
                     row["provenance"]["country_evidence"] = profile["stateOfIncorporation"]
                     decision = evaluate_security_universe(row, as_of=observed)
@@ -147,6 +163,36 @@ def identity_observation(
     else:
         row["identity_status"] = "RESOLVED"
     return row
+
+
+def _common_listing_proofs(
+    cik: str, records: Iterable[CanonicalTransaction], *, as_of: datetime,
+) -> dict[str, dict[str, str]]:
+    """Current listing corroboration, not a historical ticker/security inference.
+
+    Never resolve two evidenced common classes by size, spelling or array order.
+    Keep one latest source/hash per symbol; joint owners do not duplicate evidence.
+    """
+    selected: dict[str, tuple[datetime, str, dict[str, str]]] = {}
+    for record in records:
+        known = max(record.timestamps.knowledge_at, record.timestamps.recorded_at)
+        accepted = record.timestamps.accepted_at
+        ticker = record.issuer.ticker
+        if (record.issuer.cik != cik or ticker is None or known > as_of
+            or accepted is None or not as_of - timedelta(days=365) <= accepted <= as_of
+            or record.transaction.transaction_date > as_of.date()
+            or record.security.table_type is not TableType.NON_DERIVATIVE
+            or not _COMMON.search(record.security.title)
+            or _EXCLUDED_TEXT.search(record.security.title)):
+            continue
+        proof = {"accession": record.source.accession_number,
+                 "source_url": record.source.source_url,
+                 "source_hash": record.source.content_hash,
+                 "knowledge_at": known.isoformat(), "security_title": record.security.title}
+        candidate = (known, record.source.accession_number, proof)
+        if ticker not in selected or candidate[:2] > selected[ticker][:2]:
+            selected[ticker] = candidate
+    return {ticker: selected[ticker][2] for ticker in sorted(selected)}
 
 
 def merge_observations(
@@ -175,6 +221,7 @@ def acquire_identity_observations(
     ciks: Iterable[str], *, user_agent: str, run_id: str, output: Path,
     previous: Path | None = None, client: httpx.Client | None = None,
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    filing_records: Iterable[CanonicalTransaction] = (),
 ) -> dict[str, Any]:
     """Write a fresh local bundle atomically; no publication, cursor or alert writes.
 
@@ -182,6 +229,9 @@ def acquire_identity_observations(
     an indefinitely reused current-map cache, retain prior knowledge timestamps.
     """
     requested = sorted({_cik(value) for value in ciks})
+    filing_by_cik: dict[str, list[CanonicalTransaction]] = {}
+    for record in filing_records:
+        filing_by_cik.setdefault(record.issuer.cik, []).append(record)
     if not requested or len(requested) > 10000:
         raise ValueError("request between 1 and 10000 distinct issuer CIKs")
     if not re.fullmatch(r"run_[A-Za-z0-9_-]{8,64}", run_id):
@@ -219,6 +269,7 @@ def acquire_identity_observations(
                     cik, mapping.records, metadata=payload, observed_at=observed,
                     map_observed_at=mapping.retrieved_at, map_hash=mapping.content_hash,
                     run_id=run_id,
+                    filing_records=filing_by_cik.get(cik, ()),
                 ))
             content = _json(merge_observations(history, observations))
             _write(stage / "identities.json", content)

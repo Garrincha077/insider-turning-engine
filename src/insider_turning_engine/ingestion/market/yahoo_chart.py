@@ -10,7 +10,7 @@ import hashlib
 import json
 import os
 import tempfile
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
 from urllib.parse import quote, urlparse
@@ -37,6 +37,7 @@ class YahooChartProvider:
         max_bytes: int = 5 * 1024 * 1024,
         cache_ttl_seconds: int = 86400,
         timeout: float = 45.0,
+        required_cache_session: date | None = None,
     ) -> None:
         self.client = client or httpx.Client(timeout=timeout, follow_redirects=False)
         self.cache_dir = Path(cache_dir) if cache_dir is not None else None
@@ -44,6 +45,7 @@ class YahooChartProvider:
         if cache_ttl_seconds < 0:
             raise ValueError("cache TTL must be nonnegative")
         self.cache_ttl_seconds = cache_ttl_seconds
+        self.required_cache_session = required_cache_session
 
     @staticmethod
     def _symbol(value: str) -> tuple[str, str]:
@@ -93,10 +95,17 @@ class YahooChartProvider:
             age = (datetime.now(UTC) - fetched_at).total_seconds()
         except (KeyError, TypeError, ValueError):
             return None
-        if not 0 <= age < self.cache_ttl_seconds:
+        if age < 0 or (self.required_cache_session is None and age >= self.cache_ttl_seconds):
             return None
         if len(payload) > self.max_bytes:
             return None
+        if self.required_cache_session is not None:
+            try:
+                bars = self._parse(payload, symbol, self._url(symbol))
+            except ValueError:
+                return None
+            if not any(row.date == self.required_cache_session for row in bars):
+                return None
         return payload
 
     @staticmethod

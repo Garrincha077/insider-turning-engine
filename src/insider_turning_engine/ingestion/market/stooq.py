@@ -58,12 +58,14 @@ class StooqMarketDataProvider:
         timeout: float = 10.0,
         cache_ttl_seconds: float = 300.0,
         cache_dir: str | Path | None = None,
+        required_cache_session: date | None = None,
         sleeper: Callable[[float], None] = time.sleep,
     ) -> None:
         self.client = client or httpx.Client(timeout=timeout, follow_redirects=False)
         self.max_attempts = max(1, max_attempts)
         self.cache_ttl_seconds = max(0.0, cache_ttl_seconds)
         self.cache_dir = Path(cache_dir) if cache_dir is not None else None
+        self.required_cache_session = required_cache_session
         self._sleeper = sleeper
         self._cache: dict[str, tuple[float, tuple[DailyBar, ...]]] = {}
         self._cache_hits = 0
@@ -109,7 +111,9 @@ class StooqMarketDataProvider:
         key = symbol.strip().upper()
         now = time.monotonic()
         cached = self._cache.get(key)
-        if cached and now - cached[0] <= self.cache_ttl_seconds:
+        if cached and (any(row.date == self.required_cache_session for row in cached[1])
+                       if self.required_cache_session is not None
+                       else now - cached[0] <= self.cache_ttl_seconds):
             self._cache_hits += 1
             bars = cached[1]
         else:
@@ -208,12 +212,17 @@ class StooqMarketDataProvider:
             or manifest.get("sha256") != digest
             or manifest.get("byteLength") != len(payload)
             or manifest.get("sourceUrl") != self._url(symbol)
-            or age > self.cache_ttl_seconds
+            or (self.required_cache_session is None and age > self.cache_ttl_seconds)
         ):
             return None
         try:
             bars = self._parse(payload.decode("utf-8"), symbol, str(manifest["sourceUrl"]))
         except (UnicodeError, ValueError):
+            return None
+        # A closed session remains fresh over weekends/holidays. A missing newer
+        # session forces a refresh even if wall-clock TTL has not yet expired.
+        if (self.required_cache_session is not None
+            and not any(row.date == self.required_cache_session for row in bars)):
             return None
         self._cache_hits += 1
         return bars

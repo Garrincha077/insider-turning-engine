@@ -68,9 +68,11 @@ def market_shards(
     shards = [selected[index::3] for index in range(3) if selected[index::3]]
     bars: dict[str, tuple[DailyBar, ...]] = {}
     failures: dict[str, str] = {}
+    session = latest_closed_session(datetime.now(UTC))
     with ThreadPoolExecutor(max_workers=3) as executor:
         jobs = [executor.submit(_fetch_market, shard, cache_dir=cache_dir, max_workers=4,
-                                budget_seconds=1200, priority_symbols=priority_symbols)
+                                budget_seconds=1800, priority_symbols=priority_symbols,
+                                required_cache_session=session)
                 for shard in shards]
         for job in jobs:
             batch, failed, _sources, _cross_validated = job.result()
@@ -80,6 +82,7 @@ def market_shards(
                              for symbol, reason in failed.items()})
     _write_json(cache_dir.parent / "market-status.json", {
         "schemaVersion": "1.0.0", "requested": len(selected), "available": len(bars),
+        "requiredCacheSession": session.isoformat(), "budgetSecondsPerShard": 1800,
         "failures": dict(sorted(failures.items())),
         "status": "COMPLETE" if not failures else "PARTIAL",
     })
@@ -291,7 +294,8 @@ def main() -> None:
         previous_path.write_text(json.dumps(previous, sort_keys=True), encoding="utf-8")
     acquire_identity_observations(ciks, user_agent=user_agent, run_id=run_id,
                                    output=args.work / "identities",
-                                   previous=previous_path if previous is not None else None)
+                                   previous=previous_path if previous is not None else None,
+                                   filing_records=history.records)
     identities = json.loads((args.work / "identities" / "identities.json").read_text("utf-8"))
     identity_store.persist(identities)
     point = datetime.now(UTC)
