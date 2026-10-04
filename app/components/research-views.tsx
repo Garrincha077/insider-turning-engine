@@ -2,16 +2,19 @@ import { useState } from 'react';
 import { Star, ExternalLink } from 'lucide-react';
 import type { Candidate, DashboardData, Filing } from '@/lib/dashboard-data';
 import type { PublicationManifest } from '@/lib/operations-data';
-import { controlClass, costReturn, downloadCsv, instant, metric, money, observedContext, reasonText, secUrl, timestamp } from '@/lib/research';
+import { controlClass, costReturn, downloadCsv, instant, metric, money, reasonText, secUrl, timestamp } from '@/lib/research';
 import { isBoolean, isString, usePreference } from '@/lib/local-preferences';
 import { SortControls, useRowSort, type SortField } from './sort-controls';
-import { EChart } from './echart';
+import { CompanyChart } from './company-chart';
+import type { CandidateInsight } from '@/lib/candidate-insights';
+import { evidenceFor, type TechnicalEvidence } from '@/lib/technical-evidence';
 import { ClustersV2 } from './v2-views';
 import { PaginatedRows } from './paginated-rows';
 
 type ResearchProps = {
   data: DashboardData; catalog: Candidate[]; watchlist: string[]; timezone: string;
   toggleWatch: (cik: string) => void; openCompany: (ticker: string) => void;
+  insights: Map<string, CandidateInsight>; technical: Map<string, TechnicalEvidence>;
 };
 const candidateFields: SortField<Candidate>[] = [
   ...(['total', 'insider', 'divergence', 'turn', 'cluster', 'marketRs'] as const).map((id) => ({ id, label: { total: 'Total', insider: 'Insider', divergence: 'Divergence', turn: 'Turn', cluster: 'Cluster', marketRs: 'Market RS' }[id], value: (row: Candidate) => row[id] })),
@@ -26,7 +29,7 @@ const filingFields: SortField<Filing>[] = [
 ];
 const turningStates = ['INSIDER_ACCUMULATION', 'BASE_FORMING', 'EARLY_TURN', 'CONFIRMED_TURN'];
 
-export function CompanyTable({ data, catalog, watchlist, toggleWatch, openCompany, mode }: ResearchProps & { mode: 'radar' | 'turning' | 'divergence' }) {
+export function CompanyTable({ data, catalog, watchlist, toggleWatch, openCompany, mode, timezone, insights, technical }: ResearchProps & { mode: 'radar' | 'turning' | 'divergence' }) {
   const [search, setSearch] = usePreference(`${mode}.search`, '', isString);
   const [sector, setSector] = usePreference(`${mode}.sector`, '', isString);
   const [availability, setAvailability] = usePreference(`${mode}.availability`, '', isString);
@@ -41,8 +44,13 @@ export function CompanyTable({ data, catalog, watchlist, toggleWatch, openCompan
     if (mode === 'turning' && (!turningStates.includes(row.state) || phase && row.state !== phase)) return false;
     return mode !== 'divergence' || row.insider != null && row.divergence != null && row.insider >= Number(insiderMin) && row.divergence >= Number(divergenceMin);
   });
-  const sort = useRowSort(rows, candidateFields, mode === 'radar' ? 'total' : mode === 'turning' ? 'turn' : 'divergence', mode);
-  const rank = new Map(catalog.filter((row) => row.total != null).map((row, index) => [row.ticker, index + 1]));
+  const fields = [...candidateFields,
+    { id: 'buyValue', label: 'Observed 90D purchases', value: (row: Candidate) => insights.get(row.issuerCik || row.ticker)?.buyValue90d },
+    { id: 'drawdown', label: 'Price below observed high', value: (row: Candidate) => insights.get(row.issuerCik || row.ticker)?.drawdownPct },
+  ];
+  const primaryScore = mode === 'radar' ? 'total' : mode === 'turning' ? 'turn' : 'divergence';
+  const sort = useRowSort(rows, fields, primaryScore, mode);
+  const rank = new Map(catalog.filter((row) => row.total != null).map((row, index) => [row.issuerCik || row.ticker, index + 1]));
   return <Panel title={mode === 'turning' ? 'Recorded turning phases' : mode === 'divergence' ? 'Divergence screen' : 'Company explorer'} subtitle={`${rows.length} of ${catalog.length} exported companies · ranking uses the unchanged snapshot score`}>
     <div className="mb-4 flex flex-wrap gap-3">
       <input aria-label="Ticker or company" placeholder="Ticker, company or CIK" className={`${controlClass} min-w-0 flex-1`} value={search} onChange={(event) => setSearch(event.target.value)} />
@@ -52,14 +60,30 @@ export function CompanyTable({ data, catalog, watchlist, toggleWatch, openCompan
     </div>
     {mode === 'divergence' && <div className="mb-4 flex flex-wrap gap-4">{[['Minimum Insider', insiderMin, setInsiderMin], ['Minimum Divergence', divergenceMin, setDivergenceMin]].map(([label, value, setter]) => <label key={String(label)} className="text-xs">{String(label)}<input aria-label={String(label)} className={`${controlClass} ml-2 w-20`} type="number" min="0" max="100" value={String(value)} onChange={(event) => (setter as (v: string) => void)(event.target.value)} /></label>)}</div>}
     {mode === 'turning' && <div className="mb-4 flex flex-wrap gap-2"><button className={controlClass} onClick={() => setPhase('')}>All phases</button>{turningStates.map((state) => <button key={state} className={`${controlClass} ${phase === state ? 'text-emerald-200' : ''}`} onClick={() => setPhase(state)}>{reasonText(state)} ({catalog.filter((row) => row.state === state).length})</button>)}</div>}
-    <div className="flex flex-wrap items-start justify-between gap-2"><SortControls fields={candidateFields} fieldId={sort.fieldId} descending={sort.descending} onField={sort.choose} onReverse={sort.reverse} /><button className={controlClass} onClick={() => downloadCsv(`${mode}.csv`, ['Rank', 'CIK', 'Ticker', 'Company', 'Sector', 'Total', 'Insider', 'Divergence', 'Turn', 'State', 'Score snapshot'], sort.rows.map((row) => [rank.get(row.ticker), row.issuerCik, row.ticker, row.company, row.sector, row.total, row.insider, row.divergence, row.turn, row.state, data.generatedAt]))}>Export filtered CSV</button></div>
-    {sort.rows.length === 0 ? <EmptyState title="No companies match these filters" detail="Broaden the filters or turn off Watchlist only. Missing data is not a zero score." /> : <PaginatedRows rows={sort.rows} label="Company" key={JSON.stringify([data.generatedAt, mode, search, sector, availability, watched, watched ? watchlist : [], insiderMin, divergenceMin, phase, sort.fieldId, sort.descending])}>{(pageRows) => <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr><th className="p-3">Watch</th><th className="p-3">Rank</th>{['ticker', 'total', 'insider', 'divergence', 'turn', 'state'].map((id) => <SortHeader key={id} field={candidateFields.find((field) => field.id === id)!} sort={sort} />)}<th className="p-3">Context</th></tr></thead><tbody>{pageRows.map((row) => <tr key={row.issuerCik || row.ticker} className="border-t border-border hover:bg-accent/40">
-      <td className="p-3"><WatchButton row={row} watched={watchlist.includes(row.issuerCik)} toggle={toggleWatch} /></td><td className="p-3 font-mono">{rank.get(row.ticker) ?? '—'}</td>
+    <div className="flex flex-wrap items-start justify-between gap-2"><SortControls fields={fields} fieldId={sort.fieldId} descending={sort.descending} onField={sort.choose} onReverse={sort.reverse} /><button className={controlClass} onClick={() => downloadCsv(`${mode}.csv`, ['Rank', 'CIK', 'Ticker', 'Company', 'Sector', 'Total', 'Insider', 'Divergence', 'Turn', 'State', 'Observed 90D purchase USD', 'Observed purchases', 'Reporting owners (not independent decisions)', 'Verified 30D clusters', 'Below observed high %', 'Latest purchase date', 'Score snapshot'], sort.rows.map((row) => {
+      const facts = insights.get(row.issuerCik || row.ticker);
+      return [rank.get(row.issuerCik || row.ticker), row.issuerCik, row.ticker, row.company, row.sector, row.total, row.insider, row.divergence, row.turn, row.state, facts?.buyValue90d, facts?.buyCount90d, facts?.reportingOwnerCount90d, facts?.verifiedClusterCount30d, facts?.drawdownPct, facts?.lastPurchaseDate, data.generatedAt];
+    }))}>Export filtered CSV</button></div>
+    {sort.rows.length === 0 ? <EmptyState title="No companies match these filters" detail="Broaden the filters or turn off Watchlist only. Missing data is not a zero score." /> : <PaginatedRows rows={sort.rows} label="Company" key={JSON.stringify([data.generatedAt, mode, search, sector, availability, watched, watched ? watchlist : [], insiderMin, divergenceMin, phase, sort.fieldId, sort.descending])}>{(pageRows) => <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr><th className="p-3">Watch</th><th className="p-3">Rank</th>{['ticker', primaryScore, 'buyValue', 'drawdown', 'state'].map((id) => <SortHeader key={id} field={fields.find((field) => field.id === id)!} sort={sort} />)}<th className="p-3">Why research it?</th></tr></thead><tbody>{pageRows.map((row) => {
+      const facts = insights.get(row.issuerCik || row.ticker);
+      const evidence = evidenceFor(technical, row);
+      return <tr key={row.issuerCik || row.ticker} className="border-t border-border align-top hover:bg-accent/40">
+      <td className="p-3"><WatchButton row={row} watched={watchlist.includes(row.issuerCik)} toggle={toggleWatch} /></td><td className="p-3 font-mono">{rank.get(row.issuerCik || row.ticker) ?? '—'}</td>
       <td className="p-3"><button aria-label={`Open ${row.ticker} in Company Lab`} onClick={() => openCompany(row.ticker)} className="text-left"><span className="font-mono font-semibold text-emerald-200">{row.ticker}</span><span className="block max-w-48 truncate text-xs text-muted-foreground" title={row.company}>{row.company}</span></button></td>
-      {[row.total, row.insider, row.divergence, row.turn].map((value, index) => <td key={index} className="p-3 font-mono" title={value == null ? 'Required component data is unavailable' : String(value)}>{metric(value)}</td>)}
-      <td className="p-3 text-xs"><State state={row.state} />{mode === 'turning' && <p className="mt-2 text-muted-foreground">Changed: {row.stateChangedAt ?? 'not recorded'}</p>}</td>
-      <td className="min-w-48 max-w-64 p-3 text-xs leading-5 text-muted-foreground">{reasonText(row.reasons[0] ?? 'No explanation exported')}{mode === 'divergence' && <p>{observedContext(data, row)}</p>}</td>
-    </tr>)}</tbody></table></div>}</PaginatedRows>}
+      <td className="p-3 font-mono" title={row[primaryScore] == null ? 'Required component data is unavailable' : String(row[primaryScore])}>{metric(row[primaryScore])}</td>
+      <td className="whitespace-nowrap p-3"><span className="font-mono" title={money(facts?.buyValue90d)}>{money(facts?.buyValue90d, true)}</span><span className="mt-1 block text-xs text-muted-foreground">{facts?.buyCount90d == null ? 'Purchase count unavailable' : `${facts.buyCount90d} observed purchases`}</span></td>
+      <td className="p-3 font-mono text-xs" title={facts?.priceWindow ? `${facts.priceWindow.start}–${facts.priceWindow.end}; not a 52W high` : 'Dated price history unavailable'}>{facts?.drawdownPct == null ? '—' : `${metric(facts.drawdownPct)}%`}</td>
+      <td className="min-w-40 p-3 text-xs"><State state={row.state} />{mode === 'turning' && <p className="mt-2 text-muted-foreground">Changed: {row.stateChangedAt ? instant(row.stateChangedAt, timezone) : 'not recorded'}</p>}</td>
+      <td className="min-w-64 max-w-80 p-3 text-xs leading-5 text-muted-foreground">
+        <p>{facts?.lastPurchaseDate ? `Latest purchase: ${facts.lastPurchaseDate}` : 'Reliable recent purchase facts unavailable.'}</p>
+        {facts?.verifiedClusterCount30d ? <p className="text-emerald-200">{facts.verifiedClusterCount30d} verified cluster{facts.verifiedClusterCount30d === 1 ? '' : 's'} in 30D</p> : null}
+        {mode === 'turning' && <p className="mt-2">{evidence.summary}</p>}
+        <details className="mt-2"><summary>Evidence & limitations</summary><p className="mt-2">{facts?.summary ?? 'Economic-event facts are unavailable in this legacy export.'}</p>{mode !== 'radar' && <EvidenceChecks evidence={evidence} />}
+          <p className="mt-2">Research scores: Insider {metric(row.insider)} · Divergence {metric(row.divergence)} · Turn {metric(row.turn)}</p>
+          {facts?.cautions.map((text) => <p className="mt-2" key={text}>{text}</p>)}
+        </details>
+      </td>
+    </tr>; })}</tbody></table></div>}</PaginatedRows>}
   </Panel>;
 }
 
@@ -126,38 +150,28 @@ export function CostBasisView({ catalog, openCompany }: { catalog: Candidate[]; 
   </Panel>;
 }
 
-export function CompanyLab({ data, catalog, company, watchlist, toggleWatch, openCompany, timezone }: ResearchProps & { company: Candidate }) {
+export function CompanyLab({ data, catalog, company, watchlist, toggleWatch, openCompany, timezone, insights, technical }: ResearchProps & { company: Candidate }) {
   const [query, setQuery] = useState('');
   const [period, setPeriod] = usePreference('lab.period', '180', isString);
-  const allSeries = data.companySeries.filter((row) => row.ticker === company.ticker && Number.isFinite(timestamp(row.date)));
-  const latest = allSeries.length ? Math.max(...allSeries.map((row) => timestamp(row.date))) : 0;
-  const series = allSeries.filter((row) => timestamp(row.date) >= latest - Number(period) * 86400000).sort((a, b) => timestamp(a.date) - timestamp(b.date));
-  const rank = catalog.filter((row) => row.total != null).findIndex((row) => row.ticker === company.ticker) + 1;
+  const rank = catalog.filter((row) => row.total != null).findIndex((row) => row.issuerCik === company.issuerCik && row.ticker === company.ticker) + 1;
   const choices = catalog.filter((row) => `${row.ticker} ${row.company}`.toLowerCase().includes(query.toLowerCase()));
-  const pricesByDate = new Map(series.map((row) => [row.date, row.price]));
-  const markers = (data.research?.economicTransactions ?? []).filter((row) => row.issuerCik === company.issuerCik && row.aggregateEligible && pricesByDate.has(row.transactionDate)).map((row) => ({ name: row.side === 'BUY' ? 'Purchase' : 'Sale', value: money(row.value, true), coord: [row.transactionDate, pricesByDate.get(row.transactionDate)], symbol: row.side === 'BUY' ? 'triangle' : 'diamond', symbolSize: 10, itemStyle: { color: row.side === 'BUY' ? '#5eead4' : '#fb7185' } }));
-  const option = {
-    backgroundColor: 'transparent', textStyle: { color: '#cbd5e1', fontFamily: 'Segoe UI, sans-serif' },
-    tooltip: { trigger: 'axis' }, legend: { top: 8, bottom: 'auto', left: 'center', type: 'scroll', textStyle: { color: '#a8b6c5' }, data: ['Adjusted price', 'Mansfield market RS', ...(data.research ? ['Mansfield sector RS'] : [])] },
-    grid: { left: 60, right: 55, top: 65, bottom: 45 },
-    xAxis: { type: 'category', data: series.map((row) => row.date), axisLabel: { color: '#a8b6c5', hideOverlap: true } },
-    yAxis: [{ type: 'value', scale: true, name: 'USD', splitLine: { lineStyle: { color: '#263446' } } }, { type: 'value', name: 'RS', splitLine: { show: false } }],
-    series: [{ name: 'Adjusted price', type: 'line', showSymbol: false, data: series.map((row) => row.price), itemStyle: { color: '#5eead4' },
-      markPoint: { label: { show: false }, data: markers },
-      markLine: company.insiderCost == null ? undefined : { symbol: 'none', label: { formatter: 'Current observed basis', position: 'insideEndTop' }, lineStyle: { color: '#fbbf24', type: 'dashed' }, data: [{ yAxis: company.insiderCost }] } },
-    { name: 'Mansfield market RS', type: 'line', yAxisIndex: 1, showSymbol: false, connectNulls: true, data: series.map((row) => row.mansfield), itemStyle: { color: '#38bdf8' } },
-    ...(data.research ? [{ name: 'Mansfield sector RS', type: 'line', yAxisIndex: 1, showSymbol: false, connectNulls: true, data: series.map((row) => row.sectorMansfield ?? null), itemStyle: { color: '#c4b5fd' } }] : [])],
-    media: [{ query: { maxWidth: 600 }, option: { legend: { orient: 'vertical', top: 8, left: 'center', bottom: 'auto' }, grid: { top: 100, bottom: 45 } } }],
-  };
+  const facts = insights.get(company.issuerCik || company.ticker);
+  const evidence = evidenceFor(technical, company);
   return <>
     <div className="flex flex-wrap gap-3"><input aria-label="Search companies" className={controlClass} placeholder="Search companies" value={query} onChange={(event) => setQuery(event.target.value)} /><select aria-label="Select company" className={`${controlClass} min-w-0 max-w-full flex-1`} value={choices.some((row) => row.ticker === company.ticker) ? company.ticker : ''} onChange={(event) => openCompany(event.target.value)}><option value="" disabled>{choices.length ? 'Choose company' : 'No matching companies'}</option>{choices.map((row) => <option key={row.ticker} value={row.ticker}>{row.ticker} · {row.company}</option>)}</select><WatchButton row={company} watched={watchlist.includes(company.issuerCik)} toggle={toggleWatch} /></div>
     <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_320px]">
       <Panel title={`${company.ticker} · price and relative strength`} subtitle={`${company.company} · ${company.sector} · ${company.issuerCik ? `CIK ${company.issuerCik}` : 'Identity not exported'}`}>
         <div className="mb-4 flex flex-wrap gap-2">{[['30', '1M'], ['90', '3M'], ['180', '6M'], ['365', '1Y']].map(([days, label]) => <button aria-pressed={period === days} key={days} className={`${controlClass} ${period === days ? 'text-emerald-200' : ''}`} onClick={() => setPeriod(days)}>{label}</button>)}</div>
-        {data.research && <p className="mb-4 text-xs leading-5 text-muted-foreground">Triangles = purchases; diamonds = sales, placed at the adjusted close on the reported transaction date (not trade execution price or filing availability). Only dates with an observed price receive a marker. RS lines join available weekly observations.</p>}
-        {series.length < 2 ? <EmptyState title="Price series unavailable" detail="Insufficient exported observations for this period. SEC records remain available below." /> : <><EChart option={option} style={{ height: 350 }} /><p className="text-xs leading-5 text-muted-foreground">{series.length} exported observations · {series[0].date} to {series.at(-1)?.date}. The dashed line is today’s observed purchase basis, not a historical basis series. {!data.research && 'Volume, sector RS history and precise transaction markers are not exported in v1.'}</p>{series.some((row) => row.volume != null) && <EChart style={{ height: 180 }} option={{ textStyle: { color: '#cbd5e1' }, grid: { left: 70, right: 25, bottom: 30 }, tooltip: { trigger: 'axis' }, xAxis: { type: 'category', data: series.map((row) => row.date) }, yAxis: { type: 'value', name: 'Volume' }, series: [{ type: 'bar', data: series.map((row) => row.volume ?? null), itemStyle: { color: '#38bdf866' } }] }} />}</>}
+        <CompanyChart data={data} company={company} period={period} />
       </Panel>
-      <Panel title={rank ? `Score explanation · rank #${rank}` : 'Score unavailable'} subtitle="Rank within this snapshot; no predictive performance claim."><div className="grid grid-cols-2 gap-2">{[['Total', company.total], ['Insider', company.insider], ['Divergence', company.divergence], ['Turn', company.turn]].map(([label, value]) => <Fact key={String(label)} label={String(label)} value={metric(value as number | null)} />)}</div><p className="my-4"><State state={company.state} /></p><ul className="list-disc space-y-2 pl-4 text-xs leading-5 text-muted-foreground">{company.reasons.map((reason) => <li key={reason}>{reasonText(reason)}</li>)}</ul><p className="mt-4 text-xs">Market RS: {metric(company.marketRs)} · Sector RS: {metric(company.sectorRs)}</p></Panel>
+      <Panel title="Investment idea · evidence to review" subtitle="Observed facts, not a recommendation or price forecast.">
+        <p className="text-sm leading-6" data-testid="company-factual-summary">{facts?.summary ?? 'Reliable economic-event purchase facts are unavailable in this legacy export. Inspect the SEC records below.'}</p>
+        {facts?.verifiedClusterCount30d ? <p className="mt-3 text-sm text-emerald-200">{facts.verifiedClusterCount30d} verified cluster{facts.verifiedClusterCount30d === 1 ? '' : 's'} in the observed 30D window</p> : null}
+        <p className="my-4"><State state={company.state} /></p><p className="text-xs leading-5 text-muted-foreground">{evidence.summary}</p>
+        <EvidenceChecks evidence={evidence} />
+        <details className="mt-4 text-xs leading-5 text-muted-foreground"><summary>Data limitations</summary><p className="mt-2">{evidence.caution}</p>{facts?.cautions.map((text) => <p className="mt-2" key={text}>{text}</p>)}</details>
+        <details className="mt-4 text-xs"><summary>Experimental scores{rank ? ` · rank #${rank}` : ' · unavailable'}</summary><div className="mt-3 grid grid-cols-2 gap-2">{[['Total', company.total], ['Insider', company.insider], ['Divergence', company.divergence], ['Turn', company.turn]].map(([label, value]) => <Fact key={String(label)} label={String(label)} value={metric(value as number | null)} />)}</div><p className="mt-3 leading-5 text-muted-foreground">Not historically validated. Rank is within this snapshot, not a forecast.</p></details>
+      </Panel>
     </div>
     <TapeView key={company.ticker} data={data} ticker={company.ticker} openCompany={openCompany} timezone={timezone} />
     {data.research ? <ClustersV2 data={data.research} issuer={company.issuerCik} openCompany={openCompany} /> : <ClusterView />}
@@ -177,6 +191,9 @@ export function MethodologyView({ data, manifest }: { data: DashboardData; manif
   </>;
 }
 
+function EvidenceChecks({ evidence }: { evidence: TechnicalEvidence }) {
+  return <ul className="mt-3 space-y-3 text-xs leading-5">{evidence.checks.map((check) => <li key={check.label}><span className={check.status === 'MET' ? 'text-emerald-200' : check.status === 'NOT_MET' ? 'text-amber-200' : 'text-muted-foreground'}>{check.status === 'MET' ? 'Supports' : check.status === 'NOT_MET' ? 'Needs confirmation' : 'Unavailable'} · {check.label}</span><span className="block text-muted-foreground">{check.detail}</span></li>)}</ul>;
+}
 function WatchButton({ row, watched, toggle }: { row: Candidate; watched: boolean; toggle: (cik: string) => void }) {
   return <button className="rounded-lg border border-border p-2" disabled={!row.issuerCik} aria-label={`${watched ? 'Remove' : 'Add'} ${row.ticker} ${watched ? 'from' : 'to'} watchlist`} aria-pressed={watched} title={row.issuerCik ? 'Browser-only watchlist, keyed by CIK' : 'A resolved CIK is required for a stable watchlist entry'} onClick={() => toggle(row.issuerCik)}><Star className={`size-4 ${watched ? 'fill-amber-300 text-amber-300' : 'text-muted-foreground'}`} /></button>;
 }
