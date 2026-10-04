@@ -178,3 +178,21 @@ without an observed ledger/provider result.
   acceptance, knowledge after historical day end and current-snapshot imports.
   Type/lint/build and 36 focused desktop/mobile cases pass. Parser, scores and
   digest policy are unchanged. A separate PR/CI gate covers this display fix.
+
+## Publication-loading UX
+
+- A real public-browser check found a 13.4 MB detailed snapshot taking nearly
+  four minutes to transfer. Research-tab navigation also restarted the download.
+  The new transfer is shared across research tabs, shows received/total bytes,
+  exposes an explicit restart and times out with a retryable error instead of
+  waiting indefinitely. It never replaces missing data with sample observations.
+- HTTP cache entries are revalidated; each body still must match the current
+  manifest's size and SHA-256. Compressed and decompressed sizes are bounded and
+  both hashes are checked before schema/semantic validation or rendering facts.
+- Regression coverage includes streaming progress, declared-size overflow,
+  cancellation, a stalled body/manifest, navigation without duplicate transfers
+  and restarting a pending transfer. No data acquisition, parser, scores or
+  Telegram policy changes are included.
+- Typecheck, lint, production build and 28 focused desktop/mobile cases pass.
+  A rendered local review against the actual Oct 4 dataset confirms the loaded
+  Radar and mobile shortlist. Full CI and publication are the next gate.
