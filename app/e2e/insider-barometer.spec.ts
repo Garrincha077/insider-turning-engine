@@ -171,3 +171,10 @@ test('chart separates units, shares dates, retains nulls and does not manufactur
   expect(JSON.stringify(option)).not.toMatch(/BUY zone|SELL zone|markArea/);
   expect(buildBarometerChartOption(result.monthly, true, true).series[0].markLine?.data[0].yAxis).toBe(0.39);
 });
+
+test('small ratio axis ticks remain distinct rather than rounding different levels to 0.1x', () => {
+  const format = buildBarometerChartOption([], true, false).yAxis[0].axisLabel.formatter;
+  expect([0, 0.04, 0.08, 0.12, 0.16, 0.2].map(format)).toEqual([
+    '0×', '0.04×', '0.08×', '0.12×', '0.16×', '0.2×']);
+  expect([0.0004, 0.0008, 0.0012].map(format)).toEqual(['0.0004×', '0.0008×', '0.0012×']);
+});
