@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import fixture from './fixtures/research-v2.json' with { type: 'json' };
-import { buildInsiderBarometer } from '../lib/insider-barometer';
+import { buildInsiderBarometer, secDayEnd } from '../lib/insider-barometer';
 import { buildBarometerChartOption } from '../components/insider-barometer-view';
 import type { EconomicEvent, ResearchSnapshot } from '../lib/research-v2';
 
@@ -49,6 +49,42 @@ test('late acceptance/knowledge cannot change earlier rolling observations', () 
     secDay: '2026-08-25', acceptedAt: '2026-08-25T20:00:00Z', knownAt: '2026-08-25T20:00:00Z' }));
   expect(buildInsiderBarometer(snapshot).rolling.find((row) => row.label === '2026-08-20')).toEqual(before);
   expect(buildInsiderBarometer(snapshot).current?.ratio).toBe(1);
+});
+
+test('SEC day uses New York midnight with the correct summer, winter and DST-transition offsets', () => {
+  expect(new Date(secDayEnd('2026-08-20')).toISOString()).toBe('2026-08-21T03:59:59.999Z');
+  expect(new Date(secDayEnd('2026-01-20')).toISOString()).toBe('2026-01-21T04:59:59.999Z');
+  expect(new Date(secDayEnd('2026-03-08')).toISOString()).toBe('2026-03-09T03:59:59.999Z');
+  expect(new Date(secDayEnd('2026-11-01')).toISOString()).toBe('2026-11-02T04:59:59.999Z');
+});
+
+test('late US-evening filing enters its SEC-day reading, but knowledge from the next US day does not', () => {
+  const snapshot = data();
+  snapshot.economicTransactions = [event('sale', 'SELL', '2026-08-20'),
+    event('late-us-evening', 'BUY', '2026-08-20', {
+      acceptedAt: '2026-08-21T01:35:07Z', knownAt: '2026-08-21T01:35:07Z' })];
+  const earlier = buildInsiderBarometer(snapshot).rolling.find((row) => row.label === '2026-08-20');
+  expect(earlier).toMatchObject({ buys: 1, sales: 1, ratio: 1 });
+  snapshot.economicTransactions.push(event('next-us-day', 'BUY', '2026-08-20', {
+    acceptedAt: '2026-08-21T04:00:00Z', knownAt: '2026-08-21T04:00:00Z' }));
+  expect(buildInsiderBarometer(snapshot).rolling.find((row) => row.label === '2026-08-20')).toEqual(earlier);
+  expect(buildInsiderBarometer(snapshot).rolling.find((row) => row.label === '2026-08-21')?.buys).toBe(2);
+});
+
+test('latest reading and monthly totals include a completed-day import known by the current snapshot only', () => {
+  const snapshot = data();
+  snapshot.asOf = '2026-09-01T12:00:00Z';
+  snapshot.economicTransactions = [event('sale', 'SELL', '2026-08-20')];
+  const previous = buildInsiderBarometer(snapshot).rolling.find((row) => row.label === '2026-08-28');
+  snapshot.economicTransactions.push(event('imported-after-sec-day', 'BUY', '2026-08-20', {
+    acceptedAt: '2026-08-31T20:00:00Z', secDay: '2026-08-31', knownAt: '2026-09-01T11:00:00Z' }));
+  const result = buildInsiderBarometer(snapshot);
+  expect(result.current).toMatchObject({ buys: 1, sales: 1, ratio: 1 });
+  expect(result.monthly.find((row) => row.label === '2026-08')).toMatchObject({ buys: 1, sales: 1, ratio: 1 });
+  expect(result.rolling.find((row) => row.label === '2026-08-28')).toEqual(previous);
+  snapshot.economicTransactions.push(event('not-known-yet', 'BUY', '2026-08-20', {
+    acceptedAt: '2026-08-31T20:00:00Z', secDay: '2026-08-31', knownAt: '2026-09-01T12:00:01Z' }));
+  expect(buildInsiderBarometer(snapshot)).toEqual(result);
 });
 
 test('future and ineligible observations cannot change current or earlier ratios', () => {
