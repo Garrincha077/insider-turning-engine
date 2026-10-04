@@ -109,6 +109,7 @@ jobs:
           name: daily-research-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             work/daily-research/identities/identity-manifest.json
+            work/daily-research/identities/identities.json
             work/daily-research/acquisition/acquisition-status.json
             work/daily-research/daily-report.json
             work/daily-research/market-status.json
