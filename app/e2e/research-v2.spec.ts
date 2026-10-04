@@ -94,6 +94,20 @@ test('v2 facts drive scoreless Radar, real clusters, basis and source-linked tap
   expect(chartErrors).toEqual([]);
 });
 
+test('reported P/S scope is explicit without implying independently verified exchange execution', async ({ page }) => {
+  await v2(page);
+  await ready(page);
+  await section(page, 'Insider Buys');
+  await expect(page.getByText(/Code P can include private transactions/)).toBeVisible();
+  await expect(page.locator('tbody tr')).toHaveCount(2);
+  await section(page, 'Alert Center');
+  await expect(page.getByText(/Qualified SEC P purchases/)).toContainText('Code P can include private transactions');
+  await section(page, 'Insider Ratio');
+  await page.getByText('Research context & calculation', { exact: true }).click();
+  await expect(page.getByTestId('insider-ratio-transaction-scope')).toContainText('this export does not separately verify that distinction');
+  await expect(page.getByRole('link', { name: 'SEC Form 4 transaction codes' })).toHaveAttribute('href', 'https://www.sec.gov/files/form4.pdf');
+});
+
 test('company and basis tables page the full sorted selection without truncating CSV', async ({ page }) => {
   await v2(page, (value) => {
     const research = value as unknown as ResearchSnapshot;
