@@ -8,6 +8,7 @@ import { EChart } from './echart';
 const RESEARCH_URL = 'https://www.gurufocus.com/news/99283/guru-insider-research-ii-can-aggregated-insider-trading-activities-predict-the-market';
 const REFERENCE_URL = 'https://www.gurufocus.com/economic_indicators/4359/insider-buysell-ratio-usa-overall-market';
 const times = (value: number | null) => value == null ? '—' : `${metric(value, 2)}×`;
+const ratioTicks = new Intl.NumberFormat('en-US', { maximumSignificantDigits: 3 });
 
 export function buildBarometerChartOption(points: RatioPoint[], monthly: boolean, reference: boolean) {
   const hasSpy = points.some((row) => row.spy != null);
@@ -29,7 +30,7 @@ export function buildBarometerChartOption(points: RatioPoint[], monthly: boolean
       data: points.map((row) => `${row.label}${row.partial ? ' *' : ''}`),
       axisLabel: { show: !hasSpy || index === 1, hideOverlap: true, color: '#94a3b8', formatter: (label: string) => monthly ? label : label.slice(5) } })),
     yAxis: [{ type: 'value', min: 0, gridIndex: 0, name: 'Buy / sell',
-      axisLabel: { color: '#94a3b8', formatter: (value: number) => `${metric(value, 1)}×` },
+      axisLabel: { color: '#94a3b8', formatter: (value: number) => `${ratioTicks.format(value)}×` },
       splitLine: { lineStyle: { color: '#263446' } } }, ...(hasSpy ? [
     { type: 'value', scale: true, gridIndex: 1, name: 'SPY · USD',
       axisLabel: { color: '#94a3b8', formatter: (value: number) => metric(value, 0) },

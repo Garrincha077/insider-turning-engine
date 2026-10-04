@@ -196,3 +196,18 @@ without an observed ledger/provider result.
 - Typecheck, lint, production build and 28 focused desktop/mobile cases pass.
   A rendered local review against the actual Oct 4 dataset confirms the loaded
   Radar and mobile shortlist. Full CI and publication are the next gate.
+
+## Final rendered barometer correction
+
+- Public desktop/mobile review of fresh v2.3 data confirms actual SPY aligned
+  with monthly insider ratios. PR36's current 30D reading is 825/4,863 (0.16965x)
+  in the newer snapshot; the earlier 824 numerator belonged to the prior snapshot.
+- In the small monthly range, one-decimal axis formatting incorrectly repeated
+  0.1x for different tick levels. Three significant digits keep these labels
+  distinct without changing observations, chart coordinates or calculations.
+- Mobile route changes also preserved a deep prior scroll position, leaving the
+  next view's title and primary facts off-screen. Tab/company route changes now
+  begin at the top; local filters, watchlists and same-tab interactions persist.
+- Type/lint/build, 28 barometer cases and six focused desktop/mobile
+  candidate/navigation/transfer cases pass. Rendered local mobile navigation
+  confirms scroll reset without whole-page overflow. Full CI covers this package.
