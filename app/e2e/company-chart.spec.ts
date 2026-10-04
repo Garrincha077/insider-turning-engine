@@ -63,7 +63,7 @@ test('price, volume and RS have independent aligned grids and scales', () => {
   expect(chart.grid[2].bottom).toBeGreaterThanOrEqual(45);
 });
 
-test('economic BUY and SELL markers use dated observed adjusted closes and count events once', () => {
+test('economic BUY and SELL markers use dated observed closes and count events once', () => {
   const data = snapshot();
   const buy = event(data, { eventId: 'buy', price: 500 });
   const sale = event(data, { eventId: 'sale', side: 'SELL', transactionDate: '2026-08-31', price: 600 });
@@ -93,7 +93,7 @@ test('basis is a labeled snapshot reference rather than a historical series', ()
   const chart = option(snapshot());
   expect(chart.series[0].markLine?.data).toEqual([{ name: 'Snapshot observed 90D purchase basis', yAxis: 10 }]);
   expect(chart.series[0].markLine?.label.formatter).toBe('Observed 90D basis · $10.00');
-  expect(chart.series.map((series) => series.name)).toEqual(['Adjusted price', 'Volume', 'Mansfield market RS', 'Mansfield sector RS']);
+  expect(chart.series.map((series) => series.name)).toEqual(['Observed close', 'Volume', 'Mansfield market RS', 'Mansfield sector RS']);
   expect(chart.series[0].data).toEqual([9, 11]);
 });
 

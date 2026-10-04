@@ -34,13 +34,14 @@ const check = validator.compile<ResearchSnapshot>(schema);
 export function validateResearch(value: unknown, manifest: PublicationManifest): ResearchSnapshot {
   if (!check(value)) throw new Error(`Research v2 schema mismatch at ${check.errors?.[0]?.instancePath ?? '/'}`);
   if (value.runId !== manifest.runId || Date.parse(value.asOf) !== Date.parse(manifest.asOf) || value.scoreVersion !== manifest.scoreVersion) throw new Error('Research v2 run lineage mismatch');
+  const snapshotDay = new Date(Date.parse(value.asOf)).toISOString().slice(0, 10);
   const companies = new Set(value.companies.map((row) => row.issuerCik));
   const owners = new Set(value.reportingOwners.map((row) => row.ownerCik));
   const events = new Map(value.economicTransactions.map((row) => [row.eventId, row]));
   if (companies.size !== value.companies.length || owners.size !== value.reportingOwners.length || events.size !== value.economicTransactions.length) throw new Error('Research v2 duplicate identity');
   for (const row of value.economicTransactions) {
     if (!companies.has(row.issuerCik) || row.owners.some((owner) => !owners.has(owner.ownerCik)) || new Set(row.owners.map((owner) => owner.ownerCik)).size !== row.owners.length) throw new Error('Research v2 broken event reference');
-    if (Math.max(Date.parse(row.knownAt), Date.parse(row.acceptedAt)) > Date.parse(value.asOf) || row.transactionDate > value.asOf.slice(0, 10)) throw new Error('Research v2 future event');
+    if (Math.max(Date.parse(row.knownAt), Date.parse(row.acceptedAt)) > Date.parse(value.asOf) || row.transactionDate > snapshotDay || row.secDay != null && row.secDay > snapshotDay) throw new Error('Research v2 future event');
     if (row.aggregateEligible && (row.processing !== 'EFFECTIVE' || !row.qualified)) throw new Error('Research v2 unresolved aggregate');
     if (row.shares == null && (!['2.1.0', '2.2.0', '2.3.0'].includes(value.schemaVersion) || row.table !== 'DERIVATIVE' || row.value == null || row.qualified || row.aggregateEligible)) throw new Error('Research v2 invalid amount-only event');
     if (row.code == null && (!['2.2.0', '2.3.0'].includes(value.schemaVersion) || row.table !== 'DERIVATIVE' || row.side !== 'OTHER' || row.qualified || row.aggregateEligible)) throw new Error('Research v2 invalid missing-code event');
@@ -53,11 +54,11 @@ export function validateResearch(value: unknown, manifest: PublicationManifest):
     const memberOwners = new Set(members.flatMap((event) => event.owners.map((owner) => owner.ownerCik)));
     if (new Set(row.eventIds).size !== row.eventIds.length || members.some((event) => event.issuerCik !== row.issuerCik || event.side !== 'BUY' || !event.aggregateEligible) || memberOwners.size !== row.ownerCiks.length || row.ownerCiks.some((cik) => !memberOwners.has(cik)) || Math.abs(row.purchaseValue - members.reduce((sum, event) => sum + (event.value ?? 0), 0)) > 0.01) throw new Error('Research v2 inconsistent cluster economics');
   }
-  if (value.companySeries.some((row) => !companies.has(row.issuerCik) || row.date > value.asOf.slice(0, 10))) throw new Error('Research v2 invalid company series');
+  if (value.companySeries.some((row) => !companies.has(row.issuerCik) || row.date > snapshotDay)) throw new Error('Research v2 invalid company series');
   const benchmarks = value.benchmarkSeries ?? [];
   if (benchmarks.length && value.schemaVersion !== '2.3.0') throw new Error('Research v2 benchmark requires v2.3');
   if (new Set(benchmarks.map((row) => `${row.symbol}:${row.date}`)).size !== benchmarks.length) throw new Error('Research v2 duplicate benchmark');
-  if (benchmarks.some((row) => row.date > value.asOf.slice(0, 10) || row.availableAt != null && Date.parse(row.availableAt) > Date.parse(value.asOf))) throw new Error('Research v2 future benchmark');
+  if (benchmarks.some((row) => row.date > snapshotDay || row.availableAt != null && Date.parse(row.availableAt) > Date.parse(value.asOf))) throw new Error('Research v2 future benchmark');
   if (value.companies.some((row) => row.basis.map((window) => window.days).sort((a, b) => a - b).join(',') !== '30,90')) throw new Error('Research v2 basis windows missing');
   return value;
 }

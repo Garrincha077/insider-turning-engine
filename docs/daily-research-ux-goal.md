@@ -12,11 +12,11 @@ rules are preserved. Unrelated local diagnostics are not part of this change.
 
 | Delivery | Required result | Evidence required | Status |
 | --- | --- | --- | --- |
-| 1. Candidate discovery | Radar, buys and clusters explain actual purchases and reporting roles; joint filers never inflate dollars or independent decisions | Grain/window/null regressions; desktop/mobile filtered drill-down | In progress |
-| 2. Accumulation and turn | Recorded phases are distinct; a few available price/RS checks explain support and missing evidence | Future invariance; missing-history checks; phase filtering | In progress |
-| 3. Company Lab | Separate aligned price, volume and RS panels; dated actual transaction markers and today's observed basis | Chart options, marker/basis tests; rendered desktop/mobile review | In progress |
-| 4. Market barometer | Own SEC event ratios aligned with SPY; source-scoped GuruFocus references rather than short-history BUY/SELL claims | Definition/population comparison; shared period; absent benchmark/history behavior | Pending |
-| 5. Tracking | Local watchlist exposes actual new purchases/clusters/state changes between snapshots | Prior/current snapshot tests; candidate-to-Lab-to-watchlist flow | Pending |
+| 1. Candidate discovery | Radar, buys and clusters explain actual purchases and reporting roles; joint filers never inflate dollars or independent decisions | Grain/window/null regressions; desktop/mobile filtered drill-down | Published PR 32; factual shortlist follow-up below |
+| 2. Accumulation and turn | Recorded phases are distinct; a few available price/RS checks explain support and missing evidence | Future invariance; missing-history checks; phase filtering | Published PR 32 |
+| 3. Company Lab | Separate aligned price, volume and RS panels; dated actual transaction markers and today's observed basis | Chart options, marker/basis tests; rendered desktop/mobile review | Published PR 32; adjustment-label clarification below |
+| 4. Market barometer | Own SEC event ratios aligned with SPY; source-scoped GuruFocus references rather than short-history BUY/SELL claims | Definition/population comparison; shared period; absent benchmark/history behavior | PR 34 merged after green CI; fresh v2.3 public data pending |
+| 5. Tracking | Local watchlist exposes actual new purchases/clusters/state changes between snapshots | Prior/current snapshot tests; candidate-to-Lab-to-watchlist flow | Published PR 33; actual public flow verified |
 
 Cross-cutting: all retained views useful and honest, readable dark English UI,
 stable filters/sorting/return/links, missing values distinct from zero, explicit
@@ -60,7 +60,7 @@ without an observed ledger/provider result.
 - Radar/Turning/Divergence now show indexed canonical 90D purchase facts,
   verified 30D clusters, dated observed-price drawdown and concise evidence.
   Joint-owner USD is counted once; absent or held facts are not fabricated zeros.
-- Company Lab separates adjusted close, volume and market/sector Mansfield RS;
+- Company Lab separates observed provider close, volume and market/sector Mansfield RS;
   marker availability and a single current observed basis are explicit.
 - Three supporting price/RS checks are display evidence, not a recomputation of
   the state machine or all prerequisites. Recorded server phases remain authoritative.
@@ -72,8 +72,8 @@ without an observed ledger/provider result.
   [UI-only deployment](https://github.com/Garrincha077/insider-turning-engine/actions/runs/37211657371)
   completed successfully. Public Radar now shows factual purchase/drawdown/phase
   columns. No digest was requested.
-- Market reference/SPY integration and actual snapshot-to-snapshot watchlist
-  changes are still separate unfinished deliverables.
+- The initial package preserved acquisition and Telegram behavior. Market
+  reference/SPY and watchlist follow-ups are documented below.
 
 ## Watchlist follow-up checkpoint
 
@@ -89,7 +89,9 @@ without an observed ledger/provider result.
   [PR 33](https://github.com/Garrincha077/insider-turning-engine/pull/33) merged
   after green Python/dashboard CI. Its
   [UI-only deployment](https://github.com/Garrincha077/insider-turning-engine/actions/runs/37212893668)
-  completed successfully; browser flow verification is pending. Telegram is unchanged.
+  completed successfully. Actual public Radar -> add DUOT -> Company Lab flow
+  was verified; the first viewed baseline did not label old purchases as new.
+  Telegram is unchanged.
 - Next: source-scoped GuruFocus market context with actual same-period SPY;
   then remaining tab/health/coverage checks and observed daily/delivery evidence.
 
@@ -109,5 +111,47 @@ without an observed ledger/provider result.
 - Detailed research views wait for v2 validation rather than briefly showing a
   potentially conflicting legacy phase during lazy loading.
 - Focused backend tests: 28 passed. Ruff and strict mypy pass. Frontend type/lint
-  and build pass; focused desktop/mobile checks pass. Full CI and fresh public
-  v2.3 producer verification remain pending. No parser/score/delivery change.
+  and build pass; focused desktop/mobile checks pass.
+  [PR 34](https://github.com/Garrincha077/insider-turning-engine/pull/34) merged
+  after green Python and dashboard CI. Its UI-only deployment completed.
+  [Fresh v2.3 data refresh](https://github.com/Garrincha077/insider-turning-engine/actions/runs/37225254899)
+  is running with `send_digest=false`. Actual public SPY verification remains
+  pending; an earlier v2.2 snapshot correctly shows SPY as unavailable.
+  No parser/score/delivery change.
+
+## Final daily-use UX package
+
+- A single optional Radar shortlist uses observed 90D purchases >=$100K and a
+  price at least 20% below the exported-window high. It works without a score,
+  excludes absent/held facts, persists locally and exports exactly its filtered
+  rows. It does not establish a 52W high or change methodology. On the actual
+  Oct 4 snapshot it finds 184 of 4,183 companies; partial windows stay disclosed.
+- Insider Buys excludes held/unresolved aggregate events; Live SEC Tape keeps
+  their facts inspectable. Missing sales denominators display `—`, not infinity.
+- Company charts call the input an observed provider close (adjusted where
+  supplied), not a proven uniformly split/dividend-adjusted series. Markers are
+  dated observed closes, not transaction execution prices.
+- System Health separates the accepted >=80% daily-use market target from the
+  unchanged >=90% predictive validation gate. Predictive suppressions are not
+  presented as suppressions of the independent factual digest.
+- Client date checks use the UTC as-of date and reject future SEC days; added
+  regression cases cover offset-local dates and held events. A newer incomplete
+  SEC day is explicitly disclosed rather than silently substituted as complete.
+- Local typecheck/lint/build pass. Focused desktop/mobile regressions pass.
+  Full CI, merge and final public verification remain pending for this package.
+
+## Operational evidence and exact remaining proof
+
+- Actual manual refresh 37197685282 succeeded on 2026-10-04 without digest
+  sending: SEC 2026-10-02 complete (1,572 filings, 2,820 stored rows), latest-day
+  quarantine 0; market 1,611/1,871 (86.1%), benchmarks through Oct 2. Global
+  unresolved issuer count was 276, not zero; affected aggregates remain held.
+- Read-only restoration of the durable state branch verified a Telegram test
+  SENT on 2026-10-01 and operational notices SENT on Oct 3/4. The user previously
+  confirmed receipt of both TEST and warning. The most recent factual digest
+  SENT in the inspected ledger is SEC day 2026-09-15; this is not evidence of a
+  current post-repair scheduled digest. No historic day has been resent.
+- Existing quiet monitoring follows the next five scheduled Tue-Sat 07:15 UTC
+  cycles. Sunday has no scheduled cycle. A fresh scheduled digest/provider
+  result and the new public v2.3 benchmark output remain required proof; neither
+  is replaced by a green build or an enabled policy.
