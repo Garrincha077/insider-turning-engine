@@ -20,7 +20,7 @@ export function metric(value: number | null | undefined, digits = 1): string {
 
 export function money(value: number | null | undefined, compact = false): string {
   if (value == null || !Number.isFinite(value)) return '—';
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: compact ? 'compact' : 'standard', maximumFractionDigits: compact ? 1 : 2 }).format(value);
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: compact ? 'compact' : 'standard', minimumFractionDigits: compact ? 0 : 2, maximumFractionDigits: compact ? 1 : 2 }).format(value);
 }
 
 export function costReturn(row: Candidate): number | null {
