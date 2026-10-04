@@ -18,7 +18,7 @@ from zoneinfo import ZoneInfo
 
 import polars as pl
 
-from insider_turning_engine.domain.research import ResearchScore, SeriesPoint
+from insider_turning_engine.domain.research import BenchmarkPoint, ResearchScore, SeriesPoint
 from insider_turning_engine.domain.session_calendar import latest_closed_session, session_lag
 from insider_turning_engine.export import export_dashboard, validate_dashboard_directory
 from insider_turning_engine.features.price import price_features
@@ -212,14 +212,28 @@ def materialize_research(
                 continue
             relative = rs_lookup.get((ticker, bar.date.isoformat()), {})
             series.append(SeriesPoint(
-                issuer_cik=cik, date=bar.date, price=float(bar.adj_close or bar.close),
+                issuer_cik=cik, date=bar.date,
+                price=float(bar.adj_close if bar.adj_close is not None else bar.close),
                 volume=bar.volume, market_rs=relative.get("mansfield_market"),
                 sector_rs=relative.get("mansfield_sector"),
             ))
+    benchmark_series: list[BenchmarkPoint] = []
+    for bar in fresh.get("SPY", ()):
+        if bar.symbol != "SPY" or bar.date < point.date() - timedelta(days=365):
+            continue
+        benchmark_price = bar.adj_close if bar.adj_close is not None else bar.close
+        if not benchmark_price.is_finite() or benchmark_price <= 0:
+            continue
+        benchmark_series.append(BenchmarkPoint(
+            symbol="SPY", date=bar.date, price=float(benchmark_price), provider=bar.provider,
+            is_adjusted=bar.is_adjusted, adjustment_basis=bar.adjustment_basis,
+            available_at=bar.available_at,
+        ))
     research = build_research_snapshot(
         available, as_of=point, run_id=run_id, identities=identities_by_cik,
         expected_sec_days=history.expected_days, day_evidence=history.evidence,
         candidate_rows=legacy["candidates"], company_series=series,
+        benchmark_series=benchmark_series,
         sec_day_by_accession=history.sec_day_by_accession,
         quarantined_issuers=history.quarantined_issuers,
     )

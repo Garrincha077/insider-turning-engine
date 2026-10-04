@@ -235,15 +235,16 @@ test('Insider Ratio counts economic events once and exposes live and monthly vie
   await section(page, 'Insider Ratio');
   await expect(page.getByText('Latest complete SEC day', { exact: true })).toBeVisible();
   await expect(page.getByTestId('insider-ratio-current')).toHaveText('2×');
-  await expect(page.getByTestId('insider-ratio-zone')).toHaveText('Needs 20 varied observations');
-  await expect(page.getByText('At least 20 valid, varied rolling observations are required.')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Daily rolling 30D' })).toHaveAttribute('aria-pressed', 'true');
-  await page.getByRole('button', { name: 'Calendar months' }).click();
+  await expect(page.getByTestId('insider-ratio-zone')).toContainText('Historical percentile / z-score unavailable');
+  await expect(page.getByTestId('barometer-spy-status')).toContainText('SPY observations are unavailable');
   await expect(page.getByRole('button', { name: 'Calendar months' })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Daily rolling 30D' }).click();
+  await expect(page.getByRole('button', { name: 'Daily rolling 30D' })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByText('Research context & calculation', { exact: true }).click();
   await expect(page.getByText(/Each economic event is counted once/)).toBeVisible();
 });
 
-test('Insider Ratio derives historical BUY and SELL boundaries from its own observations', async ({ page }) => {
+test('twenty overlapping rolling observations do not manufacture calibrated market signals', async ({ page }) => {
   await v2(page, (value) => {
     const research = value as unknown as ResearchSnapshot;
     const days: string[] = [];
@@ -271,11 +272,68 @@ test('Insider Ratio derives historical BUY and SELL boundaries from its own obse
   await ready(page);
   await section(page, 'Insider Ratio');
   await expect(page.getByTestId('insider-ratio-current')).toHaveText('2×');
-  await expect(page.getByTestId('insider-ratio-zone')).toHaveText('Historical BUY zone');
-  await expect(page.getByText('BUY zone ≥ 2× (80th percentile)')).toBeVisible();
-  await expect(page.getByText('SELL zone ≤ 0.67× (20th percentile)')).toBeVisible();
-  await expect(page.getByText('Event parity: 1×')).toBeVisible();
+  await expect(page.getByTestId('insider-ratio-zone')).toContainText('comparable long-history data is not established');
+  await expect(page.getByText(/Historical BUY zone|Historical SELL zone/)).toHaveCount(0);
   await expect(page.locator('canvas').first()).toBeVisible();
+});
+
+test('v2.3 SPY chart uses actual prices and source metadata with working sector/reference controls', async ({ page }) => {
+  await v2(page, (value) => {
+    const research = value as unknown as ResearchSnapshot;
+    research.schemaVersion = '2.3.0';
+    research.coverage.expectedSecDays = ['2026-08-28', '2026-08-31'];
+    research.coverage.days = research.coverage.expectedSecDays.map((day) => ({ day,
+      discoveredFilings: 1, storedFilings: 1, parseRows: 1, quarantinedRows: 0, failures: 0, complete: true }));
+    research.economicTransactions.forEach((row) => { row.secDay = '2026-08-28'; });
+    research.benchmarkSeries = [{ symbol: 'SPY', date: '2026-08-31', price: 600,
+      provider: 'fixture-adjusted', isAdjusted: true, adjustmentBasis: 'split-and-dividend', availableAt: '2026-08-31T20:00:00Z' }];
+  });
+  await ready(page);
+  await section(page, 'Insider Ratio');
+  await expect(page.getByTestId('barometer-spy-status')).toContainText('fixture-adjusted · split-and-dividend');
+  const observed = await page.evaluate(async () => {
+    const modulePath = '/node_modules/.vite/deps/echarts_core.js';
+    const engine = await import(modulePath) as typeof import('echarts/core');
+    const chart = engine.getInstanceByDom(document.querySelector<HTMLElement>('[_echarts_instance_]')!);
+    const option = chart!.getOption() as { series: Array<{ name: string; data: Array<number | null> }>; grid: Array<{ top: string | number }> };
+    return { spy: option.series.find((row) => row.name === 'SPY close')?.data, grids: option.grid.length };
+  });
+  expect(observed.spy?.at(-1)).toBe(600);
+  expect(observed.grids).toBe(2);
+  const reference = page.getByRole('checkbox', { name: /Show GuruFocus published mean/ });
+  await reference.check();
+  await page.getByLabel('Ratio sector').selectOption('Technology');
+  await expect(reference).toHaveCount(0);
+  await page.getByLabel('Ratio sector').selectOption('All sectors');
+  await expect(reference).toBeChecked();
+  await page.getByRole('button', { name: 'Daily rolling 30D' }).click();
+  await expect(reference).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('detailed snapshot loading never presents a conflicting legacy company phase', async ({ page }) => {
+  await v2(page);
+  let release!: () => void;
+  const delayed = new Promise<void>((resolve) => { release = resolve; });
+  await page.route('**/data/research-v2.json', async (route) => { await delayed; await route.fallback(); });
+  await page.goto('/');
+  await expect(page.getByText(/Detailed facts and phases appear only after validation/)).toBeVisible();
+  await expect(page.getByRole('table')).toHaveCount(0);
+  release();
+  await expect(page.getByLabel('Ticker or company')).toBeVisible();
+});
+
+for (const corrupt of ['future', 'duplicate'] as const) test(`v2.3 rejects ${corrupt} benchmark observations`, async ({ page }) => {
+  await v2(page, (value) => {
+    const research = value as unknown as ResearchSnapshot;
+    research.schemaVersion = '2.3.0';
+    const point = { symbol: 'SPY' as const, date: '2026-08-31', price: 600,
+      provider: 'fixture', isAdjusted: true, adjustmentBasis: 'split-and-dividend', availableAt: '2026-08-31T20:00:00Z' };
+    research.benchmarkSeries = corrupt === 'duplicate' ? [point, point]
+      : [{ ...point, availableAt: '2026-09-01T20:00:00Z' }];
+  });
+  await page.goto('/');
+  await expect(page.getByText(`Research v2 ${corrupt} benchmark`)).toBeVisible();
 });
 
 test('v2 semantic corruption cannot fall back to the legacy snapshot', async ({ page }) => {

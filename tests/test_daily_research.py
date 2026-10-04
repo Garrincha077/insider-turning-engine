@@ -1,6 +1,7 @@
 import json
 from dataclasses import replace
 from datetime import timedelta
+from decimal import Decimal
 from types import SimpleNamespace
 
 from test_identity_observations import _observation
@@ -50,6 +51,7 @@ def test_no_market_does_not_hide_source_linked_sec_facts(tmp_path):
     assert data["economicTransactions"][0]["issuerCik"] == record.issuer.cik
     assert data["companies"][0]["currentPrice"] is None
     assert data["researchScores"][0]["total"] is None
+    assert data["schemaVersion"] == "2.3.0" and data["benchmarkSeries"] == []
     assert data["readiness"]["predictive"]["status"] == "BLOCKED"
     assert json.loads((output / "dashboard.json").read_text())["marketPulse"] is None
 
@@ -66,13 +68,71 @@ def test_full_materialization_replay_and_future_bars(tmp_path):
     assert before == {path.name: path.read_bytes() for path in output.iterdir()}
     market["ACME"] = (*market["ACME"], replace(market["ACME"][-1],
         date=POINT.date() + timedelta(days=1), available_at=POINT + timedelta(days=1)))
+    market["SPY"] = (*market["SPY"],
+        replace(market["SPY"][-1], date=POINT.date() + timedelta(days=1),
+                available_at=POINT + timedelta(days=1)),
+        replace(market["SPY"][-1], available_at=POINT + timedelta(seconds=1)))
     daily_research.materialize_research(history, market=market, **kwargs)
     assert before == {path.name: path.read_bytes() for path in output.iterdir()}
     data = json.loads((output / "research-v2.json").read_text())
     assert data["companies"][0]["currentPrice"] is not None
     assert data["companySeries"]
     assert all(row["volume"] is not None for row in data["companySeries"])
+    assert data["schemaVersion"] == "2.3.0" and data["benchmarkSeries"]
+    assert all(row["symbol"] == "SPY" for row in data["benchmarkSeries"])
     assert not data["readiness"]["predictive"]["status"] == "READY"
+
+
+def test_actual_spy_bars_export_bounded_prices_and_source_adjustment_metadata(tmp_path):
+    _record_value, identity, history = _inputs()
+    spy = list(_rows("SPY"))
+    spy[-1] = replace(spy[-1], close=Decimal("620.25"), adj_close=Decimal("612.34"),
+        provider="adjusted-source", is_adjusted=True,
+        adjustment_basis="provider-adjusted-close")
+    spy[-2] = replace(spy[-2], provider="unadjusted-source", is_adjusted=False,
+                      adjustment_basis="unadjusted")
+    daily_research.materialize_research(history, identity_rows=[identity],
+        market={"SPY": tuple(reversed(spy))}, as_of=POINT,
+        run_id="run_daily_research_001", output=tmp_path)
+    data = json.loads((tmp_path / "research-v2.json").read_text())
+    expected = [row for row in spy if row.date >= POINT.date() - timedelta(days=365)]
+    assert len(data["benchmarkSeries"]) == len(expected)
+    assert [row["date"] for row in data["benchmarkSeries"]] == [
+        row.date.isoformat() for row in expected]
+    assert data["benchmarkSeries"][-1] == {
+        "symbol": "SPY", "date": spy[-1].date.isoformat(), "price": 612.34,
+        "provider": "adjusted-source", "isAdjusted": True,
+        "adjustmentBasis": "provider-adjusted-close",
+        "availableAt": spy[-1].available_at.isoformat().replace("+00:00", "Z"),
+    }
+    assert data["benchmarkSeries"][-2]["provider"] == "unadjusted-source"
+    assert data["benchmarkSeries"][-2]["isAdjusted"] is False
+    assert data["benchmarkSeries"][-2]["adjustmentBasis"] == "unadjusted"
+
+
+def test_nonpositive_adjusted_spy_prices_are_excluded_without_close_fallback(tmp_path):
+    _record_value, identity, history = _inputs()
+    spy = list(_rows("SPY")[-3:])
+    spy[0] = replace(spy[0], adj_close=Decimal("0"))
+    spy[1] = replace(spy[1], adj_close=Decimal("-1"))
+    daily_research.materialize_research(history, identity_rows=[identity], market={"SPY": spy},
+        as_of=POINT, run_id="run_daily_research_001", output=tmp_path)
+    data = json.loads((tmp_path / "research-v2.json").read_text())
+    assert len(data["benchmarkSeries"]) == 1
+    assert data["benchmarkSeries"][0]["date"] == spy[-1].date.isoformat()
+    assert data["benchmarkSeries"][0]["price"] == float(spy[-1].adj_close)
+
+
+def test_missing_stale_or_unavailable_spy_has_an_explicit_empty_benchmark_series(tmp_path):
+    _record_value, identity, history = _inputs()
+    for index, spy in enumerate([(), _rows("SPY")[:-5],
+        (replace(_rows("SPY")[-1], available_at=None),)]):
+        output = tmp_path / str(index)
+        daily_research.materialize_research(history, identity_rows=[identity],
+            market={"ACME": _rows("ACME"), "SPY": spy}, as_of=POINT,
+            run_id="run_daily_research_001", output=output)
+        data = json.loads((output / "research-v2.json").read_text())
+        assert data["schemaVersion"] == "2.3.0" and data["benchmarkSeries"] == []
 
 
 def test_market_outage_holds_recorded_state(tmp_path):

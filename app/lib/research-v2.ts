@@ -13,14 +13,16 @@ export type EconomicEvent = {
   processing: 'EFFECTIVE' | 'UNRESOLVED_AMENDMENT'; qualified: boolean; aggregateEligible: boolean;
 };
 export type BasisWindow = { days: 30 | 90; start: string; end: string; weightedBasis: number | null; purchaseValue: number | null; purchaseCount: number | null; coverage: 'OBSERVED_COMPLETE_SEC_WINDOW' | 'PARTIAL' | 'BLOCKED' };
+export type BenchmarkPoint = { symbol: 'SPY'; date: string; price: number; provider: string; isAdjusted: boolean; adjustmentBasis: string; availableAt?: string | null };
 export type ResearchSnapshot = {
-  schemaVersion: '2.0.0' | '2.1.0' | '2.2.0'; source: 'canonical-sec-research'; runId: string; asOf: string; scoreVersion: string;
+  schemaVersion: '2.0.0' | '2.1.0' | '2.2.0' | '2.3.0'; source: 'canonical-sec-research'; runId: string; asOf: string; scoreVersion: string;
   companies: Array<{ issuerCik: string; ticker: string | null; name: string; sector: string | null; identityStatus: 'RESOLVED' | 'UNRESOLVED'; insiderStatus: 'AVAILABLE' | 'UNRESOLVED_AMENDMENT' | 'SOURCE_QUARANTINE'; currentPrice: number | null; basis: BasisWindow[] }>;
   economicTransactions: EconomicEvent[];
   reportingOwners: Array<{ ownerCik: string; name: string }>;
   researchScores: Array<{ issuerCik: string; total: number | null; insider: number | null; divergence: number | null; turn: number | null; cluster: number | null; marketRs: number | null; sectorRs: number | null; state: string; stateChangedAt: string | null; reasons: string[]; scoreVersion: string; methodologyHash: string | null; configHash: string | null; runId: string; asOf: string }>;
   clusters: Array<{ clusterId: string; issuerCik: string; start: string; end: string; ownerCiks: string[]; eventIds: string[]; purchaseValue: number }>;
   companySeries: Array<{ issuerCik: string; date: string; price: number; volume: number | null; marketRs: number | null; sectorRs: number | null }>;
+  benchmarkSeries?: BenchmarkPoint[];
   coverage: { scope: string; expectedSecDays: string[]; missingSecDays: string[]; days: Array<{ day: string; discoveredFilings: number; storedFilings: number; parseRows: number; quarantinedRows: number; failures: number; complete: boolean }>; canonicalOwnerRows: number; economicEvents: number; eligibleCompanies: number; resolvedIdentities: number; pricedCompanies: number; completeScores: number; unresolvedAmendmentIssuers: string[]; exclusions: Record<string, number> };
   readiness: Record<'dashboard' | 'digest' | 'predictive', { status: 'READY' | 'PARTIAL' | 'BLOCKED'; reasons: string[] }>;
 };
@@ -39,9 +41,9 @@ export function validateResearch(value: unknown, manifest: PublicationManifest):
   for (const row of value.economicTransactions) {
     if (!companies.has(row.issuerCik) || row.owners.some((owner) => !owners.has(owner.ownerCik)) || new Set(row.owners.map((owner) => owner.ownerCik)).size !== row.owners.length) throw new Error('Research v2 broken event reference');
     if (Math.max(Date.parse(row.knownAt), Date.parse(row.acceptedAt)) > Date.parse(value.asOf) || row.transactionDate > value.asOf.slice(0, 10)) throw new Error('Research v2 future event');
-    if (row.processing !== 'EFFECTIVE' && row.aggregateEligible) throw new Error('Research v2 unresolved aggregate');
-    if (row.shares == null && (!['2.1.0', '2.2.0'].includes(value.schemaVersion) || row.table !== 'DERIVATIVE' || row.value == null || row.qualified || row.aggregateEligible)) throw new Error('Research v2 invalid amount-only event');
-    if (row.code == null && (value.schemaVersion !== '2.2.0' || row.table !== 'DERIVATIVE' || row.side !== 'OTHER' || row.qualified || row.aggregateEligible)) throw new Error('Research v2 invalid missing-code event');
+    if (row.aggregateEligible && (row.processing !== 'EFFECTIVE' || !row.qualified)) throw new Error('Research v2 unresolved aggregate');
+    if (row.shares == null && (!['2.1.0', '2.2.0', '2.3.0'].includes(value.schemaVersion) || row.table !== 'DERIVATIVE' || row.value == null || row.qualified || row.aggregateEligible)) throw new Error('Research v2 invalid amount-only event');
+    if (row.code == null && (!['2.2.0', '2.3.0'].includes(value.schemaVersion) || row.table !== 'DERIVATIVE' || row.side !== 'OTHER' || row.qualified || row.aggregateEligible)) throw new Error('Research v2 invalid missing-code event');
   }
   if (new Set(value.researchScores.map((row) => row.issuerCik)).size !== value.researchScores.length) throw new Error('Research v2 duplicate score');
   for (const row of value.researchScores) if (!companies.has(row.issuerCik) || row.runId !== value.runId || row.scoreVersion !== value.scoreVersion || Date.parse(row.asOf) !== Date.parse(value.asOf) || row.stateChangedAt != null && Date.parse(row.stateChangedAt) > Date.parse(value.asOf)) throw new Error('Research v2 mixed score lineage');
@@ -52,6 +54,10 @@ export function validateResearch(value: unknown, manifest: PublicationManifest):
     if (new Set(row.eventIds).size !== row.eventIds.length || members.some((event) => event.issuerCik !== row.issuerCik || event.side !== 'BUY' || !event.aggregateEligible) || memberOwners.size !== row.ownerCiks.length || row.ownerCiks.some((cik) => !memberOwners.has(cik)) || Math.abs(row.purchaseValue - members.reduce((sum, event) => sum + (event.value ?? 0), 0)) > 0.01) throw new Error('Research v2 inconsistent cluster economics');
   }
   if (value.companySeries.some((row) => !companies.has(row.issuerCik) || row.date > value.asOf.slice(0, 10))) throw new Error('Research v2 invalid company series');
+  const benchmarks = value.benchmarkSeries ?? [];
+  if (benchmarks.length && value.schemaVersion !== '2.3.0') throw new Error('Research v2 benchmark requires v2.3');
+  if (new Set(benchmarks.map((row) => `${row.symbol}:${row.date}`)).size !== benchmarks.length) throw new Error('Research v2 duplicate benchmark');
+  if (benchmarks.some((row) => row.date > value.asOf.slice(0, 10) || row.availableAt != null && Date.parse(row.availableAt) > Date.parse(value.asOf))) throw new Error('Research v2 future benchmark');
   if (value.companies.some((row) => row.basis.map((window) => window.days).sort((a, b) => a - b).join(',') !== '30,90')) throw new Error('Research v2 basis windows missing');
   return value;
 }

@@ -113,6 +113,18 @@ class SeriesPoint(PublicModel):
     sector_rs: float | None
 
 
+class BenchmarkPoint(PublicModel):
+    """Actual benchmark close; adjustment/source metadata must survive export."""
+
+    symbol: Literal["SPY"] = "SPY"
+    date: date
+    price: float = Field(gt=0, allow_inf_nan=False)
+    provider: str = Field(min_length=1)
+    is_adjusted: bool
+    adjustment_basis: str = Field(min_length=1)
+    available_at: datetime | None = None
+
+
 class DayEvidence(PublicModel):
     day: date
     discovered_filings: int = Field(ge=0)
@@ -158,7 +170,7 @@ class ResearchReadiness(PublicModel):
 
 
 class ResearchSnapshot(PublicModel):
-    schema_version: Literal["2.0.0", "2.1.0", "2.2.0"] = "2.0.0"
+    schema_version: Literal["2.0.0", "2.1.0", "2.2.0", "2.3.0"] = "2.0.0"
     source: Literal["canonical-sec-research"] = "canonical-sec-research"
     run_id: str
     as_of: datetime
@@ -169,6 +181,7 @@ class ResearchSnapshot(PublicModel):
     research_scores: list[ResearchScore]
     clusters: list[Cluster]
     company_series: list[SeriesPoint]
+    benchmark_series: list[BenchmarkPoint] = Field(default_factory=list)
     coverage: ResearchCoverage
     readiness: ResearchReadiness
 
@@ -195,9 +208,9 @@ class ResearchSnapshot(PublicModel):
                 raise ValueError("unresolved event cannot enter aggregates")
             if row.shares is None and (row.table != "DERIVATIVE" or row.value is None
                                        or row.qualified or row.aggregate_eligible
-                                       or self.schema_version not in {"2.1.0", "2.2.0"}):
+                                       or self.schema_version not in {"2.1.0", "2.2.0", "2.3.0"}):
                 raise ValueError("unknown quantity requires a non-signal derivative amount")
-            if row.code is None and (self.schema_version != "2.2.0"
+            if row.code is None and (self.schema_version not in {"2.2.0", "2.3.0"}
                                      or row.table != "DERIVATIVE" or row.side != "OTHER"
                                      or row.qualified or row.aggregate_eligible):
                 raise ValueError("missing transaction code requires a non-signal derivative")
@@ -230,4 +243,13 @@ class ResearchSnapshot(PublicModel):
         if any(row.issuer_cik not in companies or row.date > self.as_of.date()
                for row in self.company_series):
             raise ValueError("invalid company series")
+        if self.benchmark_series and self.schema_version != "2.3.0":
+            raise ValueError("benchmark series requires snapshot v2.3")
+        if len({(row.symbol, row.date) for row in self.benchmark_series}) != len(
+                self.benchmark_series):
+            raise ValueError("duplicate benchmark observation")
+        if any(row.date > self.as_of.date() or row.available_at is not None
+               and (row.available_at.tzinfo is None or row.available_at > self.as_of)
+               for row in self.benchmark_series):
+            raise ValueError("future benchmark observation")
         return self
