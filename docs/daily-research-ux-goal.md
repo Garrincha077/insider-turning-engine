@@ -66,6 +66,25 @@ without an observed ledger/provider result.
   the state machine or all prerequisites. Recorded server phases remain authoritative.
 - Typecheck, lint and production build pass. Focused desktop/mobile run: 90
   passing cases (including new facts, chart, future invariance and drill-down tests).
-- Full CI, public real-data visual verification and publication are still pending.
+- [PR 32](https://github.com/Garrincha077/insider-turning-engine/pull/32)
+  merged after green Python and dashboard CI (118 desktop/mobile cases).
+  Desktop/mobile visual review of the actual Oct 4 snapshot passed locally.
+  [UI-only deployment](https://github.com/Garrincha077/insider-turning-engine/actions/runs/37211657371)
+  is running; public verification remains pending. No digest was requested.
 - Market reference/SPY integration and actual snapshot-to-snapshot watchlist
   changes are still separate unfinished deliverables.
+
+## Watchlist follow-up checkpoint
+
+- The Radar watchlist panel compares the previous verified publication viewed
+  in this browser with the current publication. It is not a server-synced list.
+- New purchases >=$100K, new supplied cluster memberships supported by newly
+  available purchases and recorded established-state transitions are shown.
+  Older acceptance/knowledge, replay, unresolved issuer facts and score-version
+  changes cannot become new activity.
+- Compact local baselines persist across reload and UI-only deployments. Adding
+  an issuer does not fabricate its predecessor; removing it erases its baseline.
+- Local typecheck/lint/build and focused facts/storage/UI checks pass. Full
+  CI/publication are pending for this follow-up; Telegram remains unchanged.
+- Next: source-scoped GuruFocus market context with actual same-period SPY;
+  then remaining tab/health/coverage checks and observed daily/delivery evidence.
