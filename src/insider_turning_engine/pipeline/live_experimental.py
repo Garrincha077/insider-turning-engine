@@ -208,6 +208,7 @@ def _fetch_sec_records(
 def _fetch_market(
     symbols: Iterable[str], *, cache_dir: Path, max_workers: int = 1,
     budget_seconds: float | None = None, priority_symbols: Iterable[str] = (),
+    required_cache_session: date | None = None,
 ) -> tuple[dict[str, tuple[DailyBar, ...]], dict[str, str], dict[str, str], set[str]]:
     if not 1 <= max_workers <= 4 or (budget_seconds is not None and budget_seconds <= 0):
         raise ValueError("market workers must be 1..4 and budget must be positive")
@@ -219,8 +220,10 @@ def _fetch_market(
                 max_attempts=1,
                 timeout=8.0,
                 cache_ttl_seconds=86_400,
+                required_cache_session=required_cache_session,
             ),
-            YahooChartProvider(cache_dir=cache_dir, timeout=8.0),
+            YahooChartProvider(cache_dir=cache_dir, timeout=8.0,
+                               required_cache_session=required_cache_session),
         )
     )
     bars: dict[str, tuple[DailyBar, ...]] = {}

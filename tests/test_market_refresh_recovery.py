@@ -74,7 +74,8 @@ def test_invalid_refresh_bounds_fail_before_network(tmp_path, workers, budget):
 
 def test_shards_record_scrubbed_partial_coverage_and_budget_reason(tmp_path, monkeypatch):
     def fetch(symbols, **kwargs):
-        assert kwargs["max_workers"] == 4 and kwargs["budget_seconds"] == 1200
+        assert kwargs["max_workers"] == 4 and kwargs["budget_seconds"] == 1800
+        assert kwargs["required_cache_session"] is not None
         return ({symbol: () for symbol in symbols if symbol == "AAA"},
                 {symbol: "MARKET_REFRESH_BUDGET_EXHAUSTED" if symbol == "BBB"
                  else "private provider diagnostic" for symbol in symbols if symbol != "AAA"},
@@ -121,7 +122,8 @@ def test_shards_forward_benchmark_priority_without_changing_requested_inventory(
 
     def fetch(symbols, **kwargs):
         assert kwargs["priority_symbols"] == ("SPY", "XLK")
-        assert kwargs["max_workers"] == 4 and kwargs["budget_seconds"] == 1200
+        assert kwargs["max_workers"] == 4 and kwargs["budget_seconds"] == 1800
+        assert kwargs["required_cache_session"] is not None
         calls.append(tuple(symbols))
         return dict.fromkeys(symbols, ()), {}, {}, set()
 
