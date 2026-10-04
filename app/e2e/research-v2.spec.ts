@@ -6,6 +6,7 @@ import { ready, section } from './helpers';
 import originalSettings from './public/data/settings-status.json' with { type: 'json' };
 import type { SettingsStatus } from '../lib/operations-data';
 import type { ResearchSnapshot } from '../lib/research-v2';
+import { createWatchlistBaseline } from '../lib/watchlist-changes';
 
 type Fixture = Omit<typeof fixture, 'economicTransactions'> & { economicTransactions: Array<Omit<typeof fixture.economicTransactions[number], 'shares'> & { shares: number | null }> };
 
@@ -174,6 +175,46 @@ test('turning phases expose met and missing evidence without inventing transitio
   await expect(page.locator('tbody tr')).toContainText('2 observed purchases');
   await page.getByLabel('Minimum Divergence').fill('75');
   await expect(page.getByText('No companies match these filters')).toBeVisible();
+});
+
+test('watchlist updates survive reload and never label first-visit backlog as new', async ({ page }) => {
+  const prior = structuredClone(fixture) as unknown as ResearchSnapshot;
+  prior.runId = 'prior_verified_run'; prior.asOf = '2026-08-30T21:00:00Z';
+  prior.researchScores.forEach((row) => { row.runId = prior.runId; row.asOf = prior.asOf; row.state = 'BASE_FORMING'; });
+  const cik = prior.companies[0].issuerCik;
+  await page.addInitScript(({ cik, baseline }) => {
+    if (localStorage.getItem('test.seeded-watchlist')) return;
+    localStorage.setItem('test.seeded-watchlist', 'true');
+    localStorage.setItem('ite.daily.v1.watchlist', JSON.stringify([cik]));
+    localStorage.setItem('ite.daily.v1.watchlist.tracking', JSON.stringify({ version: 1, current: baseline, previous: null }));
+  }, { cik, baseline: createWatchlistBaseline(prior, [cik]) });
+  await v2(page, (value) => {
+    const current = value as unknown as ResearchSnapshot;
+    const event = { ...current.economicTransactions[0], eventId: 'new_watch_purchase',
+      accession: '0001234567-26-000003', transactionDate: '2026-08-31',
+      acceptedAt: '2026-08-31T20:00:00Z', knownAt: '2026-08-31T20:00:00Z', value: 100_000, shares: 10_000 };
+    current.economicTransactions.push(event);
+    current.clusters[0].eventIds.push(event.eventId);
+    current.clusters[0].purchaseValue += event.value;
+    current.clusters[0].end = event.transactionDate;
+    current.researchScores[0].state = 'EARLY_TURN';
+    current.researchScores[0].stateChangedAt = '2026-08-31T20:00:00Z';
+    current.companies[0].basis.forEach((window) => { window.purchaseValue = 102_000; window.purchaseCount = 3; });
+  });
+  await ready(page);
+  const updates = page.getByTestId('watchlist-updates');
+  await expect(updates).toContainText('3 observed changes');
+  await expect(updates).toContainText('New purchase · $100K');
+  await expect(updates).toContainText('New cluster evidence');
+  await expect(updates).toContainText('Base forming → Early turn');
+  await page.reload();
+  await expect(updates).toContainText('3 observed changes');
+  await expect(updates.getByRole('link', { name: 'SEC', exact: true })).toHaveCount(1);
+  await page.evaluate(() => localStorage.removeItem('ite.daily.v1.watchlist.tracking'));
+  await page.reload();
+  await updates.locator('summary').click();
+  await expect(updates).toContainText('A local baseline is saved');
+  await expect(updates).not.toContainText('New purchase');
 });
 
 test('Insider Ratio counts economic events once and exposes live and monthly views', async ({ page }) => {

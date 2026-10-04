@@ -9,6 +9,9 @@ import { ActivityV2, BasisV2, ClustersV2, CoverageV2, InsiderRatioV2 } from './v
 import { SnapshotAge } from './snapshot-age';
 import { buildCandidateInsights } from '@/lib/candidate-insights';
 import { buildTechnicalEvidence } from '@/lib/technical-evidence';
+import { buildWatchlistChanges } from '@/lib/watchlist-changes';
+import { advanceWatchlistTracking, isWatchlistTracking, type WatchlistTracking } from '@/lib/watchlist-tracker';
+import { WatchlistUpdates } from './watchlist-updates';
 
 const groups = [
   { label: 'Overview', views: [['radar', 'Radar'], ['market-pulse', 'Market Pulse'], ['insider-ratio', 'Insider Ratio'], ['live-sec-tape', 'Live SEC Tape']] },
@@ -50,11 +53,20 @@ export function EngineDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [watchlist, setWatchlist] = usePreference('watchlist', [], isCikList);
   const [timezone, setTimezone] = usePreference('timezone', 'Europe/Zagreb', isTimezone);
+  const [savedTracking, setTracking] = usePreference<WatchlistTracking | null>('watchlist.tracking', null,
+    (value): value is WatchlistTracking | null => value === null || isWatchlistTracking(value));
   const [previousView, setPreviousView] = useState('radar');
   const [selected, setSelected] = useState('');
   const catalog = useMemo(() => publication ? companyCatalog(publication.data) : [], [publication]);
   const insights = useMemo(() => publication ? buildCandidateInsights(publication.data) : new Map(), [publication]);
   const technical = useMemo(() => publication ? buildTechnicalEvidence(publication.data) : new Map(), [publication]);
+  const tracking = useMemo(() => publication?.data.research
+    ? advanceWatchlistTracking(savedTracking, publication.data.research, watchlist) : savedTracking,
+  [publication, savedTracking, watchlist]);
+  const watchChanges = useMemo(() => publication?.data.research
+    ? buildWatchlistChanges(publication.data.research, tracking?.previous, watchlist) : new Map(),
+  [publication, tracking, watchlist]);
+  useEffect(() => { if (tracking !== savedTracking) setTracking(tracking); }, [tracking, savedTracking, setTracking]);
 
   useEffect(() => {
     const listener = () => setRoute(readRoute());
@@ -143,7 +155,7 @@ export function EngineDashboard() {
           {data.status === 'STALE' && <output className="text-rose-300">Source reports stale data. Check System Health.</output>}
         </div>
         {publication.researchAvailable && !data.research && researchViews.has(view) && <output className="block rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-4 text-sm text-emerald-100">Loading and verifying detailed SEC research… The compact dashboard is already available.</output>}
-        {view === 'radar' && <CompanyTable {...tableProps} mode="radar" />}
+        {view === 'radar' && <><WatchlistUpdates data={data} catalog={catalog} watched={watchlist} changes={watchChanges} comparedAt={tracking?.previous?.asOf ?? null} timezone={timezone} openCompany={openCompany} /><CompanyTable {...tableProps} mode="radar" /></>}
         {view === 'turning-stocks' && <CompanyTable key="turning" {...tableProps} mode="turning" />}
         {view === 'divergence' && <CompanyTable key="divergence" {...tableProps} mode="divergence" />}
         {view === 'market-pulse' && (data.research ? <ActivityV2 data={data.research} /> : <PulseView data={data} />)}
