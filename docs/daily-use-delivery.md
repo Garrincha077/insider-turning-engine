@@ -66,6 +66,13 @@ session forces refresh despite an unexpired TTL. Each of the three bounded
 market shards has 30 minutes; the producer has a 60-minute workflow limit.
 The 90% coverage target and benchmark freshness checks are unchanged.
 
+Identity history remains append-only in immutable Releases. Small legacy v1
+archives are readable; larger v2 releases use CIK buckets and bounded chunks
+with a content-addressed manifest. Publish occurs only after every draft asset
+passes remote checksum, row-inventory, provenance and history-preservation
+checks. Interrupted uploads remain drafts, never the current identity history.
+No historical observations are deleted or assigned new knowledge timestamps.
+
 The existing per-day immutable SEC checkpoint ledger tracks resumable progress.
 Publishing a partial factual snapshot does **not** advance the older global
 canonical cursor or claim that the full 90-day window is complete. The manual

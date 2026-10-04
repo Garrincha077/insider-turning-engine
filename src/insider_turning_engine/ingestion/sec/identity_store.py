@@ -24,7 +24,12 @@ from .incremental import SEC_SUBMISSIONS_URL
 from .release_store import ReleaseCheckpointStore
 
 PREFIX = "sec-identity-v1-"
+SHARDED_PREFIX = "sec-identity-v2-"
 MAX_BYTES = 64 * 1024 * 1024
+CHUNK_TARGET_BYTES = 8 * 1024 * 1024
+MAX_SHARDS = 256
+MAX_MANIFEST_BYTES = 128 * 1024
+MAX_BUNDLE_BYTES = 1024 * 1024 * 1024
 _FIELDS = {
     "schema_version", "source", "run_id", "cik", "knowledge_at", "ingested_at", "valid_from",
     "valid_to", "identity_status", "ticker", "current_mapping", "survivorship_caveat",
@@ -115,12 +120,117 @@ def decode_identity_history(name: str, content: bytes) -> list[dict[str, Any]]:
     return rows
 
 
+def encode_identity_bundle(rows: list[dict[str, Any]]) -> tuple[str, dict[str, bytes]]:
+    """Deterministic bounded chunks; never truncate or retime identity history."""
+    ordered = merge_observations(rows, [])
+    if not ordered:
+        name, content = encode_identity_history([])
+        return PREFIX + hashlib.sha256(content).hexdigest(), {name: content}
+    buckets: dict[int, list[dict[str, Any]]] = {}
+    for row in ordered:
+        buckets.setdefault(int(row["cik"]) % 16, []).append(row)
+    files: dict[str, bytes] = {}
+    shards = []
+    expanded_total = 0
+    for bucket, members in sorted(buckets.items()):
+        parts: list[list[dict[str, Any]]] = [[]]
+        size = 0
+        for row in members:
+            row_size = len(json.dumps(row, sort_keys=True, separators=(",", ":"),
+                                      allow_nan=False).encode()) + 1
+            if parts[-1] and size + row_size > CHUNK_TARGET_BYTES:
+                parts.append([])
+                size = 0
+            parts[-1].append(row)
+            size += row_size
+        for part, records in enumerate(parts):
+            name, content = encode_identity_history(records)
+            expanded = len(gzip.decompress(content))
+            expanded_total += expanded
+            files[name] = content
+            shards.append({"bucket": bucket, "part": part, "file": name,
+                           "sha256": hashlib.sha256(content).hexdigest(),
+                           "byteLength": len(content), "expandedBytes": expanded,
+                           "observationCount": len(records)})
+    if (not files or len(shards) > MAX_SHARDS or expanded_total > MAX_BUNDLE_BYTES
+        or len(files) != len(shards)):
+        raise ValueError("identity bundle exceeds bounded shard inventory")
+    if len(files) == 1:
+        name, content = next(iter(files.items()))
+        return PREFIX + hashlib.sha256(content).hexdigest(), {name: content}
+    manifest = json.dumps({"schemaVersion": "2.0.0", "sharding": "cik-modulo-16",
+                           "chunkTargetBytes": CHUNK_TARGET_BYTES,
+                           "observationCount": len(ordered), "expandedBytes": expanded_total,
+                           "shards": shards}, sort_keys=True,
+                          separators=(",", ":"), allow_nan=False).encode()
+    if len(manifest) > MAX_MANIFEST_BYTES:
+        raise ValueError("identity shard manifest exceeds size limit")
+    digest = hashlib.sha256(manifest).hexdigest()
+    files[f"identity-manifest-{digest}.json"] = manifest
+    return SHARDED_PREFIX + digest, files
+
+
+def decode_identity_bundle(tag: str, files: dict[str, bytes]) -> list[dict[str, Any]]:
+    if not re.fullmatch(SHARDED_PREFIX + r"[a-f0-9]{64}", tag):
+        raise ValueError("invalid sharded identity release tag")
+    name = f"identity-manifest-{tag.removeprefix(SHARDED_PREFIX)}.json"
+    raw = files.get(name, b"")
+    if (not 0 < len(raw) <= MAX_MANIFEST_BYTES
+        or hashlib.sha256(raw).hexdigest() != tag.removeprefix(SHARDED_PREFIX)):
+        raise ValueError("identity manifest checksum/size mismatch")
+    manifest = json.loads(raw)
+    if (not isinstance(manifest, dict) or manifest.get("schemaVersion") != "2.0.0"
+        or manifest.get("sharding") != "cik-modulo-16"
+        or not isinstance(manifest.get("shards"), list)
+        or not 1 <= len(manifest["shards"]) <= MAX_SHARDS):
+        raise ValueError("invalid identity shard manifest")
+    rows = []
+    expected = {name}
+    expanded_total = 0
+    for shard in manifest["shards"]:
+        if (not isinstance(shard, dict)
+            or set(shard) != {"bucket", "part", "file", "sha256", "byteLength",
+                              "expandedBytes", "observationCount"}
+            or type(shard["bucket"]) is not int or not 0 <= shard["bucket"] < 16
+            or type(shard["part"]) is not int or shard["part"] < 0
+            or any(type(shard[field]) is not int or shard[field] <= 0
+                   for field in ("byteLength", "expandedBytes", "observationCount"))
+            or not isinstance(shard["file"], str)
+            or not re.fullmatch(r"identities-[a-f0-9]{64}\.json\.gz", shard["file"])
+            or shard["file"] in expected
+            or shard["expandedBytes"] > MAX_BYTES):
+            raise ValueError("invalid identity shard inventory")
+        expected.add(shard["file"])
+        expanded_total += shard["expandedBytes"]
+        if expanded_total > MAX_BUNDLE_BYTES:
+            raise ValueError("expanded identity bundle exceeds size limit")
+        content = files.get(shard["file"], b"")
+        if (len(content) != shard["byteLength"]
+            or hashlib.sha256(content).hexdigest() != shard["sha256"]):
+            raise ValueError("identity shard checksum/size mismatch")
+        decoded = decode_identity_history(shard["file"], content)
+        actual_expanded = len(json.dumps({"schemaVersion": "1.0.0", "observations": decoded},
+                                        sort_keys=True, separators=(",", ":"),
+                                        allow_nan=False).encode())
+        if (len(decoded) != shard["observationCount"]
+            or actual_expanded != shard["expandedBytes"]
+            or any(int(row["cik"]) % 16 != shard["bucket"] for row in decoded)):
+            raise ValueError("identity shard issuer/row inventory mismatch")
+        rows.extend(decoded)
+    if set(files) != expected or encode_identity_bundle(rows) != (tag, files):
+        raise ValueError("identity bundle is not canonical or has extra/missing assets")
+    return merge_observations(rows, [])
+
+
 class ReleaseIdentityStore:
     def __init__(self, repository: str, *, target: str) -> None:
         self.transport = ReleaseCheckpointStore(repository, target=target)
 
-    def _download(self, release: dict[str, Any]) -> list[dict[str, Any]]:
+    def _download(self, release: dict[str, Any], *, allow_draft: bool = False,
+                  ) -> list[dict[str, Any]]:
         tag = release["tag_name"]
+        if tag.startswith(SHARDED_PREFIX):
+            return self._download_sharded(release, allow_draft=allow_draft)
         if not re.fullmatch(PREFIX + r"[a-f0-9]{64}", tag):
             raise ValueError("invalid identity release tag")
         name = f"identities-{tag.removeprefix(PREFIX)}.json.gz"
@@ -137,10 +247,42 @@ class ReleaseIdentityStore:
                 raise ValueError("identity download size mismatch")
             return decode_identity_history(name, path.read_bytes())
 
+    def _download_sharded(self, release: dict[str, Any], *, allow_draft: bool,
+                          ) -> list[dict[str, Any]]:
+        tag, assets = release["tag_name"], release["assets"]
+        if (not re.fullmatch(SHARDED_PREFIX + r"[a-f0-9]{64}", tag)
+            or (release["draft"] and not allow_draft) or not release["prerelease"]
+            or not 2 <= len(assets) <= MAX_SHARDS + 1):
+            raise ValueError("incomplete sharded identity release")
+        manifest_name = f"identity-manifest-{tag.removeprefix(SHARDED_PREFIX)}.json"
+        inventory: dict[str, int] = {}
+        for asset in assets:
+            name = asset["name"]
+            limit = MAX_MANIFEST_BYTES if name == manifest_name else MAX_BYTES
+            if (name in inventory or asset["state"] != "uploaded"
+                or not 0 < asset["size"] <= limit
+                or (name != manifest_name
+                    and not re.fullmatch(r"identities-[a-f0-9]{64}\.json\.gz", name))):
+                raise ValueError("invalid identity release asset inventory")
+            inventory[name] = asset["size"]
+        if manifest_name not in inventory or sum(inventory.values()) > MAX_BUNDLE_BYTES:
+            raise ValueError("identity release asset budget exceeded")
+        with tempfile.TemporaryDirectory(prefix="ite-identity-shards-") as temporary:
+            self.transport._gh("release", "download", tag, "--repo", self.transport.repository,
+                               "--dir", temporary)
+            files = {}
+            for name, size in inventory.items():
+                path = Path(temporary) / name
+                if path.is_symlink() or path.stat().st_size != size:
+                    raise ValueError("identity download size mismatch")
+                files[name] = path.read_bytes()
+            return decode_identity_bundle(tag, files)
+
     def latest(self) -> list[dict[str, Any]] | None:
         matches = [item for item in self.transport._releases()
-                   if item["tag_name"].startswith(PREFIX) and not item["draft"]]
-        return self._download(max(matches, key=lambda item: int(item["id"]))) if matches else None
+                   if item["tag_name"].startswith((PREFIX, SHARDED_PREFIX)) and not item["draft"]]
+        return self._download(max(matches, key=lambda item: (
+            item["tag_name"].startswith(SHARDED_PREFIX), int(item["id"])))) if matches else None
 
     def persist(self, rows: list[dict[str, Any]]) -> dict[str, str]:
         self.transport._inventory = None
@@ -148,16 +290,19 @@ class ReleaseIdentityStore:
         combined = merge_observations(previous, rows)
         if merge_observations(rows, []) != combined:
             raise ValueError("identity publication would discard prior observations")
-        name, content = encode_identity_history(rows)
-        tag = PREFIX + hashlib.sha256(content).hexdigest()
+        tag, files = encode_identity_bundle(rows)
         existing = next((item for item in self.transport._releases()
                          if item["tag_name"] == tag), None)
+        sharded = tag.startswith(SHARDED_PREFIX)
         if existing is None:
             with tempfile.TemporaryDirectory(prefix="ite-identity-upload-") as temporary:
-                path = Path(temporary) / name
-                path.write_bytes(content)
+                for name, content in files.items():
+                    (Path(temporary) / name).write_bytes(content)
+                first = next(name for name in files if name.startswith("identity-manifest-")) \
+                    if sharded else next(iter(files))
                 self.transport._gh(
-                    "release", "create", tag, str(path), "--repo", self.transport.repository,
+                    "release", "create", tag, str(Path(temporary) / first),
+                    *(("--draft",) if sharded else ()), "--repo", self.transport.repository,
                     "--target", self.transport.target, "--prerelease", "--latest=false",
                     "--title", "SEC point-in-time identity observations", "--notes",
                     "Public issuer metadata only; no raw/cache payloads or credentials. "
@@ -168,7 +313,29 @@ class ReleaseIdentityStore:
             ))
             if self.transport._inventory is not None:
                 self.transport._inventory.append(existing)
-        if encode_identity_history(self._download(existing)) != (name, content):
+        if sharded and existing["draft"]:
+            present = {asset["name"] for asset in existing["assets"]}
+            if not present <= set(files):
+                raise ValueError("identity draft contains unexpected assets")
+            missing = sorted(set(files) - present)
+            with tempfile.TemporaryDirectory(prefix="ite-identity-parts-") as temporary:
+                for name in missing:
+                    (Path(temporary) / name).write_bytes(files[name])
+                for index in range(0, len(missing), 16):
+                    self.transport._gh("release", "upload", tag,
+                                       *(str(Path(temporary) / name)
+                                         for name in missing[index:index + 16]),
+                                       "--repo", self.transport.repository)
+            existing = json.loads(self.transport._gh(
+                "api", f"repos/{self.transport.repository}/releases/tags/{tag}"))
+            if encode_identity_bundle(self._download(existing, allow_draft=True)) != (tag, files):
+                raise ValueError("remote identity draft differs from local history")
+            self.transport._gh("release", "edit", tag, "--draft=false",
+                               "--repo", self.transport.repository)
+            existing = json.loads(self.transport._gh(
+                "api", f"repos/{self.transport.repository}/releases/tags/{tag}"))
+        if encode_identity_bundle(self._download(existing)) != (tag, files):
             raise ValueError("remote identity evidence differs from local history")
+        self.transport._inventory = None  # A draft's cached inventory is no longer authoritative.
         return {"storageStatus": "VERIFIED", "tag": tag,
                 "url": f"https://github.com/{self.transport.repository}/releases/tag/{tag}"}
