@@ -12,7 +12,14 @@ export function dateOffset(day: string, offset: number): string {
   return value.toISOString().slice(0, 10);
 }
 
-const endOfDay = (day: string) => Date.parse(`${day}T23:59:59.999Z`);
+const secTimezone = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', timeZoneName: 'longOffset' });
+// The index date is a New York civil day. Noon establishes that day's end-of-day
+// offset even on a DST transition; UTC midnight would omit late US filings.
+export function secDayEnd(day: string): number {
+  const offset = secTimezone.formatToParts(new Date(`${day}T12:00:00Z`))
+    .find((part) => part.type === 'timeZoneName')!.value.replace('GMT', '');
+  return Date.parse(`${day}T23:59:59.999${offset}`);
+}
 const ratio = (buys: number, sales: number) => sales ? buys / sales : null;
 
 /** A descriptive count ratio, never a calibrated forecast of market extremes. */
@@ -43,7 +50,7 @@ export function buildInsiderBarometer(data: ResearchSnapshot, sector = 'All sect
       || sector !== 'All sectors' && (company.sector ?? 'Unmapped') !== sector) return false;
     if (row.secDay == null) { missingLineage++; return false; }
     if (!latestDay || !historyStart || row.secDay > latestDay || row.transactionDate < historyStart
-      || row.transactionDate > latestDay || Math.max(Date.parse(row.knownAt), Date.parse(row.acceptedAt)) > Math.min(asOf, endOfDay(latestDay))) return false;
+      || row.transactionDate > latestDay) return false;
     if (seen.has(row.eventId)) return false;
     seen.add(row.eventId);
     return true;
@@ -51,11 +58,12 @@ export function buildInsiderBarometer(data: ResearchSnapshot, sector = 'All sect
   const windowPartial = (from: string, to: string) => !firstDay || from < firstDay
     || !latestDay || to > latestDay
     || expected.some((day) => day >= from && day <= to && !evidence.get(day)?.complete);
-  const count = (from: string, to: string, cutoff: string) => {
+  const count = (from: string, to: string, cutoff: string, currentKnowledge: boolean) => {
     let buys = 0, sales = 0;
+    const knownBy = currentKnowledge ? asOf : Math.min(asOf, secDayEnd(cutoff));
     for (const row of eligible) {
       if (row.transactionDate < from || row.transactionDate > to || row.secDay! > cutoff
-        || Math.max(Date.parse(row.knownAt), Date.parse(row.acceptedAt)) > Math.min(asOf, endOfDay(cutoff))) continue;
+        || Math.max(Date.parse(row.knownAt), Date.parse(row.acceptedAt)) > knownBy) continue;
       if (row.side === 'BUY') buys++; else sales++;
     }
     return { buys, sales, ratio: ratio(buys, sales) };
@@ -68,16 +76,18 @@ export function buildInsiderBarometer(data: ResearchSnapshot, sector = 'All sect
   const bases = new Set(benchmarks.map((row) => `${row.isAdjusted}:${row.adjustmentBasis}`));
   const spyReason = !benchmarks.length ? 'SPY observations are unavailable in this snapshot.'
     : bases.size > 1 ? 'SPY adjustment basis changes within this window; comparison is unavailable.' : null;
-  const spyFor = (from: string, to: string): BenchmarkPoint | undefined => spyReason ? undefined
-    : benchmarks.findLast((row) => row.date >= from && row.date <= to
-      && (row.availableAt == null || Date.parse(row.availableAt) <= Math.min(asOf, endOfDay(to))));
-  const point = (label: string, from: string, to: string, cutoff: string): RatioPoint => {
+  const spyFor = (from: string, to: string): BenchmarkPoint | undefined => {
+    const knownBy = Math.min(asOf, secDayEnd(to));
+    return spyReason ? undefined : benchmarks.findLast((row) => row.date >= from && row.date <= to
+      && (row.availableAt == null || Date.parse(row.availableAt) <= knownBy));
+  };
+  const point = (label: string, from: string, to: string, cutoff: string, currentKnowledge = false): RatioPoint => {
     const spy = spyFor(from, to);
-    return { label, start: from, end: to, ...count(from, to, cutoff),
+    return { label, start: from, end: to, ...count(from, to, cutoff, currentKnowledge),
       partial: windowPartial(from, to), mean3m: null, spy: spy?.price ?? null, spyDate: spy?.date ?? null };
   };
   const rolling = complete.filter((day) => start != null && day >= start).map((day) =>
-    point(day, dateOffset(day, -29), day, day));
+    point(day, dateOffset(day, -29), day, day, day === latestDay));
   const monthly: RatioPoint[] = [];
   if (historyStart && latestDay) {
     const cursor = new Date(`${historyStart}T00:00:00Z`);
@@ -86,7 +96,7 @@ export function buildInsiderBarometer(data: ResearchSnapshot, sector = 'All sect
       cursor.setUTCMonth(cursor.getUTCMonth() + 1);
       const to = dateOffset(cursor.toISOString().slice(0, 10), -1);
       const actualTo = to > latestDay ? latestDay : to;
-      const row = point(from.slice(0, 7), from, actualTo, latestDay);
+      const row = point(from.slice(0, 7), from, actualTo, latestDay, true);
       row.partial ||= actualTo !== to;
       monthly.push(row);
     }

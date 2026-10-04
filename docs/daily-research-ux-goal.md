@@ -138,7 +138,11 @@ without an observed ledger/provider result.
   regression cases cover offset-local dates and held events. A newer incomplete
   SEC day is explicitly disclosed rather than silently substituted as complete.
 - Local typecheck/lint/build pass. Focused desktop/mobile regressions pass.
-  Full CI, merge and final public verification remain pending for this package.
+  [PR 35](https://github.com/Garrincha077/insider-turning-engine/pull/35) merged
+  after green CI: 694 Python cases, 88.80% core branch coverage, 196 desktop/mobile
+  cases. All retained tabs were inspected against actual data at 1440/390px;
+  meaningful content, no browser errors or whole-page horizontal overflow.
+  Its public deployment is queued behind the running refresh.
 
 ## Operational evidence and exact remaining proof
 
@@ -155,3 +159,22 @@ without an observed ledger/provider result.
   cycles. Sunday has no scheduled cycle. A fresh scheduled digest/provider
   result and the new public v2.3 benchmark output remain required proof; neither
   is replaced by a green build or an enabled policy.
+
+## SEC-day boundary correction
+
+- Actual Oct 2 data contains 41 eligible events (3 buys, 38 sales) accepted
+  after UTC midnight but still during the same New York SEC day. More broadly,
+  all 253 eligible Oct 2 events were known locally after the SEC day ended.
+  Capping a current snapshot at the source day-end excluded these valid imports.
+- Historical rolling points use America/New_York day end with the actual
+  summer/winter offset, capped at as-of. The latest point and calendar-month
+  revisions include imports known by the current as-of, while still excluding
+  incomplete/newer SEC days and future knowledge. They are not archived live
+  historical readings; that distinction is explicit in the calculation notes.
+- Against the exact same Oct 4 snapshot, current 30D counts change from 788/4,612
+  to 824/4,863 (0.16944x). Partial October changes to 32/200 (0.16x); it is not a
+  full-month estimate. No source amounts or transactions are modified.
+- Regression checks cover summer, winter, both DST transitions, late US-evening
+  acceptance, knowledge after historical day end and current-snapshot imports.
+  Type/lint/build and 36 focused desktop/mobile cases pass. Parser, scores and
+  digest policy are unchanged. A separate PR/CI gate covers this display fix.
