@@ -32,7 +32,7 @@ const descriptions: Record<string, string> = {
   'live-sec-tape': 'Source-linked SEC records, including companies without complete research scores.',
   'turning-stocks': 'Recorded accumulation, base and turn states. These are research classifications, not trade recommendations.',
   divergence: 'Adjust the visible screening thresholds without changing the score methodology.',
-  'smart-buys': 'Observed open-market purchases, largest first. This is not a recommendation list.',
+  'smart-buys': 'Observed qualified SEC purchases, largest first. Code P can include private transactions; this is not a recommendation list.',
   clusters: 'Independent reporting-owner evidence is required; a high cluster score alone is not proof.',
   'cost-basis': 'Observed purchase prices, not insiders’ complete holdings or a price target.',
   'company-lab': 'Explore one company and open the underlying SEC records.',

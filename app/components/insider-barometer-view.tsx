@@ -7,6 +7,7 @@ import { EChart } from './echart';
 
 const RESEARCH_URL = 'https://www.gurufocus.com/news/99283/guru-insider-research-ii-can-aggregated-insider-trading-activities-predict-the-market';
 const REFERENCE_URL = 'https://www.gurufocus.com/economic_indicators/4359/insider-buysell-ratio-usa-overall-market';
+const SEC_CODES_URL = 'https://www.sec.gov/files/form4.pdf';
 const times = (value: number | null) => value == null ? '—' : `${metric(value, 2)}×`;
 const ratioTicks = new Intl.NumberFormat('en-US', { maximumSignificantDigits: 3 });
 
@@ -79,6 +80,7 @@ export function InsiderRatioV2({ data }: { data: ResearchSnapshot }) {
     </section>
     <details className="rounded-xl border border-border bg-card p-5 text-sm leading-6 text-muted-foreground"><summary className="cursor-pointer font-semibold text-foreground">Research context & calculation</summary>
       <p className="mt-3">Each economic event is counted once, including joint reporting owners. Effective qualified non-derivative P/S events enter only for resolved eligible companies. Unresolved amendments are excluded. A missing sale denominator is <strong className="text-foreground">—</strong>, not zero or infinity.</p>
+      <p className="mt-3" data-testid="insider-ratio-transaction-scope"><a href={SEC_CODES_URL} target="_blank" rel="noreferrer" className="text-emerald-200 underline">SEC Form 4 transaction codes</a> P and S can include exchange trades or private transactions. The code alone does not prove execution at a market price; this export does not separately verify that distinction. GuruFocus’s study excluded private placements at non-market prices, another reason its thresholds are not directly transferable.</p>
       <p className="mt-3">Historical SEC-day availability ends at midnight in America/New_York, including US-evening filings recorded after UTC midnight. The current reading and calendar months include imports known at the snapshot as-of instant, even if ingestion occurred after the latest complete SEC day. Earlier rolling readings never use that later knowledge.</p>
       <p className="mt-3">GuruFocus’s <a href={RESEARCH_URL} target="_blank" rel="noreferrer" className="text-emerald-200 underline">2010 public study</a> examined monthly open-market transaction counts from 2004, principally CEO examples. Buying increased during the 2008–09 decline. This supports viewing insider activity alongside prices, but does not establish a universal threshold or prove that a low ratio predicts a top. Our chart includes all reporting-owner roles and our observed eligible population.</p>
       <p className="mt-3">Its <a href={REFERENCE_URL} target="_blank" rel="noreferrer" className="text-emerald-200 underline">public overall-market indicator</a> listed a long-term mean of 0.39× when reviewed on 4 October 2026. This is a documented external reference, not our historical mean or a trading threshold. Cohort, security filtering and history are not demonstrated identical, so we do not copy buy/sell cutoffs or derive a z-score from that mean.</p>

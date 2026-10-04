@@ -15,7 +15,7 @@ rules are preserved. Unrelated local diagnostics are not part of this change.
 | 1. Candidate discovery | Radar, buys and clusters explain actual purchases and reporting roles; joint filers never inflate dollars or independent decisions | Grain/window/null regressions; desktop/mobile filtered drill-down | Published PR 32; factual shortlist follow-up below |
 | 2. Accumulation and turn | Recorded phases are distinct; a few available price/RS checks explain support and missing evidence | Future invariance; missing-history checks; phase filtering | Published PR 32 |
 | 3. Company Lab | Separate aligned price, volume and RS panels; dated actual transaction markers and today's observed basis | Chart options, marker/basis tests; rendered desktop/mobile review | Published PR 32; adjustment-label clarification below |
-| 4. Market barometer | Own SEC event ratios aligned with SPY; source-scoped GuruFocus references rather than short-history BUY/SELL claims | Definition/population comparison; shared period; absent benchmark/history behavior | PR 34 merged after green CI; fresh v2.3 public data pending |
+| 4. Market barometer | Own SEC event ratios aligned with SPY; source-scoped GuruFocus references rather than short-history BUY/SELL claims | Definition/population comparison; shared period; absent benchmark/history behavior | Published PR 34/36; actual v2.3 SPY rendered and independently verified |
 | 5. Tracking | Local watchlist exposes actual new purchases/clusters/state changes between snapshots | Prior/current snapshot tests; candidate-to-Lab-to-watchlist flow | Published PR 33; actual public flow verified |
 
 Cross-cutting: all retained views useful and honest, readable dark English UI,
@@ -211,3 +211,21 @@ without an observed ledger/provider result.
 - Type/lint/build, 28 barometer cases and six focused desktop/mobile
   candidate/navigation/transfer cases pass. Rendered local mobile navigation
   confirms scroll reset without whole-page overflow. Full CI covers this package.
+
+## Transaction-code scope clarification
+
+- [SEC Form 4 instructions](https://www.sec.gov/files/form4.pdf), instruction 8,
+  define P/S to include exchange or private purchases/sales. Our existing parser
+  maps those codes to its legacy open-market classification; that mapping is not
+  independent proof of execution venue or market-price terms.
+- Insider Buys and the digest preview now call these qualified reported SEC
+  purchases. Barometer calculation details disclose the private-transaction
+  limitation alongside GuruFocus's exclusion of non-market-price placements.
+  Parser, eligibility, scores, source amounts and Telegram selection are unchanged.
+- PR 38 merged after all Python/dashboard CI checks succeeded: 694 Python tests,
+  88.80% core branch coverage, strict mypy, lint/type/build and 226 desktop/mobile
+  cases. Its UI deployment queues behind the single running recovery refresh.
+- Public v2.3 run `run_research_20261004T185540Z` has complete latest SEC day
+  2026-10-02 and actual same-period SPY. Market coverage is 1332/1872 (71.15%),
+  below the accepted 80%: 540 symbols exhausted the shard time budget. Recovery
+  run 37230735273 has digest sending disabled; its result remains unproven.
