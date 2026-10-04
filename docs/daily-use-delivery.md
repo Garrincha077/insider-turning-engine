@@ -65,6 +65,12 @@ latest closed XNYS session, including over weekends and holidays. A missing new
 session forces refresh despite an unexpired TTL. Each of the three bounded
 market shards has 30 minutes; the producer has a 60-minute workflow limit.
 The 90% coverage target and benchmark freshness checks are unchanged.
+Production overlaps the two provider requests instead of adding their latencies.
+One shared source pool per shard caps concurrency at eight requests (four symbols
+across two sources), with at most three shards. Source order still breaks freshness
+ties, every successful source is cross-checked, and HTTP clients close only after
+in-flight requests and cache writes finish. No extra retries or wider time budget
+are introduced; SEC request pacing and score/digest policies are unaffected.
 
 Identity history remains append-only in immutable Releases. Small legacy v1
 archives are readable; larger v2 releases use CIK buckets and bounded chunks

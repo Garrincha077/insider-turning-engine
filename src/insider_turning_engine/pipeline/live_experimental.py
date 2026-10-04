@@ -224,7 +224,8 @@ def _fetch_market(
             ),
             YahooChartProvider(cache_dir=cache_dir, timeout=8.0,
                                required_cache_session=required_cache_session),
-        )
+        ),
+        max_source_workers=2 * max_workers,
     )
     bars: dict[str, tuple[DailyBar, ...]] = {}
     failures: dict[str, str] = {}

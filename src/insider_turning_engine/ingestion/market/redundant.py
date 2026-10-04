@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Protocol
@@ -30,16 +31,23 @@ class RedundantEODProvider:
         providers: Sequence[EODSource],
         *,
         adjusted_close_tolerance: Decimal = Decimal("0.05"),
+        max_source_workers: int = 1,
     ) -> None:
         if len(providers) < 2:
             raise ValueError("redundant EOD provider requires at least two sources")
         if adjusted_close_tolerance <= 0 or adjusted_close_tolerance > Decimal("0.25"):
             raise ValueError("adjusted close tolerance must be in (0, 0.25]")
+        if not 1 <= max_source_workers <= 8:
+            raise ValueError("source workers must be between 1 and 8")
         self.providers = tuple(providers)
         self.adjusted_close_tolerance = adjusted_close_tolerance
         self.selected_provider: dict[str, str] = {}
         self.cross_validated_symbols: set[str] = set()
         self.failures: dict[str, dict[str, str]] = {}
+        # One shared pool bounds all source requests, including concurrent
+        # callers. Never create a separate pool (and unbounded threads) per symbol.
+        self._executor = (ThreadPoolExecutor(max_workers=max_source_workers)
+                          if max_source_workers > 1 else None)
 
     def fetch_daily(
         self,
@@ -55,11 +63,14 @@ class RedundantEODProvider:
         self.failures.pop(normalized, None)
         successes: list[tuple[str, tuple[DailyBar, ...]]] = []
         errors: dict[str, str] = {}
-        for provider in self.providers:
+        jobs = ([self._executor.submit(provider.fetch_daily, normalized)
+                 for provider in self.providers] if self._executor is not None else None)
+        for index, provider in enumerate(self.providers):
             try:
                 rows = tuple(
                     row
-                    for row in provider.fetch_daily(normalized)
+                    for row in (jobs[index].result() if jobs is not None
+                                else provider.fetch_daily(normalized))
                     if (start is None or row.date >= start)
                     and (end is None or row.date <= end)
                     and (as_of is None or row.date <= as_of)
@@ -131,6 +142,9 @@ class RedundantEODProvider:
         )
 
     def close(self) -> None:
+        # In-flight source/cache writes must finish before closing HTTP clients.
+        if self._executor is not None:
+            self._executor.shutdown(wait=True)
         for provider in self.providers:
             provider.close()
 
