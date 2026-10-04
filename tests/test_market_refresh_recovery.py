@@ -10,7 +10,8 @@ from insider_turning_engine.pipeline import live_experimental as live
 
 
 class FakeProvider:
-    def __init__(self, providers):
+    def __init__(self, providers, *, max_source_workers):
+        assert 2 <= max_source_workers <= 8
         for provider in providers:
             assert provider.client.timeout.read == 8.0
             provider.close()
@@ -27,8 +28,9 @@ def test_parallel_fetch_is_bounded_and_preserves_deterministic_inventory(tmp_pat
     instances = []
 
     class Provider(FakeProvider):
-        def __init__(self, providers):
-            super().__init__(providers)
+        def __init__(self, providers, *, max_source_workers):
+            assert max_source_workers == 8
+            super().__init__(providers, max_source_workers=max_source_workers)
             instances.append(self)
 
         def fetch_daily(self, symbol):
