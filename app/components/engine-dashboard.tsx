@@ -27,7 +27,7 @@ const researchViews = new Set([
 const descriptions: Record<string, string> = {
   radar: 'Explore the companies in this snapshot. Missing scores do not hide SEC activity.',
   'market-pulse': 'Observed activity in the exported population — not a census of the US market.',
-  'insider-ratio': 'Daily-refreshed SEC purchase/sale event ratio, modeled on the familiar monthly market barometer without a three-month publication delay.',
+  'insider-ratio': 'Our observed SEC buy/sell event counts alongside SPY. Public historical research supplies context, not a forecast of market tops or bottoms.',
   'live-sec-tape': 'Source-linked SEC records, including companies without complete research scores.',
   'turning-stocks': 'Recorded accumulation, base and turn states. These are research classifications, not trade recommendations.',
   divergence: 'Adjust the visible screening thresholds without changing the score methodology.',
@@ -127,6 +127,7 @@ export function EngineDashboard() {
   if (!publication) return <main className="grid min-h-screen place-items-center p-6"><output>Checking snapshot schema and integrity…</output></main>;
   const { data, manifest, settings } = publication;
   const view = route.view;
+  const detailedReady = !publication.researchAvailable || Boolean(data.research);
   const company = catalog.find((item) => route.issuer ? item.issuerCik === route.issuer : item.ticker === (route.ticker || selected)) ?? (!route.issuer && !route.ticker ? catalog[0] : undefined);
   const title = views.find(([id]) => id === view)?.[1] ?? 'Radar';
   const tableProps = { data, catalog, watchlist, toggleWatch, openCompany, timezone, insights, technical };
@@ -154,7 +155,8 @@ export function EngineDashboard() {
           <span className="text-amber-200">{scoreLabel}</span><span>{data.scoreVersion}</span><span>Score snapshot: {instant(manifest.asOf, timezone)}</span><SnapshotAge asOf={manifest.asOf} /><span>Market through: {manifest.watermarks.marketSessionThrough ?? 'unavailable'}</span>
           {data.status === 'STALE' && <output className="text-rose-300">Source reports stale data. Check System Health.</output>}
         </div>
-        {publication.researchAvailable && !data.research && researchViews.has(view) && <output className="block rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-4 text-sm text-emerald-100">Loading and verifying detailed SEC research… The compact dashboard is already available.</output>}
+        {publication.researchAvailable && !data.research && researchViews.has(view) && <output className="block rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-4 text-sm text-emerald-100">Loading and verifying detailed SEC research… Detailed facts and phases appear only after validation.</output>}
+        {detailedReady && <>
         {view === 'radar' && <><WatchlistUpdates data={data} catalog={catalog} watched={watchlist} changes={watchChanges} comparedAt={tracking?.previous?.asOf ?? null} timezone={timezone} openCompany={openCompany} /><CompanyTable {...tableProps} mode="radar" /></>}
         {view === 'turning-stocks' && <CompanyTable key="turning" {...tableProps} mode="turning" />}
         {view === 'divergence' && <CompanyTable key="divergence" {...tableProps} mode="divergence" />}
@@ -165,6 +167,7 @@ export function EngineDashboard() {
         {view === 'clusters' && (data.research ? <ClustersV2 data={data.research} openCompany={openCompany} /> : <ClusterView />)}
         {view === 'cost-basis' && (data.research ? <BasisV2 data={data.research} openCompany={openCompany} /> : <CostBasisView catalog={catalog} openCompany={openCompany} />)}
         {view === 'company-lab' && <><button className={controlClass} onClick={() => navigate(previousView)}>← Back to {views.find(([id]) => id === previousView)?.[1]}</button>{company ? <CompanyLab {...tableProps} company={company} /> : <EmptyState title="Company not in this snapshot" detail="This shared issuer link cannot be resolved from the published company catalogue. Return to Radar to choose an available company." />}</>}
+        </>}
         {view === 'backtest-lab' && <MethodologyView data={data} manifest={manifest} />}
         {view === 'system-health' && <SystemHealthView manifest={manifest} research={data.research} settings={settings} />}
         {view === 'data-coverage' && (data.research ? <CoverageV2 data={data.research} /> : <DataCoverageView manifest={manifest} />)}

@@ -79,6 +79,64 @@
       "title": "BasisWindow",
       "type": "object"
     },
+    "BenchmarkPoint": {
+      "additionalProperties": false,
+      "description": "Actual benchmark close; adjustment/source metadata must survive export.",
+      "properties": {
+        "symbol": {
+          "const": "SPY",
+          "default": "SPY",
+          "title": "Symbol",
+          "type": "string"
+        },
+        "date": {
+          "format": "date",
+          "title": "Date",
+          "type": "string"
+        },
+        "price": {
+          "exclusiveMinimum": 0,
+          "title": "Price",
+          "type": "number"
+        },
+        "provider": {
+          "minLength": 1,
+          "title": "Provider",
+          "type": "string"
+        },
+        "isAdjusted": {
+          "title": "Isadjusted",
+          "type": "boolean"
+        },
+        "adjustmentBasis": {
+          "minLength": 1,
+          "title": "Adjustmentbasis",
+          "type": "string"
+        },
+        "availableAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Availableat"
+        }
+      },
+      "required": [
+        "date",
+        "price",
+        "provider",
+        "isAdjusted",
+        "adjustmentBasis"
+      ],
+      "title": "BenchmarkPoint",
+      "type": "object"
+    },
     "Cluster": {
       "additionalProperties": false,
       "properties": {
@@ -886,12 +944,13 @@
   "additionalProperties": false,
   "properties": {
     "schemaVersion": {
+      "default": "2.0.0",
       "enum": [
         "2.0.0",
         "2.1.0",
-        "2.2.0"
+        "2.2.0",
+        "2.3.0"
       ],
-      "default": "2.0.0",
       "title": "Schemaversion",
       "type": "string"
     },
@@ -954,6 +1013,13 @@
         "$ref": "#/$defs/SeriesPoint"
       },
       "title": "Companyseries",
+      "type": "array"
+    },
+    "benchmarkSeries": {
+      "items": {
+        "$ref": "#/$defs/BenchmarkPoint"
+      },
+      "title": "Benchmarkseries",
       "type": "array"
     },
     "coverage": {

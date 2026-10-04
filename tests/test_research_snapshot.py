@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from insider_turning_engine.domain.research import DayEvidence, ResearchSnapshot
+from insider_turning_engine.domain.research import BenchmarkPoint, DayEvidence, ResearchSnapshot
 from insider_turning_engine.export.dashboard import (
     DashboardExportError,
     export_dashboard,
@@ -93,6 +93,90 @@ def test_future_or_after_close_observations_do_not_change_snapshot():
     future.timestamps.knowledge_at = POINT - timedelta(days=1)
     future.transaction.transaction_date = POINT.date() + timedelta(days=1)
     assert _build([original]).model_dump_json() == _build([original, future]).model_dump_json()
+
+
+def _benchmark(**overrides):
+    return BenchmarkPoint(**{
+        "date": POINT.date(), "price": 640.25, "provider": "actual-source",
+        "is_adjusted": True, "adjustment_basis": "adjclose-ratio-applied-to-ohlc",
+        "available_at": POINT - timedelta(hours=1), **overrides,
+    })
+
+
+def test_benchmarks_opt_into_v23_preserve_metadata_and_keep_legacy_default():
+    legacy = _build([_record()])
+    assert legacy.schema_version == "2.0.0"
+    assert legacy.benchmark_series == []
+    empty = _build([_record()], benchmark_series=[])
+    assert empty.schema_version == "2.3.0" and empty.benchmark_series == []
+    benchmark = _benchmark()
+    snapshot = _build([_record()], benchmark_series=[benchmark])
+    assert snapshot.schema_version == "2.3.0"
+    assert snapshot.benchmark_series == [benchmark]
+    exported = snapshot.model_dump(by_alias=True, mode="json")["benchmarkSeries"][0]
+    assert exported == {
+        "symbol": "SPY", "date": POINT.date().isoformat(), "price": 640.25,
+        "provider": "actual-source", "isAdjusted": True,
+        "adjustmentBasis": "adjclose-ratio-applied-to-ohlc",
+        "availableAt": (POINT - timedelta(hours=1)).isoformat().replace("+00:00", "Z"),
+    }
+
+
+@pytest.mark.parametrize(("fixture", "missing_code", "version"), [
+    ("form4_derivative_amount.xml", False, "2.1.0"),
+    ("form4_derivative.xml", True, "2.2.0"),
+])
+def test_benchmark_opt_in_preserves_legacy_derivative_version_choice(
+    fixture, missing_code, version,
+):
+    xml = (Path(__file__).parent / "fixtures" / fixture).read_text()
+    if missing_code:
+        xml = xml.replace("<transactionCode>M</transactionCode>", "", 1)
+    parsed = parse_sec_xml(xml.encode(), {
+        "accession_number": "0001234567-26-000009",
+        "source_url": "https://www.sec.gov/Archives/test.xml",
+        "accepted_at": POINT - timedelta(days=3), "observed_at": POINT - timedelta(days=1),
+        "run_id": "run_benchmark_legacy_fixture_001",
+    })
+    assert parsed.records and not parsed.quarantines
+    assert _build(parsed.records).schema_version == version
+    assert _build(parsed.records, benchmark_series=[]).schema_version == "2.3.0"
+
+
+def test_future_benchmarks_do_not_change_snapshot_and_valid_rows_sort_deterministically():
+    first = _benchmark(date=POINT.date() - timedelta(days=3), price=635)
+    last = _benchmark()
+    snapshot = _build([_record()], benchmark_series=[last, first])
+    replay = _build([_record()], benchmark_series=[
+        _benchmark(date=POINT.date() + timedelta(days=1)),
+        _benchmark(date=POINT.date() - timedelta(days=1),
+                   available_at=POINT + timedelta(seconds=1)),
+        first, last,
+    ])
+    assert snapshot.model_dump_json() == replay.model_dump_json()
+    assert [row.date for row in snapshot.benchmark_series] == [first.date, last.date]
+
+
+def test_benchmark_duplicates_and_naive_availability_fail_closed():
+    benchmark = _benchmark()
+    with pytest.raises(ValueError, match="duplicate benchmark"):
+        _build([_record()], benchmark_series=[benchmark, benchmark])
+    with pytest.raises(ValueError, match="future benchmark"):
+        _build([_record()], benchmark_series=[
+            _benchmark(available_at=POINT.replace(tzinfo=None))])
+
+
+def test_public_model_rejects_future_benchmark_dates_and_availability():
+    snapshot = _build([_record()], benchmark_series=[])
+    for benchmark in [
+        _benchmark(date=POINT.date() + timedelta(days=1)),
+        _benchmark(available_at=POINT + timedelta(seconds=1)),
+        _benchmark(available_at=POINT.replace(tzinfo=None)),
+    ]:
+        payload = snapshot.model_dump(by_alias=True, mode="json")
+        payload["benchmarkSeries"] = [benchmark.model_dump(by_alias=True, mode="json")]
+        with pytest.raises(ValueError, match="future benchmark"):
+            ResearchSnapshot.model_validate(payload)
 
 
 def test_partial_window_not_claimed_complete_or_zero():

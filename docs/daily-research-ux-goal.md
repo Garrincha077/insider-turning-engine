@@ -70,7 +70,8 @@ without an observed ledger/provider result.
   merged after green Python and dashboard CI (118 desktop/mobile cases).
   Desktop/mobile visual review of the actual Oct 4 snapshot passed locally.
   [UI-only deployment](https://github.com/Garrincha077/insider-turning-engine/actions/runs/37211657371)
-  is running; public verification remains pending. No digest was requested.
+  completed successfully. Public Radar now shows factual purchase/drawdown/phase
+  columns. No digest was requested.
 - Market reference/SPY integration and actual snapshot-to-snapshot watchlist
   changes are still separate unfinished deliverables.
 
@@ -84,7 +85,29 @@ without an observed ledger/provider result.
   changes cannot become new activity.
 - Compact local baselines persist across reload and UI-only deployments. Adding
   an issuer does not fabricate its predecessor; removing it erases its baseline.
-- Local typecheck/lint/build and focused facts/storage/UI checks pass. Full
-  CI/publication are pending for this follow-up; Telegram remains unchanged.
+- Local typecheck/lint/build and focused facts/storage/UI checks pass.
+  [PR 33](https://github.com/Garrincha077/insider-turning-engine/pull/33) merged
+  after green Python/dashboard CI. Its
+  [UI-only deployment](https://github.com/Garrincha077/insider-turning-engine/actions/runs/37212893668)
+  completed successfully; browser flow verification is pending. Telegram is unchanged.
 - Next: source-scoped GuruFocus market context with actual same-period SPY;
   then remaining tab/health/coverage checks and observed daily/delivery evidence.
+
+## Market-context package checkpoint
+
+- Snapshot v2.3 carries actual SPY observations with source, adjustment basis and
+  availability. Earlier v2 versions remain readable without invented benchmarks.
+- Monthly event counts are the default; the existing daily rolling mode remains.
+  Ratio and SPY use aligned windows and separate scales. Missing denominator,
+  unavailable SPY and incomplete SEC windows stay explicit. Three-month means
+  require three fully covered calendar-month ratios, not overlapping daily points.
+- Removed short-history 20th/80th-percentile BUY/SELL labels: 20 overlapping
+  observations do not establish a long-history calibrated market-extremes signal.
+- The public GuruFocus overall-market indicator lists a mean of 0.39, reviewed
+  2026-10-04. An optional monthly/all-sector reference is clearly external. CEO
+  examples in the 2010 study cannot become all-owner universal thresholds.
+- Detailed research views wait for v2 validation rather than briefly showing a
+  potentially conflicting legacy phase during lazy loading.
+- Focused backend tests: 28 passed. Ruff and strict mypy pass. Frontend type/lint
+  and build pass; focused desktop/mobile checks pass. Full CI and fresh public
+  v2.3 producer verification remain pending. No parser/score/delivery change.

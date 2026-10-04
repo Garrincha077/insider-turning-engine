@@ -11,6 +11,7 @@ from typing import Any
 from insider_turning_engine.domain.models import CanonicalTransaction, TableType
 from insider_turning_engine.domain.research import (
     BasisWindow,
+    BenchmarkPoint,
     Cluster,
     DayEvidence,
     EconomicEvent,
@@ -175,6 +176,7 @@ def build_research_snapshot(
     expected_sec_days: Sequence[date] = (), day_evidence: Sequence[DayEvidence] = (),
     candidate_rows: Sequence[Mapping[str, Any]] = (),
     company_series: Sequence[SeriesPoint] = (),
+    benchmark_series: Sequence[BenchmarkPoint] | None = None,
     sec_day_by_accession: Mapping[str, date] | None = None,
     quarantined_issuers: frozenset[str] = frozenset(),
 ) -> ResearchSnapshot:
@@ -205,6 +207,11 @@ def build_research_snapshot(
     ):
         raise ValueError("duplicate or mixed-run research scores")
     series = [row for row in company_series if row.date <= as_of.date()]
+    benchmarks = sorted((row for row in benchmark_series or ()
+        if row.date <= as_of.date() and (row.available_at is None
+            # Keep invalid naive availability for the public model to reject.
+            or row.available_at.tzinfo is None or row.available_at <= as_of)),
+        key=lambda row: (row.symbol, row.date))
     prices = {row.issuer_cik: row.price for row in sorted(series, key=lambda item: item.date)}
     groups: dict[str, list[EconomicEvent]] = defaultdict(list)
     for row in events:
@@ -260,11 +267,13 @@ def build_research_snapshot(
     missing = sorted(expected - evidence.keys())
     incomplete = missing or any(not row.complete for row in day_evidence) or not expected
     return ResearchSnapshot(
-        schema_version="2.2.0" if any(row.code is None for row in events) else
+        schema_version="2.3.0" if benchmark_series is not None else
+            "2.2.0" if any(row.code is None for row in events) else
             "2.1.0" if any(row.shares is None for row in events) else "2.0.0",
         run_id=run_id, as_of=as_of, score_version="scoring.v1", companies=companies,
         economic_transactions=events, reporting_owners=owners, research_scores=scores,
         clusters=_clusters(events, as_of=as_of), company_series=series,
+        benchmark_series=benchmarks,
         coverage=ResearchCoverage(
             scope="Observed SEC filings; not a census of the US market or complete 90D history",
             expected_sec_days=sorted(expected), days=sorted(day_evidence, key=lambda row: row.day),
