@@ -5,7 +5,12 @@ from datetime import timedelta
 from pathlib import Path
 
 import pytest
-from test_identity_observations import NOW, _observation
+from test_identity_observations import (
+    NOW,
+    _common_filing,
+    _multi_listing_observation,
+    _observation,
+)
 from test_sec_checkpoints import FakeReleases
 
 from insider_turning_engine.ingestion.sec import identity_store
@@ -67,3 +72,40 @@ def test_archive_is_public_metadata_only():
     assert "SEC_USER_AGENT" not in gzip.decompress(content).decode()
     assert "test@example.com" not in gzip.decompress(content).decode()
     assert not any(Path(key).suffix == ".xml" for key in payload)
+
+
+def test_listing_proof_survives_immutable_release_readback_and_replay():
+    row = _multi_listing_observation([_common_filing()])
+    store = ReleaseIdentityStore("owner/repo", target="a" * 40)
+    store.transport = FakeReleases()
+    receipt = store.persist([row])
+    assert store.latest() == [row]
+    assert store.persist([row]) == receipt
+    assert store.latest()[0]["provenance"]["common_stock_listing_evidence"] == (
+        row["provenance"]["common_stock_listing_evidence"])
+
+
+@pytest.mark.parametrize("changes", [
+    {"source_url": "https://evil.example/data.xml"},
+    {"source_url": "https://www.sec.gov/Archives/edgar/data/x.xml?token=secret"},
+    {"source_hash": "sha256:invalid"},
+    {"issuer_cik": "0000000008"},
+    {"ticker": "OTHER"},
+    {"knowledge_at": (NOW + timedelta(seconds=1)).isoformat()},
+    {"knowledge_at": NOW.replace(tzinfo=None).isoformat()},
+    {"accepted_at": (NOW - timedelta(days=366)).isoformat()},
+    {"security_title": "Warrants for Common Stock"},
+    {"raw_xml": "not public"},
+])
+def test_listing_proof_rejects_invalid_or_private_nested_evidence(changes):
+    row = _multi_listing_observation([_common_filing()])
+    row["provenance"]["common_stock_listing_evidence"].update(changes)
+    with pytest.raises(ValueError):
+        encode_identity_history([row])
+
+
+def test_listing_proof_flag_requires_archived_evidence():
+    row = _multi_listing_observation([_common_filing()])
+    del row["provenance"]["common_stock_listing_evidence"]
+    with pytest.raises(ValueError, match="flag/evidence"):
+        encode_identity_history([row])

@@ -8,10 +8,16 @@ import io
 import json
 import re
 import tempfile
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
-from insider_turning_engine.pipeline.identity_observations import merge_observations
+from insider_turning_engine.normalization.identity import _EXCLUDED_TEXT
+from insider_turning_engine.pipeline.identity_observations import (
+    _COMMON,
+    merge_observations,
+)
 
 from .identity import COMPANY_TICKERS_EXCHANGE_URL
 from .incremental import SEC_SUBMISSIONS_URL
@@ -27,8 +33,35 @@ _FIELDS = {
 _PROVENANCE = {
     "exchange_url", "exchange_hash", "exchange_observed_at", "metadata_url", "metadata_hash",
     "metadata_observed_at", "sector_mapping_hash", "sector_mapping_version", "country_evidence",
-    "exclusion_reasons",
+    "exclusion_reasons", "common_stock_listing_evidence",
 }
+
+
+def _validate_listing_proof(row: dict[str, Any], proof: Any) -> None:
+    """Allow only bounded public SEC corroboration, never arbitrary nested data."""
+    keys = {"issuer_cik", "ticker", "accession", "source_url", "source_hash",
+            "accepted_at", "knowledge_at", "security_title"}
+    if (not isinstance(proof, dict) or set(proof) != keys
+        or any(not isinstance(value, str) for value in proof.values())
+        or proof["issuer_cik"] != row["cik"]
+        or not re.fullmatch(r"[A-Z0-9][A-Z0-9.\-]{0,14}", proof["ticker"])
+        or (row["ticker"] is not None and proof["ticker"] != row["ticker"])
+        or not re.fullmatch(r"\d{10}-\d{2}-\d{6}", proof["accession"])
+        or not re.fullmatch(r"sha256:[a-f0-9]{64}", proof["source_hash"])
+        or not 0 < len(proof["security_title"]) <= 500
+        or not _COMMON.search(proof["security_title"])
+        or _EXCLUDED_TEXT.search(proof["security_title"])):
+        raise ValueError("invalid common-stock listing proof")
+    url = urlparse(proof["source_url"])
+    if (len(proof["source_url"]) > 2000 or url.scheme != "https" or url.netloc != "www.sec.gov"
+        or not url.path.startswith("/Archives/edgar/data/") or url.query or url.fragment):
+        raise ValueError("invalid listing proof source URL")
+    known = datetime.fromisoformat(proof["knowledge_at"])
+    accepted = datetime.fromisoformat(proof["accepted_at"])
+    observed = datetime.fromisoformat(row["knowledge_at"])
+    if (known.tzinfo is None or accepted.tzinfo is None or not accepted <= known <= observed
+        or accepted < observed - timedelta(days=365)):
+        raise ValueError("invalid listing proof availability timestamp")
 
 
 def encode_identity_history(rows: list[dict[str, Any]]) -> tuple[str, bytes]:
@@ -46,6 +79,11 @@ def encode_identity_history(rows: list[dict[str, Any]]) -> tuple[str, bytes]:
                 continue
             if not isinstance(value, str) or not re.fullmatch(r"sha256:[a-f0-9]{64}", value):
                 raise ValueError("identity source checksum missing or malformed")
+        has_proof = "common_stock_listing_evidence" in evidence
+        if has_proof != ("COMMON_STOCK_LISTING_CONFIRMED" in row["quality_flags"]):
+            raise ValueError("listing proof flag/evidence mismatch")
+        if has_proof:
+            _validate_listing_proof(row, evidence["common_stock_listing_evidence"])
     raw = json.dumps({"schemaVersion": "1.0.0", "observations": ordered},
                      sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
     if len(raw) > MAX_BYTES:

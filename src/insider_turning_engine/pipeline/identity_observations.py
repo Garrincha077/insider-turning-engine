@@ -186,6 +186,7 @@ def _common_listing_proofs(
             or _EXCLUDED_TEXT.search(record.security.title)):
             continue
         proof = {"accession": record.source.accession_number,
+                 "issuer_cik": cik, "ticker": ticker, "accepted_at": accepted.isoformat(),
                  "source_url": record.source.source_url,
                  "source_hash": record.source.content_hash,
                  "knowledge_at": known.isoformat(), "security_title": record.security.title}
