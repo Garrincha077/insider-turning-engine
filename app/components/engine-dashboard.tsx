@@ -12,6 +12,7 @@ import { buildTechnicalEvidence } from '@/lib/technical-evidence';
 import { buildWatchlistChanges } from '@/lib/watchlist-changes';
 import { advanceWatchlistTracking, isWatchlistTracking, type WatchlistTracking } from '@/lib/watchlist-tracker';
 import { WatchlistUpdates } from './watchlist-updates';
+import type { SnapshotTransfer } from '@/lib/publication-transfer';
 
 const groups = [
   { label: 'Overview', views: [['radar', 'Radar'], ['market-pulse', 'Market Pulse'], ['insider-ratio', 'Insider Ratio'], ['live-sec-tape', 'Live SEC Tape']] },
@@ -51,6 +52,9 @@ export function EngineDashboard() {
   const [route, setRoute] = useState(readRoute);
   const [publication, setPublication] = useState<Awaited<ReturnType<typeof loadPublication>> | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [transfer, setTransfer] = useState<SnapshotTransfer | null>(null);
+  const [researchAttempt, setResearchAttempt] = useState(0);
+  const needsResearch = researchViews.has(route.view);
   const [watchlist, setWatchlist] = usePreference('watchlist', [], isCikList);
   const [timezone, setTimezone] = usePreference('timezone', 'Europe/Zagreb', isTimezone);
   const [savedTracking, setTracking] = usePreference<WatchlistTracking | null>('watchlist.tracking', null,
@@ -86,7 +90,7 @@ export function EngineDashboard() {
   }, []);
   useEffect(() => {
     if (!publication?.researchAvailable || publication.data.research ||
-        !researchViews.has(route.view) || error) {
+        !needsResearch || error) {
       document.documentElement.dataset.research = publication?.data.research
         ? 'ready'
         : publication?.researchAvailable ? (error ? 'error' : 'pending') : 'unavailable';
@@ -94,9 +98,11 @@ export function EngineDashboard() {
     }
     const controller = new AbortController();
     document.documentElement.dataset.research = 'loading';
-    publication.loadResearch(controller.signal).then((data) => {
-      setPublication((current) => current ? { ...current, data } : current);
-      document.documentElement.dataset.research = 'ready';
+    publication.loadResearch(controller.signal, setTransfer).then((data) => {
+      if (!controller.signal.aborted) {
+        setPublication((current) => current ? { ...current, data } : current);
+        document.documentElement.dataset.research = 'ready';
+      }
     }).catch((reason: unknown) => {
       if (!controller.signal.aborted) {
         document.documentElement.dataset.research = 'error';
@@ -104,7 +110,7 @@ export function EngineDashboard() {
       }
     });
     return () => controller.abort();
-  }, [publication, route.view, error]);
+  }, [publication, needsResearch, error, researchAttempt]);
 
   function navigate(view: string, ticker?: string) {
     const company = catalog.find((item) => item.ticker === ticker);
@@ -155,7 +161,12 @@ export function EngineDashboard() {
           <span className="text-amber-200">{scoreLabel}</span><span>{data.scoreVersion}</span><span>Score snapshot: {instant(manifest.asOf, timezone)}</span><SnapshotAge asOf={manifest.asOf} /><span>Market through: {manifest.watermarks.marketSessionThrough ?? 'unavailable'}</span>
           {data.status === 'STALE' && <output className="text-rose-300">Source reports stale data. Check System Health.</output>}
         </div>
-        {publication.researchAvailable && !data.research && researchViews.has(view) && <output className="block rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-4 text-sm text-emerald-100">Loading and verifying detailed SEC research… Detailed facts and phases appear only after validation.</output>}
+        {publication.researchAvailable && !data.research && needsResearch && <section className="rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-4 text-sm text-emerald-100" aria-live="polite">
+          <p>Loading and verifying detailed SEC research… Detailed facts and phases appear only after validation.</p>
+          {transfer && <><p className="mt-2 text-xs">{transfer.phase === 'verify' ? 'Checking schema and hashes' : 'Downloading snapshot'} · {(transfer.received / 1_000_000).toFixed(1)} / {(transfer.total / 1_000_000).toFixed(1)} MB</p><progress aria-label="Detailed snapshot download" className="mt-2 w-full" value={transfer.received} max={transfer.total} /></>}
+          <p className="mt-2 text-xs text-muted-foreground">Research tabs share this download. A stalled connection times out; integrity checks are never skipped.</p>
+          <button className={`${controlClass} mt-3`} onClick={() => setResearchAttempt((attempt) => attempt + 1)}>Restart download</button>
+        </section>}
         {detailedReady && <>
         {view === 'radar' && <><WatchlistUpdates data={data} catalog={catalog} watched={watchlist} changes={watchChanges} comparedAt={tracking?.previous?.asOf ?? null} timezone={timezone} openCompany={openCompany} /><CompanyTable {...tableProps} mode="radar" /></>}
         {view === 'turning-stocks' && <CompanyTable key="turning" {...tableProps} mode="turning" />}

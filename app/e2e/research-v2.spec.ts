@@ -361,6 +361,79 @@ test('detailed snapshot loading never presents a conflicting legacy company phas
   await expect(page.getByLabel('Ticker or company')).toBeVisible();
 });
 
+test('research navigation shares one pending transfer and exposes restart/progress controls', async ({ page }) => {
+  await v2(page);
+  let release!: () => void, requests = 0;
+  const delayed = new Promise<void>((resolve) => { release = resolve; });
+  await page.route('**/data/research-v2.json', async (route) => {
+    requests++; await delayed;
+    await route.fulfill({ json: fixture });
+  });
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Restart download' })).toBeVisible();
+  await expect(page.getByRole('progressbar', { name: 'Detailed snapshot download' })).toBeVisible();
+  await section(page, 'Insider Ratio');
+  await section(page, 'Live SEC Tape');
+  expect(requests).toBe(1);
+  release();
+  await expect(page.locator('html')).toHaveAttribute('data-research', 'ready');
+  await expect(page.locator('tbody tr')).toHaveCount(2);
+});
+
+test('a stalled research download becomes an explicit retryable error without sample fallback', async ({ page }) => {
+  await page.clock.install();
+  await v2(page);
+  let release!: () => void;
+  const delayed = new Promise<void>((resolve) => { release = resolve; });
+  await page.route('**/data/research-v2.json', async (route) => {
+    await delayed;
+    await route.fulfill({ json: fixture });
+  });
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Restart download' })).toBeVisible();
+  await page.clock.runFor(180_001);
+  await expect(page.getByRole('alert')).toContainText('download timed out');
+  await expect(page.getByRole('button', { name: 'Retry snapshot' })).toBeVisible();
+  await expect(page.getByLabel('Ticker or company')).toHaveCount(0);
+  release();
+});
+
+test('restart abandons a pending download and only publishes the verified replacement', async ({ page }) => {
+  await v2(page);
+  let release!: () => void, requests = 0;
+  const delayed = new Promise<void>((resolve) => { release = resolve; });
+  await page.route('**/data/research-v2.json', async (route) => {
+    requests++;
+    if (requests === 1) await delayed;
+    await route.fulfill({ json: fixture });
+  });
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Restart download' })).toBeVisible();
+  await page.getByRole('button', { name: 'Restart download' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-research', 'ready');
+  expect(requests).toBe(2);
+  await expect(page.locator('tbody tr')).toHaveCount(1);
+  release();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+test('a stalled manifest has a bounded retryable error before rendering data', async ({ page }) => {
+  await page.clock.install();
+  let release!: () => void;
+  const delayed = new Promise<void>((resolve) => { release = resolve; });
+  await page.route('**/data/manifest.json', async (route) => {
+    await delayed;
+    await route.fulfill({ status: 503 });
+  });
+  await page.goto('/');
+  await expect(page.getByText('Checking snapshot schema and integrity…')).toBeVisible();
+  await page.clock.runFor(30_001);
+  await expect(page.getByRole('alert')).toContainText('Publication manifest download timed out');
+  await expect(page.getByRole('button', { name: 'Retry snapshot' })).toBeVisible();
+  await expect(page.getByRole('table')).toHaveCount(0);
+  release();
+});
+
 for (const corrupt of ['future', 'duplicate'] as const) test(`v2.3 rejects ${corrupt} benchmark observations`, async ({ page }) => {
   await v2(page, (value) => {
     const research = value as unknown as ResearchSnapshot;
