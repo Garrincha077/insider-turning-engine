@@ -675,10 +675,7 @@
     "issuer_cik": "0000031791",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -744,10 +741,7 @@
     "issuer_cik": "0000034782",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -1159,10 +1153,7 @@
     "issuer_cik": "0000052827",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -1203,10 +1194,7 @@
     "issuer_cik": "0000056868",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -1380,7 +1368,7 @@
     "issuer_cik": "0000064463",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -1389,11 +1377,7 @@
     "issuer_cik": "0000065596",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_NET_BUYING_ABSENCE_SALES",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -1690,7 +1674,7 @@
     "last_evaluated_session": "2026-10-02",
     "previous_state": "FALLING",
     "reason_codes": [
-      "STATE_HELD"
+      "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
   },
@@ -1726,7 +1710,7 @@
     "last_evaluated_session": "2026-10-02",
     "previous_state": "FALLING",
     "reason_codes": [
-      "STATE_HELD"
+      "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
   },
@@ -1734,10 +1718,7 @@
     "issuer_cik": "0000080035",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -1746,10 +1727,7 @@
     "issuer_cik": "0000080420",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -1779,10 +1757,7 @@
     "issuer_cik": "0000082811",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -1791,10 +1766,7 @@
     "issuer_cik": "0000085535",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -1812,10 +1784,7 @@
     "issuer_cik": "0000088941",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -1845,10 +1814,7 @@
     "issuer_cik": "0000089800",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -1878,10 +1844,7 @@
     "issuer_cik": "0000091419",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -1911,10 +1874,7 @@
     "issuer_cik": "0000092122",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -1932,10 +1892,7 @@
     "issuer_cik": "0000093389",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -1965,10 +1922,7 @@
     "issuer_cik": "0000093751",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -1977,10 +1931,7 @@
     "issuer_cik": "0000094344",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -2165,10 +2116,7 @@
     "issuer_cik": "0000101829",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -2421,10 +2369,7 @@
     "issuer_cik": "0000230557",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -2442,7 +2387,7 @@
     "issuer_cik": "0000275880",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -2570,10 +2515,7 @@
     "issuer_cik": "0000315852",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -2582,10 +2524,7 @@
     "issuer_cik": "0000316709",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -2702,10 +2641,7 @@
     "issuer_cik": "0000350894",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -2763,7 +2699,7 @@
     "issuer_cik": "0000354963",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -2772,10 +2708,7 @@
     "issuer_cik": "0000355948",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -2889,10 +2822,7 @@
     "issuer_cik": "0000705432",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -2984,10 +2914,7 @@
     "issuer_cik": "0000709283",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -3054,10 +2981,7 @@
     "issuer_cik": "0000713676",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -3079,10 +3003,7 @@
     "issuer_cik": "0000715072",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -3150,10 +3071,7 @@
     "issuer_cik": "0000719220",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -3183,10 +3101,7 @@
     "issuer_cik": "0000720005",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -3207,10 +3122,7 @@
     "issuer_cik": "0000720672",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -3401,10 +3313,7 @@
     "issuer_cik": "0000730272",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -3422,10 +3331,7 @@
     "issuer_cik": "0000730708",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -3516,10 +3422,7 @@
     "issuer_cik": "0000744187",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -3690,10 +3593,7 @@
     "issuer_cik": "0000764038",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -3738,10 +3638,7 @@
     "issuer_cik": "0000764622",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -3917,10 +3814,7 @@
     "issuer_cik": "0000784977",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -3950,10 +3844,7 @@
     "issuer_cik": "0000785786",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -4136,7 +4027,7 @@
     "last_evaluated_session": "2026-10-02",
     "previous_state": "INSIDER_ACCUMULATION",
     "reason_codes": [
-      "STATE_HELD"
+      "STALE_DATA_HOLD"
     ],
     "state": "INSIDER_ACCUMULATION"
   },
@@ -4209,10 +4100,7 @@
     "issuer_cik": "0000804328",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -4233,10 +4121,7 @@
     "issuer_cik": "0000806172",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -4495,10 +4380,7 @@
     "issuer_cik": "0000825542",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -4512,6 +4394,17 @@
       "MISSING_COST_BASIS_RECLAIM",
       "MISSING_OPPORTUNISTIC",
       "STALE_DATA_HOLD"
+    ],
+    "state": "FALLING"
+  },
+  "0000826675": {
+    "established": true,
+    "failed_evaluations": 0,
+    "issuer_cik": "0000826675",
+    "last_evaluated_session": "2026-10-02",
+    "previous_state": "FALLING",
+    "reason_codes": [
+      "STATE_HELD"
     ],
     "state": "FALLING"
   },
@@ -4552,10 +4445,7 @@
     "issuer_cik": "0000829224",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -4588,10 +4478,7 @@
     "issuer_cik": "0000833640",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -4928,10 +4815,7 @@
     "issuer_cik": "0000861884",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -5042,10 +4926,7 @@
     "issuer_cik": "0000872589",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -5150,10 +5031,7 @@
     "issuer_cik": "0000876167",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -5313,10 +5191,7 @@
     "issuer_cik": "0000882835",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -5334,10 +5209,7 @@
     "issuer_cik": "0000883241",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -5589,10 +5461,7 @@
     "issuer_cik": "0000889900",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -5619,10 +5488,7 @@
     "issuer_cik": "0000893538",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -5751,10 +5617,7 @@
     "issuer_cik": "0000897723",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -6119,10 +5982,7 @@
     "issuer_cik": "0000916907",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -6142,10 +6002,7 @@
     "issuer_cik": "0000917273",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -6412,7 +6269,7 @@
     "last_evaluated_session": "2026-10-02",
     "previous_state": "FALLING",
     "reason_codes": [
-      "STATE_HELD"
+      "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
   },
@@ -6510,10 +6367,7 @@
     "issuer_cik": "0000943819",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -6522,10 +6376,7 @@
     "issuer_cik": "0000944075",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -6657,10 +6508,7 @@
     "issuer_cik": "0001001614",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -6764,10 +6612,7 @@
     "issuer_cik": "0001012019",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -6979,10 +6824,7 @@
     "issuer_cik": "0001022408",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -7036,10 +6878,7 @@
     "issuer_cik": "0001024478",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -7117,10 +6956,7 @@
     "issuer_cik": "0001034054",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -7175,7 +7011,7 @@
     "issuer_cik": "0001035092",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -7220,10 +7056,7 @@
     "issuer_cik": "0001037038",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -7265,10 +7098,7 @@
     "issuer_cik": "0001038074",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -7277,10 +7107,7 @@
     "issuer_cik": "0001038773",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -7313,10 +7140,7 @@
     "issuer_cik": "0001040161",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -7349,10 +7173,7 @@
     "issuer_cik": "0001040971",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -7404,10 +7225,7 @@
     "issuer_cik": "0001041803",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -7441,8 +7259,7 @@
     "last_evaluated_session": "2026-10-02",
     "previous_state": "FALLING",
     "reason_codes": [
-      "FALLING_PREDICATE_NOT_MET",
-      "NO_TRACKED_STATE_PROMOTION"
+      "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
   },
@@ -7856,7 +7673,7 @@
     "last_evaluated_session": "2026-10-02",
     "previous_state": "FALLING",
     "reason_codes": [
-      "STATE_HELD"
+      "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
   },
@@ -7977,8 +7794,7 @@
     "last_evaluated_session": "2026-10-02",
     "previous_state": "FALLING",
     "reason_codes": [
-      "FALLING_PREDICATE_NOT_MET",
-      "NO_TRACKED_STATE_PROMOTION"
+      "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
   },
@@ -7995,10 +7811,7 @@
     "issuer_cik": "0001070081",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -8068,7 +7881,7 @@
     "issuer_cik": "0001071236",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -8377,10 +8190,7 @@
     "issuer_cik": "0001093691",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -8410,10 +8220,7 @@
     "issuer_cik": "0001095651",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -8426,7 +8233,7 @@
     "last_evaluated_session": "2026-10-02",
     "previous_state": "FALLING",
     "reason_codes": [
-      "STATE_HELD"
+      "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
   },
@@ -8532,10 +8339,7 @@
     "issuer_cik": "0001107843",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -8605,10 +8409,7 @@
     "issuer_cik": "0001111485",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -8920,10 +8721,7 @@
     "issuer_cik": "0001137774",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -9174,7 +8972,7 @@
     "issuer_cik": "0001162896",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -9207,10 +9005,7 @@
     "issuer_cik": "0001163668",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -9240,10 +9035,7 @@
     "issuer_cik": "0001167419",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -9369,10 +9161,7 @@
     "issuer_cik": "0001177394",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -9518,7 +9307,7 @@
     "issuer_cik": "0001227636",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -9776,10 +9565,7 @@
     "issuer_cik": "0001281761",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -9788,10 +9574,7 @@
     "issuer_cik": "0001281895",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -9947,10 +9730,7 @@
     "issuer_cik": "0001289945",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -10140,10 +9920,7 @@
     "issuer_cik": "0001314727",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -10152,10 +9929,7 @@
     "issuer_cik": "0001315098",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -10606,10 +10380,7 @@
     "issuer_cik": "0001351636",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -10686,7 +10457,7 @@
     "issuer_cik": "0001361538",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -10873,10 +10644,7 @@
     "issuer_cik": "0001375365",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -10885,10 +10653,7 @@
     "issuer_cik": "0001377121",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -11009,10 +10774,7 @@
     "issuer_cik": "0001393311",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -11051,10 +10813,7 @@
     "issuer_cik": "0001395937",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -11138,10 +10897,7 @@
     "issuer_cik": "0001400118",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -11429,10 +11185,7 @@
     "issuer_cik": "0001422930",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -11463,10 +11216,7 @@
     "issuer_cik": "0001428439",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -11487,10 +11237,7 @@
     "issuer_cik": "0001430723",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -11803,10 +11550,7 @@
     "issuer_cik": "0001459839",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -11929,10 +11673,7 @@
     "issuer_cik": "0001468327",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -12032,10 +11773,7 @@
     "issuer_cik": "0001475922",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -12116,10 +11854,7 @@
     "issuer_cik": "0001481582",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -12238,10 +11973,7 @@
     "issuer_cik": "0001490978",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -12250,10 +11982,7 @@
     "issuer_cik": "0001492298",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -12311,7 +12040,7 @@
     "last_evaluated_session": "2026-09-18",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -12456,7 +12185,7 @@
     "issuer_cik": "0001503274",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -12677,10 +12406,7 @@
     "issuer_cik": "0001515673",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -12755,10 +12481,7 @@
     "issuer_cik": "0001517375",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -12917,10 +12640,7 @@
     "issuer_cik": "0001527753",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -12953,10 +12673,7 @@
     "issuer_cik": "0001528849",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -12986,10 +12703,7 @@
     "issuer_cik": "0001530766",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -12998,10 +12712,7 @@
     "issuer_cik": "0001530950",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -13046,10 +12757,7 @@
     "issuer_cik": "0001531177",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -13158,10 +12866,7 @@
     "issuer_cik": "0001534969",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -13245,10 +12950,7 @@
     "issuer_cik": "0001541119",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -13361,7 +13063,7 @@
     "last_evaluated_session": "2026-10-02",
     "previous_state": "INSIDER_ACCUMULATION",
     "reason_codes": [
-      "STATE_HELD"
+      "STALE_DATA_HOLD"
     ],
     "state": "INSIDER_ACCUMULATION"
   },
@@ -13487,10 +13189,7 @@
     "issuer_cik": "0001564408",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -13641,10 +13340,7 @@
     "issuer_cik": "0001573221",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -13665,10 +13361,7 @@
     "issuer_cik": "0001575515",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -13722,10 +13415,7 @@
     "issuer_cik": "0001576942",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -13902,10 +13592,7 @@
     "issuer_cik": "0001583648",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -13914,10 +13601,7 @@
     "issuer_cik": "0001583708",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -13950,10 +13634,7 @@
     "issuer_cik": "0001585389",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -13980,7 +13661,7 @@
     "issuer_cik": "0001588978",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -14211,10 +13892,7 @@
     "issuer_cik": "0001601830",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -14253,10 +13931,7 @@
     "issuer_cik": "0001604778",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -14451,7 +14126,7 @@
     "last_evaluated_session": "2026-09-17",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -14518,10 +14193,7 @@
     "issuer_cik": "0001623526",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -14564,7 +14236,7 @@
     "last_evaluated_session": "2026-10-01",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -14658,10 +14330,7 @@
     "issuer_cik": "0001628171",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -14875,10 +14544,7 @@
     "issuer_cik": "0001640147",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -15032,10 +14698,7 @@
     "issuer_cik": "0001649904",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -15229,10 +14892,7 @@
     "issuer_cik": "0001658566",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -15511,10 +15171,7 @@
     "issuer_cik": "0001676163",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -15580,10 +15237,7 @@
     "issuer_cik": "0001680247",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -15592,11 +15246,7 @@
     "issuer_cik": "0001680367",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_NET_BUYING_ABSENCE_SALES",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -15609,7 +15259,7 @@
     "last_evaluated_session": "2026-10-02",
     "previous_state": "FALLING",
     "reason_codes": [
-      "STATE_HELD"
+      "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
   },
@@ -15773,10 +15423,7 @@
     "issuer_cik": "0001692115",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -15888,10 +15535,7 @@
     "issuer_cik": "0001699039",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -15909,10 +15553,7 @@
     "issuer_cik": "0001699350",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -16031,7 +15672,7 @@
     "issuer_cik": "0001707910",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -16052,7 +15693,7 @@
     "issuer_cik": "0001708599",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -16107,10 +15748,7 @@
     "issuer_cik": "0001713445",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -16175,7 +15813,7 @@
     "last_evaluated_session": "2026-09-18",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -16202,10 +15840,7 @@
     "issuer_cik": "0001724521",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -16223,10 +15858,7 @@
     "issuer_cik": "0001726445",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -16244,11 +15876,7 @@
     "issuer_cik": "0001727196",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_NET_BUYING_ABSENCE_SALES",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -16564,7 +16192,7 @@
     "issuer_cik": "0001751783",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -16643,7 +16271,7 @@
     "issuer_cik": "0001757499",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -16716,10 +16344,7 @@
     "issuer_cik": "0001759655",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -16773,10 +16398,7 @@
     "issuer_cik": "0001766400",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -16941,7 +16563,7 @@
     "last_evaluated_session": "2026-10-02",
     "previous_state": "INSIDER_ACCUMULATION",
     "reason_codes": [
-      "STATE_HELD"
+      "STALE_DATA_HOLD"
     ],
     "state": "INSIDER_ACCUMULATION"
   },
@@ -17000,10 +16622,7 @@
     "issuer_cik": "0001777835",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -17024,10 +16643,7 @@
     "issuer_cik": "0001779128",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -17345,7 +16961,7 @@
     "issuer_cik": "0001799191",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -17448,10 +17064,7 @@
     "issuer_cik": "0001805284",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -17562,10 +17175,7 @@
     "issuer_cik": "0001810019",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -17731,10 +17341,7 @@
     "issuer_cik": "0001816017",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -17743,10 +17350,7 @@
     "issuer_cik": "0001816431",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -17842,10 +17446,7 @@
     "issuer_cik": "0001818874",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -17993,10 +17594,7 @@
     "issuer_cik": "0001822479",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -18064,7 +17662,7 @@
     "last_evaluated_session": "2026-10-02",
     "previous_state": "FALLING",
     "reason_codes": [
-      "STATE_HELD"
+      "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
   },
@@ -18335,10 +17933,7 @@
     "issuer_cik": "0001831979",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -18383,10 +17978,7 @@
     "issuer_cik": "0001832483",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -18519,7 +18111,7 @@
     "last_evaluated_session": "2026-09-18",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -18549,10 +18141,7 @@
     "issuer_cik": "0001838359",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -18772,10 +18361,7 @@
     "issuer_cik": "0001849253",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -18941,7 +18527,7 @@
     "issuer_cik": "0001856725",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -19146,7 +18732,7 @@
     "last_evaluated_session": "2026-09-18",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -19185,7 +18771,7 @@
     "issuer_cik": "0001871509",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -19215,10 +18801,7 @@
     "issuer_cik": "0001874178",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -19363,10 +18946,7 @@
     "issuer_cik": "0001886428",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -19511,10 +19091,7 @@
     "issuer_cik": "0001907982",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -19550,11 +19127,7 @@
     "issuer_cik": "0001919246",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_NET_BUYING_ABSENCE_SALES",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -19635,7 +19208,7 @@
     "last_evaluated_session": "2026-10-02",
     "previous_state": "FALLING",
     "reason_codes": [
-      "STATE_HELD"
+      "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
   },
@@ -19664,7 +19237,7 @@
     "issuer_cik": "0001943289",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -19673,10 +19246,7 @@
     "issuer_cik": "0001943896",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -19746,7 +19316,7 @@
     "last_evaluated_session": "2026-09-11",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -20040,10 +19610,7 @@
     "issuer_cik": "0002011208",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -20076,10 +19643,7 @@
     "issuer_cik": "0002012593",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -20190,10 +19754,7 @@
     "issuer_cik": "0002023554",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -20214,10 +19775,7 @@
     "issuer_cik": "0002024218",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -20226,10 +19784,7 @@
     "issuer_cik": "0002025410",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -20275,10 +19830,7 @@
     "issuer_cik": "0002030781",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -20345,10 +19897,7 @@
     "issuer_cik": "0002041385",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_CONVICTION",
-      "MISSING_COST_BASIS_RECLAIM",
-      "MISSING_OPPORTUNISTIC",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -20460,9 +20009,7 @@
     "issuer_cik": "0002058873",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_CLUSTER",
-      "MISSING_MANSFIELD_MARKET",
-      "MISSING_MANSFIELD_SECTOR",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -20559,8 +20106,7 @@
     "issuer_cik": "0002077709",
     "previous_state": "FALLING",
     "reason_codes": [
-      "MISSING_MANSFIELD_MARKET",
-      "MISSING_MANSFIELD_SECTOR",
+      "MISSING_PIT_TICKER_OR_MARKET_CONTEXT",
       "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
@@ -20610,7 +20156,7 @@
     "last_evaluated_session": "2026-10-02",
     "previous_state": "FALLING",
     "reason_codes": [
-      "STATE_HELD"
+      "STALE_DATA_HOLD"
     ],
     "state": "FALLING"
   },
