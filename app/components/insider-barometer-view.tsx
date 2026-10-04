@@ -15,7 +15,7 @@ export function buildBarometerChartOption(points: RatioPoint[], monthly: boolean
   return {
     textStyle: { color: '#cbd5e1' },
     legend: { top: 0, type: 'scroll', textStyle: { color: '#cbd5e1' }, data: ['Buy / sell event ratio', ...(hasMean ? ['3-month mean ratio'] : []), ...(hasSpy ? ['SPY close'] : [])] },
-    tooltip: { trigger: 'axis', formatter: (params: unknown) => {
+    tooltip: { trigger: 'axis', confine: true, backgroundColor: '#111d2b', borderColor: '#334155', textStyle: { color: '#e2e8f0' }, formatter: (params: unknown) => {
       const list = Array.isArray(params) ? params : [params];
       const index = Number((list[0] as { dataIndex?: number } | undefined)?.dataIndex ?? -1);
       const row = points[index];
@@ -61,6 +61,7 @@ export function InsiderRatioV2({ data }: { data: ResearchSnapshot }) {
   const activity = current?.ratio == null ? 'No sale denominator'
     : current.buys > current.sales ? 'More purchase events' : current.buys < current.sales ? 'More sale events' : 'Equal event counts';
   return <div className="space-y-5">
+    {result.latestExpectedDay && result.latestExpectedDay !== result.latestDay && <output className="block rounded-lg border border-amber-300/20 p-3 text-xs text-amber-200">Newest inventoried SEC day {result.latestExpectedDay} is incomplete. The barometer is held at {result.latestDay ?? 'no complete day'}; newer partial data is not substituted.</output>}
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[
       ['Current rolling 30D ratio', times(current?.ratio ?? null), activity, 'insider-ratio-current'],
       ['Observed events · 30D', current ? `${current.buys.toLocaleString('en-US')} buys / ${current.sales.toLocaleString('en-US')} sales` : '—', current?.partial ? 'Partial SEC window' : 'SEC window covered; late filings may revise it', undefined],

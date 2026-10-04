@@ -153,6 +153,44 @@ test('candidate evidence stays factual through Radar, Company Lab and watchlist'
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
+test('Radar factual shortlist works without scores, excludes missing prices and exports only its selection', async ({ page }) => {
+  await v2(page, (value) => {
+    const research = value as unknown as ResearchSnapshot;
+    const original = research.companies[0];
+    research.companies.push({ ...original, issuerCik: '0001999002', ticker: 'SMALL', name: 'Small purchase' },
+      { ...original, issuerCik: '0001999003', ticker: 'NOPRICE', name: 'Missing prices' });
+    research.clusters = [];
+    const event = research.economicTransactions[0];
+    event.shares = 30000; event.value = 300000;
+    research.economicTransactions.push({ ...event, eventId: 'small_purchase', issuerCik: '0001999002', shares: 100, value: 1000 },
+      { ...event, eventId: 'missing_price_purchase', issuerCik: '0001999003' });
+    research.companySeries = [
+      { issuerCik: original.issuerCik, date: '2026-08-20', price: 10, volume: null, marketRs: null, sectorRs: null },
+      { issuerCik: original.issuerCik, date: '2026-08-31', price: 6, volume: null, marketRs: null, sectorRs: null },
+      { issuerCik: '0001999002', date: '2026-08-20', price: 10, volume: null, marketRs: null, sectorRs: null },
+      { issuerCik: '0001999002', date: '2026-08-31', price: 6, volume: null, marketRs: null, sectorRs: null },
+    ];
+  });
+  await ready(page);
+  await expect(page.locator('tbody tr')).toHaveCount(3);
+  await page.getByRole('checkbox', { name: 'Significant buying + weak price' }).check();
+  await expect(page.locator('tbody tr')).toHaveCount(1);
+  await expect(page.locator('tbody tr')).toContainText('ACME');
+  await expect(page.locator('tbody tr')).toContainText('-40%');
+  await expect(page.getByText(/this screen does not change scores/)).toBeVisible();
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export filtered CSV' }).click();
+  const stream = await (await download).createReadStream();
+  let csv = ''; for await (const chunk of stream!) csv += chunk;
+  expect(csv.trim().split('\r\n')).toHaveLength(2);
+  expect(csv).toContain('ACME'); expect(csv).not.toContain('NOPRICE');
+  await page.reload();
+  await expect(page.getByRole('checkbox', { name: 'Significant buying + weak price' })).toBeChecked();
+  await expect(page.locator('tbody tr')).toHaveCount(1);
+  await page.getByRole('checkbox', { name: 'Significant buying + weak price' }).uncheck();
+  await expect(page.locator('tbody tr')).toHaveCount(3);
+});
+
 test('turning phases expose met and missing evidence without inventing transitions', async ({ page }) => {
   await v2(page, (value) => {
     const research = value as unknown as ResearchSnapshot;
@@ -381,6 +419,65 @@ test('Market Pulse separates 30D and 90D event ratios from value ratios and show
   await expect(page.getByTestId('sector-net')).toHaveText('+$1.5K');
 });
 
+test('a future SEC day cannot pass the client semantic guard', async ({ page }) => {
+  await v2(page, (value) => { (value as unknown as ResearchSnapshot).economicTransactions[0].secDay = '2026-09-02'; });
+  await page.goto('/');
+  await expect(page.getByText('Research v2 future event')).toBeVisible();
+});
+
+test('series date validation uses the UTC snapshot day, not its offset-local date', async ({ page }) => {
+  await v2(page, (value) => {
+    value.asOf = '2026-09-01T07:00:00+10:00'; // Same instant as the manifest, but next local date.
+    value.companySeries[0].date = '2026-09-01';
+  });
+  await page.goto('/');
+  await expect(page.getByText('Research v2 invalid company series')).toBeVisible();
+});
+
+test('Insider Buys excludes held aggregate events while SEC Tape keeps them inspectable', async ({ page }) => {
+  await v2(page, (value) => {
+    value.economicTransactions[0].aggregateEligible = false;
+    value.economicTransactions[0].processing = 'UNRESOLVED_AMENDMENT';
+    value.clusters = [];
+  });
+  await ready(page);
+  await section(page, 'Insider Buys');
+  await expect(page.locator('tbody tr')).toHaveCount(1);
+  await section(page, 'Live SEC Tape');
+  await expect(page.locator('tbody tr')).toHaveCount(2);
+});
+
+test('new incomplete SEC day is disclosed instead of looking like a fully current barometer', async ({ page }) => {
+  await v2(page, (value) => {
+    const research = value as unknown as ResearchSnapshot;
+    research.coverage.expectedSecDays = ['2026-08-28', '2026-08-31'];
+    research.coverage.days = [
+      { day: '2026-08-28', discoveredFilings: 1, storedFilings: 1, parseRows: 1, quarantinedRows: 0, failures: 0, complete: true },
+      { day: '2026-08-31', discoveredFilings: 1, storedFilings: 0, parseRows: 0, quarantinedRows: 0, failures: 1, complete: false },
+    ];
+    research.economicTransactions.forEach((row) => { row.secDay = '2026-08-28'; });
+  });
+  await ready(page);
+  await section(page, 'Insider Ratio');
+  await expect(page.getByText(/Newest inventoried SEC day 2026-08-31 is incomplete/)).toBeVisible();
+  await expect(page.getByText(/barometer is held at 2026-08-28/)).toBeVisible();
+});
+
+test('daily-use coverage accepts 85% without pretending the predictive 90% gate passed', async ({ page }) => {
+  await page.route('**/data/manifest.json', async (route) => {
+    const response = await route.fetch();
+    const manifest = await response.json();
+    manifest.quality.marketCoverage = { numerator: 85, denominator: 100, rate: 0.85, threshold: 0.9, result: 'FAIL' };
+    await route.fulfill({ json: manifest });
+  });
+  await ready(page);
+  await section(page, 'System Health');
+  await expect(page.getByText('Daily-use market coverage', { exact: true })).toBeVisible();
+  await expect(page.getByText(/85\.00%.*daily-use target ≥80%.*Target met.*15 selected issuers missing prices/)).toBeVisible();
+  await page.getByText('Separate predictive validation gates', { exact: true }).click();
+  await expect(page.getByText(/Predictive market-coverage gate: 90% \(FAIL\)/)).toBeVisible();
+});
+
 test('Market Pulse excludes a clearly flagged reported-price anomaly without hiding the SEC event', async ({ page }) => {
   await v2(page, (value) => {
     value.economicTransactions.push({ ...value.economicTransactions[0],
@@ -392,7 +489,7 @@ test('Market Pulse excludes a clearly flagged reported-price anomaly without hid
   await ready(page);
   await section(page, 'Market Pulse');
   await expect(page.getByText('$2,000.00', { exact: true })).toBeVisible();
-  await expect(page.getByTestId('pulse-value-ratio')).toHaveText('∞');
+  await expect(page.getByTestId('pulse-value-ratio')).toHaveText('—');
   await expect(page.getByText('1 SEC-reported price anomaly is excluded from Pulse totals')).toBeVisible();
   await section(page, 'Live SEC Tape');
   await expect(page.locator('tbody tr')).toHaveCount(3);
@@ -425,7 +522,7 @@ test('Company Lab reserves a top legend band away from date labels', async ({ pa
     const engine = await import(modulePath) as typeof import('echarts/core');
     const chart = [...document.querySelectorAll<HTMLElement>('[_echarts_instance_]')]
       .map((element) => engine.getInstanceByDom(element))
-      .find((instance) => (instance?.getOption() as { series?: Array<{ name?: string }> } | undefined)?.series?.some((item) => item.name === 'Adjusted price'));
+      .find((instance) => (instance?.getOption() as { series?: Array<{ name?: string }> } | undefined)?.series?.some((item) => item.name === 'Observed close'));
     const option = chart!.getOption() as { legend: Array<{ top: number; bottom: number | null }>; grid: Array<{ top: number; bottom: number }>; xAxis: Array<{ axisLabel: { hideOverlap: boolean } }> };
     return { legend: option.legend[0], grid: { top: option.grid[0].top, bottom: option.grid.at(-1)!.bottom }, xAxis: option.xAxis.at(-1)! };
   });

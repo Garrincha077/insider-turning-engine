@@ -98,7 +98,7 @@ export function buildInsiderBarometer(data: ResearchSnapshot, sector = 'All sect
   }
   const firstSpy = spyReason ? undefined : benchmarks[0];
   const lastSpy = spyReason ? undefined : benchmarks.at(-1);
-  return { latestDay, start, sectors, missingLineage, rolling,
+  return { latestDay, latestExpectedDay: expected.at(-1) ?? null, start, sectors, missingLineage, rolling,
     monthly: monthly.filter((row) => monthStart != null && row.start >= monthStart), current: rolling.at(-1) ?? null,
     spyReason, spyProviders: [...new Set(benchmarks.map((row) => row.provider))].sort(),
     spyBasis: bases.size === 1 ? benchmarks[0].adjustmentBasis : null,

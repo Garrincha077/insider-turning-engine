@@ -37,11 +37,16 @@ export function CompanyTable({ data, catalog, watchlist, toggleWatch, openCompan
   const [insiderMin, setInsiderMin] = usePreference(`${mode}.insiderMin`, '65', isString);
   const [divergenceMin, setDivergenceMin] = usePreference(`${mode}.divergenceMin`, '65', isString);
   const [phase, setPhase] = usePreference(`${mode}.phase`, '', isString);
+  const [buyingWeakPrice, setBuyingWeakPrice] = usePreference(`${mode}.buyingWeakPrice`, false, isBoolean);
   const rows = catalog.filter((row) => {
     if (!`${row.ticker} ${row.company} ${row.issuerCik}`.toLowerCase().includes(search.toLowerCase())) return false;
     if (sector && row.sector !== sector || watched && !watchlist.includes(row.issuerCik)) return false;
     if (availability === 'complete' && row.total == null || availability === 'missing' && row.total != null) return false;
     if (mode === 'turning' && (!turningStates.includes(row.state) || phase && row.state !== phase)) return false;
+    if (mode === 'radar' && buyingWeakPrice) {
+      const facts = insights.get(row.issuerCik || row.ticker);
+      if (facts?.buyValue90d == null || facts.buyValue90d < 100000 || facts.drawdownPct == null || facts.drawdownPct > -20) return false;
+    }
     return mode !== 'divergence' || row.insider != null && row.divergence != null && row.insider >= Number(insiderMin) && row.divergence >= Number(divergenceMin);
   });
   const fields = [...candidateFields,
@@ -58,13 +63,17 @@ export function CompanyTable({ data, catalog, watchlist, toggleWatch, openCompan
       <select aria-label="Data availability" className={controlClass} value={availability} onChange={(event) => setAvailability(event.target.value)}><option value="">All data availability</option><option value="complete">Complete score</option><option value="missing">Score unavailable</option></select>
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={watched} onChange={(event) => setWatched(event.target.checked)} />Watchlist only</label>
     </div>
+    {mode === 'radar' && <div className="mb-4 space-y-2">
+      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={buyingWeakPrice} onChange={(event) => setBuyingWeakPrice(event.target.checked)} />Significant buying + weak price</label>
+      {buyingWeakPrice && <p className="text-xs leading-5 text-muted-foreground">Observed 90D purchases ≥$100K and price ≥20% below the exported-window high, not a 52W high. Partial SEC windows remain partial. Other filters still apply; this screen does not change scores.</p>}
+    </div>}
     {mode === 'divergence' && <div className="mb-4 flex flex-wrap gap-4">{[['Minimum Insider', insiderMin, setInsiderMin], ['Minimum Divergence', divergenceMin, setDivergenceMin]].map(([label, value, setter]) => <label key={String(label)} className="text-xs">{String(label)}<input aria-label={String(label)} className={`${controlClass} ml-2 w-20`} type="number" min="0" max="100" value={String(value)} onChange={(event) => (setter as (v: string) => void)(event.target.value)} /></label>)}</div>}
     {mode === 'turning' && <div className="mb-4 flex flex-wrap gap-2"><button className={controlClass} onClick={() => setPhase('')}>All phases</button>{turningStates.map((state) => <button key={state} className={`${controlClass} ${phase === state ? 'text-emerald-200' : ''}`} onClick={() => setPhase(state)}>{reasonText(state)} ({catalog.filter((row) => row.state === state).length})</button>)}</div>}
     <div className="flex flex-wrap items-start justify-between gap-2"><SortControls fields={fields} fieldId={sort.fieldId} descending={sort.descending} onField={sort.choose} onReverse={sort.reverse} /><button className={controlClass} onClick={() => downloadCsv(`${mode}.csv`, ['Rank', 'CIK', 'Ticker', 'Company', 'Sector', 'Total', 'Insider', 'Divergence', 'Turn', 'State', 'Observed 90D purchase USD', 'Observed purchases', 'Reporting owners (not independent decisions)', 'Verified 30D clusters', 'Below observed high %', 'Latest purchase date', 'Score snapshot'], sort.rows.map((row) => {
       const facts = insights.get(row.issuerCik || row.ticker);
       return [rank.get(row.issuerCik || row.ticker), row.issuerCik, row.ticker, row.company, row.sector, row.total, row.insider, row.divergence, row.turn, row.state, facts?.buyValue90d, facts?.buyCount90d, facts?.reportingOwnerCount90d, facts?.verifiedClusterCount30d, facts?.drawdownPct, facts?.lastPurchaseDate, data.generatedAt];
     }))}>Export filtered CSV</button></div>
-    {sort.rows.length === 0 ? <EmptyState title="No companies match these filters" detail="Broaden the filters or turn off Watchlist only. Missing data is not a zero score." /> : <PaginatedRows rows={sort.rows} label="Company" key={JSON.stringify([data.generatedAt, mode, search, sector, availability, watched, watched ? watchlist : [], insiderMin, divergenceMin, phase, sort.fieldId, sort.descending])}>{(pageRows) => <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr><th className="p-3">Watch</th><th className="p-3">Rank</th>{['ticker', primaryScore, 'buyValue', 'drawdown', 'state'].map((id) => <SortHeader key={id} field={fields.find((field) => field.id === id)!} sort={sort} />)}<th className="p-3">Why research it?</th></tr></thead><tbody>{pageRows.map((row) => {
+    {sort.rows.length === 0 ? <EmptyState title="No companies match these filters" detail="Broaden the filters or turn off the shortlist/Watchlist filters. Missing data is not a zero score." /> : <PaginatedRows rows={sort.rows} label="Company" key={JSON.stringify([data.generatedAt, mode, search, sector, availability, watched, watched ? watchlist : [], insiderMin, divergenceMin, phase, buyingWeakPrice, sort.fieldId, sort.descending])}>{(pageRows) => <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr><th className="p-3">Watch</th><th className="p-3">Rank</th>{['ticker', primaryScore, 'buyValue', 'drawdown', 'state'].map((id) => <SortHeader key={id} field={fields.find((field) => field.id === id)!} sort={sort} />)}<th className="p-3">Why research it?</th></tr></thead><tbody>{pageRows.map((row) => {
       const facts = insights.get(row.issuerCik || row.ticker);
       const evidence = evidenceFor(technical, row);
       return <tr key={row.issuerCik || row.ticker} className="border-t border-border align-top hover:bg-accent/40">
@@ -96,7 +105,10 @@ export function TapeView({ data, openCompany, timezone, buysOnly = false, ticker
   const [windowDays, setWindowDays] = usePreference(`${key}.days`, 'all', isString);
   const [page, setPage] = useState(0);
   const cutoff = windowDays === 'all' ? -Infinity : timestamp(data.generatedAt) - Number(windowDays) * 86400000;
-  const filtered = data.filings.filter((row) => (!ticker || ticker === row.ticker) && (!buysOnly || row.side === 'BUY' && row.qualified !== false) && (!side || row.side === side) && row.ticker.toLowerCase().includes(query.toLowerCase()) && row.owner.toLowerCase().includes(owner.toLowerCase()) && (!minimum || row.value != null && row.value >= Number(minimum)) && timestamp(row.filedAt) >= cutoff);
+  const filtered = data.filings.filter((row) => (!ticker || ticker === row.ticker)
+    && (!buysOnly || row.side === 'BUY' && row.qualified !== false
+      && (!data.research || row.aggregateEligible === true && row.processing === 'EFFECTIVE'))
+    && (!side || row.side === side) && row.ticker.toLowerCase().includes(query.toLowerCase()) && row.owner.toLowerCase().includes(owner.toLowerCase()) && (!minimum || row.value != null && row.value >= Number(minimum)) && timestamp(row.filedAt) >= cutoff);
   const sort = useRowSort(filtered, filingFields, 'value', key);
   const pages = Math.max(1, Math.ceil(sort.rows.length / 25));
   const currentPage = Math.min(page, pages - 1);

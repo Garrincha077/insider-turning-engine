@@ -12,7 +12,7 @@ function signedMoney(value: number, compact = false): string {
 }
 
 function ratio(numerator: number, denominator: number): string {
-  if (denominator === 0) return numerator > 0 ? '∞' : '—';
+  if (denominator === 0) return '—';
   return `${metric(numerator / denominator, 2)}×`;
 }
 

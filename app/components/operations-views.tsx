@@ -25,23 +25,24 @@ import {
 
 export function SystemHealthView({ manifest, research, settings }: { manifest: PublicationManifest; research?: ResearchSnapshot; settings: SettingsStatus }) {
   const quality = manifest.quality;
+  const market = quality.marketCoverage;
+  const dailyCoverage = market.denominator > 0 ? market.numerator / market.denominator : null;
+  const dailyCoveragePass = dailyCoverage != null && dailyCoverage >= 0.8;
   const checks = [
     { label: 'Canonical data', pass: quality.canonicalValid, detail: quality.canonicalValid ? 'Schema and hashes valid' : 'Canonical validation blocked' },
-    { label: 'Methodology', pass: quality.methodologyComplete, detail: quality.methodologyComplete ? 'Frozen scoring contract' : 'Candidate scoring contract' },
     { label: 'Benchmark', pass: quality.benchmarkFresh, detail: quality.benchmarkFresh ? 'Fresh at snapshot calculation' : 'Stale or unavailable at snapshot calculation' },
     { label: 'SEC parsing', pass: quality.parseSuccess.result === 'PASS', detail: `${rateLabel(quality.parseSuccess)} · gate ${(quality.parseSuccess.threshold * 100).toFixed(1)}%` },
-    { label: 'Market coverage', pass: quality.marketCoverage.result === 'PASS', detail: `${rateLabel(quality.marketCoverage)} · gate ${(quality.marketCoverage.threshold * 100).toFixed(0)}%` },
-    { label: 'Core coverage', pass: quality.coreBranchCoverage.result === 'PASS', detail: `${rateLabel(quality.coreBranchCoverage)} · gate ${(quality.coreBranchCoverage.threshold * 100).toFixed(0)}%` },
+    { label: 'Daily-use market coverage', pass: dailyCoveragePass, detail: `${rateLabel(market)} · daily-use target ≥80% · ${dailyCoverage == null ? 'Coverage unavailable' : dailyCoveragePass ? 'Target met' : 'Below target'} · ${market.denominator > 0 ? `${Math.max(0, market.denominator - market.numerator).toLocaleString('en-US')} selected issuers missing prices` : 'Missing count unavailable'}` },
   ];
   return <div className="space-y-6">
     <WorkflowHealthPanel />
     {research && <ReadinessV2 data={research} digest={settings.digest} />}
     <div className="grid gap-4 md:grid-cols-3">
       <StatusCard label="Dashboard integrity" value="VERIFIED ON LOAD" pass />
-      <StatusCard label="Predictive model gate" value={quality.disposition} pass={quality.disposition === 'PASS'} />
+      <StatusCard label="Predictive model" value={quality.disposition === 'PASS' ? 'Published gate PASS' : 'Not historically validated'} pass={quality.disposition === 'PASS'} />
       <StatusCard label="Run" value={manifest.runId} pass={quality.canonicalValid} mono />
     </div>
-    <Panel title="Data and research checks" subtitle="Research gate failures do not turn verified SEC facts into unavailable data.">
+    <Panel title="Daily-use data checks" subtitle="The accepted market coverage target is 80% of the selected active universe, not 80% of the entire market.">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{checks.map((check) => <div key={check.label} className="rounded-lg border border-border bg-background/35 p-4"><div className="flex items-center gap-2">{check.pass ? <CheckCircle2 className="size-4 text-emerald-300" /> : <AlertTriangle className="size-4 text-amber-300" />}<span className="text-sm font-semibold">{check.label}</span></div><p className="mt-2 text-xs text-muted-foreground">{check.detail}</p></div>)}</div>
     </Panel>
     <Panel title="Workflow evidence" subtitle="The published data is not proof that the latest scheduled refresh succeeded.">
@@ -49,7 +50,8 @@ export function SystemHealthView({ manifest, research, settings }: { manifest: P
       <p className="text-sm leading-6 text-muted-foreground">Published snapshot: {formatInstant(manifest.asOf)}. Last attempt and run duration are available in Actions diagnostics, not independently refreshed by this public snapshot. If dates stop advancing, inspect the latest run; do not assume a newly deployed UI refreshed the data.</p>
       <a href="https://github.com/Garrincha077/insider-turning-engine/actions" target="_blank" rel="noreferrer" className="mt-4 inline-block text-sm text-emerald-200 underline">Inspect workflow runs and failures</a>
     </Panel>
-    <Panel title="Open blockers" subtitle="These reasons prevent a validated production claim">
+    <details className="rounded-xl border border-border bg-card p-5 text-xs text-muted-foreground"><summary className="cursor-pointer font-semibold text-foreground">Separate predictive validation gates</summary><p className="mt-3">Methodology: {quality.methodologyComplete ? 'Frozen' : 'Candidate'}. Predictive market-coverage gate: {(market.threshold * 100).toFixed(0)}% ({market.result}). Core branch coverage: {rateLabel(quality.coreBranchCoverage)}. These do not certify daily-use features or stop verified SEC facts from being displayed.</p></details>
+    <Panel title="Predictive limitations" subtitle="Research-model validation is a separate future goal, not the daily-use acceptance criterion.">
       {quality.issues.length === 0 ? <SuccessMessage text="No publication-quality blockers are recorded." /> : <ReasonList reasons={quality.issues} />}
     </Panel>
   </div>;
@@ -82,7 +84,7 @@ export function AlertCenterView({ settings, research }: { settings: SettingsStat
     {research ? <DigestPreviewV2 data={research} digest={settings.digest} /> : <Panel title="Informational daily digest" subtitle="A separate channel policy, independent of experimental scores."><p className="text-sm leading-6 text-muted-foreground">Not enabled by this legacy snapshot. A trustworthy preview needs independent economic transactions, the latest complete SEC day and a durable day-level delivery claim. No message or “no new purchases” assertion is generated from incomplete v1 owner groups.</p><p className="mt-3 text-xs text-muted-foreground">{digestPolicySummary(settings.digest)} Content includes SEC source links. No scores or trade recommendations.</p></Panel>}
     <div className={`rounded-xl border p-5 ${settings.alertsAllowed ? 'border-emerald-400/25 bg-emerald-400/8' : 'border-amber-300/20 bg-amber-300/8'}`}><div className="flex items-start gap-3">{settings.alertsAllowed ? <ShieldCheck className="mt-0.5 size-5 text-emerald-300" /> : <BellOff className="mt-0.5 size-5 text-amber-300" />}<div><h2 className="text-sm font-semibold">{settings.alertsAllowed ? 'Actionable alerts enabled' : 'Actionable alerts blocked'}</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">Delivery requires a PASS snapshot, enabled policy, configured channel, and healthy outbox.</p></div></div></div>
     <div className="grid gap-4 md:grid-cols-2">{channels.map(([name, channel]) => <ChannelCard key={name} name={name} status={channel} />)}</div>
-    <Panel title="Suppression reasons" subtitle="No blocked candidate is silently discarded">
+    <Panel title="Predictive alert suppression" subtitle="These reasons apply to score-based alerts, not automatically to the informational digest above.">
       {settings.blockingReasons.length === 0 ? <SuccessMessage text="No global alert suppression is active." /> : <ReasonList reasons={settings.blockingReasons} />}
     </Panel>
     <Panel title="Delivery history" subtitle="Durable state ledger · latest 100 entries · SENT means provider acceptance">
