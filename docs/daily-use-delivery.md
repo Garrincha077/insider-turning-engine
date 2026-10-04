@@ -12,6 +12,9 @@ filters/sort, null-last sorting, numeric rounding, source links, row details,
 paginated tape, filtered CSV (spreadsheet formula escaping), scoreless companies,
 honest rank, actual turning-state and divergence screens, searchable Company Lab,
 price-period selection, and explicit unavailable/empty states.
+Company explorers and the v2 purchase-basis table render 25/50/100 rows per page,
+with first/previous/next/last navigation. Filters and sort changes reset the page;
+CSV exports retain every matching row. Page size is saved locally.
 
 Removed: score-derived CEO/CFO cluster claims, market-wide claims based on a
 buyer-selected population, unverified dollar totals across joint-owner records,
