@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 import httpx
 
@@ -21,6 +21,11 @@ class EODSource(Protocol):
     def close(self) -> None: ...
 
 
+@runtime_checkable
+class CachedEODSource(EODSource, Protocol):
+    def fetch_cached_daily(self, symbol: str) -> Sequence[DailyBar] | None: ...
+
+
 class RedundantEODProvider:
     """Use the first healthy source and reject material source disagreement."""
 
@@ -32,6 +37,7 @@ class RedundantEODProvider:
         *,
         adjusted_close_tolerance: Decimal = Decimal("0.05"),
         max_source_workers: int = 1,
+        cached_session: date | None = None,
     ) -> None:
         if len(providers) < 2:
             raise ValueError("redundant EOD provider requires at least two sources")
@@ -41,8 +47,10 @@ class RedundantEODProvider:
             raise ValueError("source workers must be between 1 and 8")
         self.providers = tuple(providers)
         self.adjusted_close_tolerance = adjusted_close_tolerance
+        self.cached_session = cached_session
         self.selected_provider: dict[str, str] = {}
         self.cross_validated_symbols: set[str] = set()
+        self.cache_replayed_symbols: set[str] = set()
         self.failures: dict[str, dict[str, str]] = {}
         # One shared pool bounds all source requests, including concurrent
         # callers. Never create a separate pool (and unbounded threads) per symbol.
@@ -60,7 +68,32 @@ class RedundantEODProvider:
         normalized = symbol.strip().upper()
         self.selected_provider.pop(normalized, None)
         self.cross_validated_symbols.discard(normalized)
+        self.cache_replayed_symbols.discard(normalized)
         self.failures.pop(normalized, None)
+        # For an explicit closed-session replay, inspect every source's existing
+        # checksum/provenance-validated cache before starting network requests.
+        # A cache with only earlier sessions cannot satisfy this fast path.
+        if self.cached_session is not None:
+            cached: list[tuple[str, tuple[DailyBar, ...]]] = []
+            for provider in self.providers:
+                if not isinstance(provider, CachedEODSource):
+                    continue
+                try:
+                    raw = provider.fetch_cached_daily(normalized)
+                except (OSError, ValueError, RuntimeError):
+                    continue
+                if raw is None or not any(row.date == self.cached_session for row in raw):
+                    continue
+                rows = tuple(row for row in raw
+                             if (start is None or row.date >= start)
+                             and (end is None or row.date <= end)
+                             and (as_of is None or row.date <= as_of))
+                if rows:
+                    cached.append((provider.name, rows))
+            if cached:
+                selected = self._select(normalized, cached, {})
+                self.cache_replayed_symbols.add(normalized)
+                return selected
         successes: list[tuple[str, tuple[DailyBar, ...]]] = []
         errors: dict[str, str] = {}
         jobs = ([self._executor.submit(provider.fetch_daily, normalized)
@@ -83,6 +116,12 @@ class RedundantEODProvider:
         if not successes:
             self.failures[normalized] = errors
             raise RuntimeError(f"all EOD providers failed for {normalized}")
+        return self._select(normalized, successes, errors)
+
+    def _select(
+        self, normalized: str, successes: Sequence[tuple[str, tuple[DailyBar, ...]]],
+        errors: dict[str, str],
+    ) -> tuple[DailyBar, ...]:
         if len(successes) > 1:
             self._cross_validate(normalized, successes)
             self.cross_validated_symbols.add(normalized)
@@ -137,6 +176,7 @@ class RedundantEODProvider:
             checked_at=datetime.now(UTC),
             message=(
                 f"{len(self.cross_validated_symbols)} symbols cross-validated; "
+                f"{len(self.cache_replayed_symbols)} closed-session cache replays; "
                 f"{len(self.failures)} symbols had provider failures"
             ),
         )

@@ -226,6 +226,7 @@ def _fetch_market(
                                required_cache_session=required_cache_session),
         ),
         max_source_workers=2 * max_workers,
+        cached_session=required_cache_session,
     )
     bars: dict[str, tuple[DailyBar, ...]] = {}
     failures: dict[str, str] = {}

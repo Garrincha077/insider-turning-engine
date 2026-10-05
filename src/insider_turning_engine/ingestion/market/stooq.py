@@ -100,6 +100,10 @@ class StooqMarketDataProvider:
     ) -> tuple[DailyBar, ...]:
         return self.get_daily_bars(symbol, start=start, end=end, as_of=as_of)
 
+    def fetch_cached_daily(self, symbol: str) -> tuple[DailyBar, ...] | None:
+        """Read the verified disk cache only; never initiate HTTP."""
+        return self._load_disk_cache(symbol.strip().upper())
+
     def get_daily_bars(
         self,
         symbol: str,

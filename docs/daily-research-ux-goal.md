@@ -229,3 +229,34 @@ without an observed ledger/provider result.
   2026-10-02 and actual same-period SPY. Market coverage is 1332/1872 (71.15%),
   below the accepted 80%: 540 symbols exhausted the shard time budget. Recovery
   run 37230735273 has digest sending disabled; its result remains unproven.
+
+## Verified closed-session market cache replay
+
+- Recovery run 37230735273 and the subsequent UI-only deployment both succeeded.
+  Acquisition diagnostics still contain 476 unrequested symbols after the shard
+  time budget was exhausted. A successful deployment is not proof that the
+  accepted 80% selected-universe coverage target has been met.
+  Independent public size/hash/schema/run-lineage verification confirms
+  `run_research_20261004T200609Z`: 1395/1871 selected stocks (74.56%), complete
+  SEC Oct 2 (1572/1572 filings, 2820 rows, quarantine/failures 0), fresh benchmarks
+  and a factual GME/CRBG/FGBI digest preview. This manual refresh did not send it.
+- An explicit required closed session now permits redundant EOD selection to
+  inspect the adapters' existing checksum/provenance-verified caches before HTTP.
+  Replaying that same session does not recontact an unavailable source when
+  another source already has the required observation. Newer sessions, missing,
+  invalid or corrupt caches retain the existing bounded network path.
+- Two available fresh cached sources still undergo the original disagreement
+  checks. A single cached source is not labelled cross-validated; skipped network
+  requests are not fabricated provider failures. Dates and point-in-time filters,
+  configured source tie-breaks and all quality thresholds remain unchanged.
+- Regression checks cover offline real-adapter reads, checksums, required-session
+  misses, invalid metadata, cross-source disagreement, source ordering and
+  clearing per-symbol metadata between calls. This is a replay/performance fix,
+  not a claim that free-provider quality or future daily coverage is guaranteed.
+- Parser, score formulas, source amounts and Telegram selection are unchanged.
+  The next verification is an actual refresh on the merged code, with digest
+  sending disabled, followed by independent public hash/lineage/coverage checks.
+- Local checks pass: 703 Python tests, Ruff over the CI source/test scope and
+  strict mypy over 83 modules. Public PR37-39 desktop/mobile review confirms
+  distinct ratio-axis ticks, actual aligned SPY, preserved research scope notes
+  and route scroll reset; full merged-head CI remains required for this package.
