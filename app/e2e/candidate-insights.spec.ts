@@ -43,6 +43,21 @@ test('stable event and cluster IDs deduplicate repeated exported facts', () => {
   expect(buildCandidateInsights(data)).toEqual(before);
 });
 
+test('reported-price review never corrects purchase facts and missing references are not zero flags', () => {
+  const data = dashboard();
+  data.research.economicTransactions[0].price = 11_000;
+  const reviewed = buildCandidateInsights(data).get(cik)!;
+  expect(reviewed.priceReviewCount90d).toBe(1);
+  expect(reviewed.buyValue90d).toBe(2000);
+  expect(reviewed.cautions.join(' ')).toContain('not proof of an error');
+  for (const price of [null, 0, -1, NaN]) {
+    data.research.companies[0].currentPrice = price;
+    const unavailable = buildCandidateInsights(data).get(cik)!;
+    expect(unavailable.priceReviewCount90d).toBeNull();
+    expect(unavailable.buyValue90d).toBe(2000);
+  }
+});
+
 test('future transactions, knowledge, acceptance, clusters and prices leave current facts invariant', () => {
   const data = dashboard();
   const before = buildCandidateInsights(data);
@@ -99,6 +114,7 @@ test('blocked, unresolved and quarantined issuers withhold insider facts rather 
     expect(insight.reportingOwnerCount90d).toBeNull();
     expect(insight.verifiedClusterCount30d).toBeNull();
     expect(insight.lastPurchaseDate).toBeNull();
+    expect(insight.priceReviewCount90d).toBeNull();
     expect(insight.drawdownPct).toBe(0);
     expect(insight.summary).toContain('Qualified purchase facts are unavailable');
     expect(insight.cautions.join(' ')).toMatch(/withheld/);

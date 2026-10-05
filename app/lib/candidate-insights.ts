@@ -1,6 +1,7 @@
 import type { DashboardData } from './dashboard-data';
 import type { EconomicEvent, ResearchSnapshot } from './research-v2';
 import { metric, money, timestamp } from './research';
+import { purchasePriceReviews, reportedPriceCaution } from './reported-price';
 
 export type CandidateInsight = {
   buyValue90d: number | null;
@@ -10,6 +11,7 @@ export type CandidateInsight = {
   drawdownPct: number | null;
   priceWindow: { start: string; end: string } | null;
   lastPurchaseDate: string | null;
+  priceReviewCount90d: number | null;
   summary: string;
   cautions: string[];
 };
@@ -27,7 +29,7 @@ function dateOnly(value: string): boolean {
 function unavailable(cautions: string[], summary: string): CandidateInsight {
   return { buyValue90d: null, buyCount90d: null, reportingOwnerCount90d: null,
     verifiedClusterCount30d: null, drawdownPct: null, priceWindow: null,
-    lastPurchaseDate: null, summary, cautions };
+    lastPurchaseDate: null, priceReviewCount90d: null, summary, cautions };
 }
 
 function holdCautions(company: Company | undefined, unresolved: Set<string>, cik: string): string[] {
@@ -76,6 +78,7 @@ export function buildCandidateInsights(data: DashboardData): Map<string, Candida
   }
 
   const companies = new Map(research.companies.map((company) => [company.issuerCik, company]));
+  const priceReviews = purchasePriceReviews(research, 90);
   const heldSourceIssuers = new Set<string>();
   for (const score of research.researchScores) if (score.reasons.includes('STALE_DATA_HOLD')) heldSourceIssuers.add(score.issuerCik);
   const issuerCiks = new Set(companies.keys());
@@ -153,6 +156,7 @@ export function buildCandidateInsights(data: DashboardData): Map<string, Candida
 
   for (const cik of issuerCiks) {
     const company = companies.get(cik);
+    const referenceAvailable = company?.currentPrice != null && Number.isFinite(company.currentPrice) && company.currentPrice > 0;
     const cautions = holdCautions(company, unresolved, cik);
     const held = cautions.length > 0;
     const complete90 = completeWindow(company, 90, start90, end);
@@ -165,6 +169,7 @@ export function buildCandidateInsights(data: DashboardData): Map<string, Candida
     if (!held && !complete90) cautions.push(`Partial observed SEC window: 90D totals cover exported qualifying events dated ${start90}–${end}; missing purchases may exist.`);
     if (!held && !complete30) cautions.push('The observed 30D SEC window is partial; exported verified clusters may not cover all activity.');
     if (buys?.missingValue && !held) cautions.push('Some qualifying purchase values are unavailable; the 90D purchase dollar total is withheld.');
+    if (!held && priceReviews.has(cik)) cautions.push(reportedPriceCaution);
     if (observedCount > 0 && !held) cautions.push('Distinct reporting owners do not establish independent buying decisions; joint-owner purchases count once.');
     if (price) cautions.push(`Observed price window: ${price.start}–${price.end}; the exported high does not establish a 52-week high.`);
     else cautions.push('Dated observed price history is unavailable.');
@@ -176,6 +181,7 @@ export function buildCandidateInsights(data: DashboardData): Map<string, Candida
       drawdownPct: price ? (price.latest / price.high - 1) * 100 : null,
       priceWindow: price ? { start: price.start, end: price.end } : null,
       lastPurchaseDate: held ? null : buys?.lastDate ?? null,
+      priceReviewCount90d: held || !referenceAvailable ? null : priceReviews.get(cik)?.length ?? 0,
       summary: '', cautions,
     };
     const priceSummary = insight.drawdownPct == null ? ''
