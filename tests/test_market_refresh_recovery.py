@@ -10,10 +10,11 @@ from insider_turning_engine.pipeline import live_experimental as live
 
 
 class FakeProvider:
-    def __init__(self, providers, *, max_source_workers):
+    def __init__(self, providers, *, max_source_workers, cached_session=None):
         assert 2 <= max_source_workers <= 8
         for provider in providers:
             assert provider.client.timeout.read == 8.0
+            assert provider.required_cache_session == cached_session
             provider.close()
         self.selected_provider = {}
         self.cross_validated_symbols = set()
@@ -28,9 +29,10 @@ def test_parallel_fetch_is_bounded_and_preserves_deterministic_inventory(tmp_pat
     instances = []
 
     class Provider(FakeProvider):
-        def __init__(self, providers, *, max_source_workers):
+        def __init__(self, providers, *, max_source_workers, cached_session=None):
             assert max_source_workers == 8
-            super().__init__(providers, max_source_workers=max_source_workers)
+            super().__init__(providers, max_source_workers=max_source_workers,
+                             cached_session=cached_session)
             instances.append(self)
 
         def fetch_daily(self, symbol):

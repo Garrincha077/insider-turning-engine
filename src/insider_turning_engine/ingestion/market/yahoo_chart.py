@@ -152,6 +152,12 @@ class YahooChartProvider:
             (json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n").encode(),
         )
 
+    def fetch_cached_daily(self, symbol: str) -> tuple[DailyBar, ...] | None:
+        """Read the verified disk cache only; never initiate HTTP."""
+        normalized, _ = self._symbol(symbol)
+        payload = self._read_cache(normalized)
+        return None if payload is None else self._parse(payload, normalized, self._url(normalized))
+
     def fetch_daily(self, symbol: str) -> tuple[DailyBar, ...]:
         normalized, _ = self._symbol(symbol)
         source_url = self._url(normalized)
