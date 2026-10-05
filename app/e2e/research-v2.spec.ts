@@ -10,6 +10,82 @@ import { createWatchlistBaseline } from '../lib/watchlist-changes';
 
 type Fixture = Omit<typeof fixture, 'economicTransactions'> & { economicTransactions: Array<Omit<typeof fixture.economicTransactions[number], 'shares'> & { shares: number | null }> };
 
+test('reported-price reviews remain visible across purchases, clusters, basis and Company Lab without correcting amounts', async ({ page }) => {
+  await v2(page, (value) => {
+    value.economicTransactions[0].price = 11_000;
+    value.economicTransactions[0].value = 1_100_000;
+    value.clusters[0].purchaseValue = 1_101_000;
+    for (const basis of value.companies[0].basis) {
+      basis.purchaseValue = 1_101_000; basis.weightedBasis = 5_505;
+    }
+  });
+  await ready(page);
+  await expect(page.locator('tbody tr')).toContainText('Review reported price');
+  await section(page, 'Insider Buys');
+  await expect(page.getByTestId('reported-price-review')).toHaveCount(1);
+  await expect(page.locator('td[data-value="1100000"]')).toContainText('$1.1M');
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export filtered CSV' }).click();
+  const stream = await (await download).createReadStream();
+  let csv = ''; for await (const chunk of stream!) csv += chunk;
+  expect(csv).toContain('Price review');
+  expect(csv).toContain('1100000'); expect(csv).toContain('REVIEW'); expect(csv).toContain('NO_FLAG');
+  await page.getByLabel('Minimum USD value').fill('100000');
+  await expect(page.locator('tbody tr')).toHaveCount(1);
+  const filteredDownload = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export filtered CSV' }).click();
+  const filteredStream = await (await filteredDownload).createReadStream();
+  let filteredCsv = ''; for await (const chunk of filteredStream!) filteredCsv += chunk;
+  expect(filteredCsv.trim().split('\r\n')).toHaveLength(2);
+  await section(page, 'Live SEC Tape');
+  await page.getByText('Record details', { exact: true }).first().click();
+  await expect(page.getByText(/review flag, not proof of an error/)).toBeVisible();
+  await expect(page.locator('tbody tr').first().getByRole('link', { name: /SEC/ })).toHaveAttribute('href', fixture.economicTransactions[0].sourceUrl);
+  await section(page, 'Clusters');
+  await expect(page.getByText('Review reported price before interpreting the dollar total.')).toBeVisible();
+  await section(page, 'Cost Basis');
+  await expect(page.getByTestId('basis-price-review')).toHaveCount(1);
+  await expect(page.locator('tbody tr')).toContainText('$5,505.00');
+  await page.getByTestId('basis-price-review').getByText('Review reported price').click();
+  await expect(page.getByText(/The basis is not corrected/)).toBeVisible();
+  await section(page, 'Radar');
+  await page.getByRole('button', { name: 'Open ACME in Company Lab' }).click();
+  await expect(page.getByTestId('company-price-review')).toBeVisible();
+  await expect(page.getByTestId('company-price-review')).toContainText('Source amounts and scores are unchanged');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('purchase-basis review follows the selected window rather than repeating a 90D warning', async ({ page }) => {
+  await v2(page, (value) => {
+    value.economicTransactions[0].transactionDate = '2026-07-01';
+    value.economicTransactions[0].price = 11_000;
+  });
+  await ready(page); await section(page, 'Cost Basis');
+  await expect(page.getByTestId('basis-price-review')).toHaveCount(1);
+  await page.getByLabel('Basis window').selectOption('30');
+  await expect(page.getByTestId('basis-price-review')).toHaveCount(0);
+});
+
+test('missing market reference discloses concentration without inventing a source-price correction', async ({ page }) => {
+  await v2(page, (value) => {
+    const data = value as unknown as ResearchSnapshot;
+    data.companies[0].currentPrice = null;
+    data.economicTransactions[0].price = 180_000;
+    data.economicTransactions[0].value = 18_000_000;
+    data.clusters[0].purchaseValue = 18_001_000;
+  });
+  await ready(page); await section(page, 'Market Pulse');
+  await expect(page.getByTestId('purchase-concentration')).toContainText('100%');
+  await expect(page.getByTestId('purchase-concentration')).toContainText('No market reference is available');
+  await expect(page.getByTestId('purchase-concentration').getByRole('link')).toHaveAttribute('href', fixture.economicTransactions[0].sourceUrl);
+  await expect(page.getByText('1 reported-price review flag is excluded from Pulse totals')).toHaveCount(0);
+  await section(page, 'Insider Buys');
+  await expect(page.getByTestId('reported-price-review')).toHaveCount(0);
+  await expect(page.locator('td[data-value="18000000"]')).toBeVisible();
+  await page.getByText('Record details', { exact: true }).first().click();
+  await expect(page.locator('tbody tr').first().getByText(/not a verified normal price/)).toBeVisible();
+});
+
 async function v2(page: Page, mutate?: (value: Fixture) => void, digest?: SettingsStatus['digest'], compressed = false) {
   const data: Fixture = structuredClone(fixture); mutate?.(data);
   const bytes = JSON.stringify(data);
@@ -592,7 +668,7 @@ test('Market Pulse excludes a clearly flagged reported-price anomaly without hid
   await section(page, 'Market Pulse');
   await expect(page.getByText('$2,000.00', { exact: true })).toBeVisible();
   await expect(page.getByTestId('pulse-value-ratio')).toHaveText('—');
-  await expect(page.getByText('1 SEC-reported price anomaly is excluded from Pulse totals')).toBeVisible();
+  await expect(page.getByText('1 reported-price review flag is excluded from Pulse totals')).toBeVisible();
   await section(page, 'Live SEC Tape');
   await expect(page.locator('tbody tr')).toHaveCount(3);
 });

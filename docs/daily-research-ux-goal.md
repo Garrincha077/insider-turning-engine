@@ -260,3 +260,27 @@ without an observed ledger/provider result.
   strict mypy over 83 modules. Public PR37-39 desktop/mobile review confirms
   distinct ratio-axis ticks, actual aligned SPY, preserved research scope notes
   and route scroll reset; full merged-head CI remains required for this package.
+
+## Reported-price review across research views
+
+- An extreme SEC-reported price is a review prompt, not proof of an erroneous
+  filing. Preserve the reported price, quantity and economic amount. Never
+  reinterpret a reported per-share price as total dollars or guess a correction.
+- Reuse the existing Pulse display screen: a positive, finite reported price
+  at least 1,000 times above or below the available snapshot market close.
+  Dates and adjustment bases can differ. This does not establish execution venue,
+  market-price terms, or a validated source amount.
+- Radar, Insider Buys, Live SEC Tape, Clusters, Company Lab and Cost Basis now
+  disclose affected amounts. Basis warnings follow the selected 30D/90D calendar
+  window. Future knowledge/acceptance and held issuer aggregates do not create
+  review facts; duplicate economic IDs do not inflate review counts.
+- Tape CSV preserves numeric values and adds REVIEW, NO_FLAG or UNAVAILABLE;
+  NO_FLAG is not a validation stamp. Basis CSV includes flagged-event counts
+  without replacing unknown comparison availability with zero.
+- Pulse also discloses when one reported purchase supplies at least half of its
+  displayed purchase dollars, linking the original SEC record. If the market
+  reference is missing, disclose that rather than inventing a price anomaly.
+  Existing Pulse exclusions and count-based barometer methodology are unchanged.
+- Parser, canonical amounts, scores, ranking, watchlist change selection and
+  Telegram eligibility are unchanged. These are interpretation safeguards,
+  not source repairs or new predictive rules.

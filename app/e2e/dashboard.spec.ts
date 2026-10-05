@@ -91,7 +91,7 @@ test('SEC row details, source links, filters and CSV respect the visible selecti
   expect(values.every((value) => value >= 250000)).toBe(true);
   if (values.length) {
     await page.getByText('Record details', { exact: true }).first().click();
-    await expect(page.getByText('Exact grouped amount').first()).toBeVisible();
+    await expect(page.getByText('As-reported grouped amount').first()).toBeVisible();
     const link = page.getByRole('link', { name: 'Open SEC document' }).first();
     if (await link.count()) await expect(link).toHaveAttribute('href', /^https:\/\/(www\.)?sec\.gov\//);
   }
