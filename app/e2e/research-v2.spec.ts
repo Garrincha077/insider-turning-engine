@@ -577,6 +577,24 @@ test('Market Pulse reserves a top legend band away from transaction dates', asyn
   expect(layout.grid.bottom).toBeGreaterThanOrEqual(45);
 });
 
+test('Market Pulse monthly ratio ticks retain small distinct levels and tooltip precision', async ({ page }) => {
+  await v2(page); await ready(page); await section(page, 'Market Pulse');
+  const labels = await page.evaluate(async () => {
+    const modulePath = '/node_modules/.vite/deps/echarts_core.js';
+    const engine = await import(modulePath) as typeof import('echarts/core');
+    const node = document.querySelectorAll<HTMLElement>('[_echarts_instance_]')[1];
+    const option = engine.getInstanceByDom(node)!.getOption() as {
+      yAxis: Array<{ axisLabel: { formatter: (value: number) => string } }>;
+      tooltip: Array<{ valueFormatter: (value: unknown) => string }>;
+    };
+    const ticks = [0, 0.03, 0.06, 0.09, 0.12, 0.15, 0.18];
+    return { ticks: ticks.map(option.yAxis[0].axisLabel.formatter),
+      tooltip: option.tooltip[0].valueFormatter(0.0001234), missing: option.tooltip[0].valueFormatter(null) };
+  });
+  expect(labels.ticks).toEqual(['0×', '0.03×', '0.06×', '0.09×', '0.12×', '0.15×', '0.18×']);
+  expect(labels.tooltip).toBe('0.000123×'); expect(labels.missing).toBe('—');
+});
+
 test('Market Pulse separates 30D and 90D event ratios from value ratios and shows signed sector net', async ({ page }) => {
   await v2(page, (value) => {
     value.economicTransactions.push({ ...value.economicTransactions[0],

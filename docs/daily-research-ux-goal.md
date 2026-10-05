@@ -284,3 +284,7 @@ without an observed ledger/provider result.
 - Parser, canonical amounts, scores, ranking, watchlist change selection and
   Telegram eligibility are unchanged. These are interpretation safeguards,
   not source repairs or new predictive rules.
+- Rendered review also found repeated 0.1x/0x tick labels in Pulse's existing
+  monthly ratio chart. Three significant digits, matching the barometer axis,
+  keep small levels and tooltip values distinct. Observations, scales and
+  ratios are unchanged; a missing denominator remains a gap.
