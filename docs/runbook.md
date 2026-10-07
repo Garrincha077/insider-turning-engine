@@ -25,6 +25,11 @@ Notice claims are persisted before sending; reruns and uncertain delivery do
 not automatically repeat notices. An execute-mode blocked digest fails its job
 instead of reporting green despite no delivery.
 
+A workflow-level GitHub error can prevent even that report job from starting.
+The separate [publication watchdog and bounded recovery](publication-recovery.md)
+handles this case using the already validated Pages artifact; it also checks
+actual public SEC freshness and durable digest evidence independently.
+
 To recover publication without sending a historical backlog, dispatch
 `pages.yml` with `refresh_data=true`, `send_digest=false`. Then check the new
 public manifest's actual source dates. Scheduled runs send only the latest
