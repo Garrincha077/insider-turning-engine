@@ -29,6 +29,14 @@ deployment once, then retry after 15 and 30 minutes (two retries maximum).
 There is no recursive recovery trigger or endless retry. The shared production
 concurrency lock and non-forcing state writes remain in place.
 
+Every workflow sharing the production lock uses queue: max with cancellation
+disabled. GitHub's default single-pending queue replaces an older waiting run
+even when cancel-in-progress is false; the expanded queue prevents a watchdog
+or UI-only deployment from replacing a waiting daily run. At most 100 runs may
+wait, and only one may execute. Queue ordering follows when runs start waiting,
+not their dispatch time; this is not a guarantee of scheduled start times.
+See [GitHub concurrency documentation](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency).
+
 If the exact HTML and manifest are already public, recovery does not redeploy
 or create another publication claim.
 

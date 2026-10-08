@@ -35,6 +35,7 @@ def test_daily_schedule_dispatch_lock_and_runtime_contract() -> None:
     assert "workflow_dispatch" in trigger
     assert workflow["concurrency"] == {
         "group": "daily-research-pipeline",
+        "queue": "max",
         "cancel-in-progress": False,
     }
     assert "python-version: ${{ env.PYTHON_VERSION }}" in text
@@ -42,6 +43,25 @@ def test_daily_schedule_dispatch_lock_and_runtime_contract() -> None:
     assert "SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT }}" in text
     assert "TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}" in text
     assert "TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}" in text
+
+
+def test_shared_production_lock_preserves_pending_runs() -> None:
+    participants = []
+    for path in sorted((ROOT / ".github/workflows").glob("*.yml")):
+        workflow, _ = _workflow(path)
+        concurrency = workflow.get("concurrency")
+        if (isinstance(concurrency, dict)
+                and concurrency.get("group") == "daily-research-pipeline"):
+            participants.append(path.name)
+            assert concurrency == {
+                "group": "daily-research-pipeline",
+                "queue": "max",
+                "cancel-in-progress": False,
+            }, path.name
+    assert participants == [
+        "daily.yml", "pages.yml", "publication-watchdog.yml",
+        "sec-daily-acquisition.yml", "test-alert-delivery.yml",
+    ]
 
 
 def test_daily_has_fixture_mode_quality_gate_safe_state_sync_and_release() -> None:
