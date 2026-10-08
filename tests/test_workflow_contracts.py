@@ -35,6 +35,7 @@ def test_daily_schedule_dispatch_lock_and_runtime_contract() -> None:
     assert "workflow_dispatch" in trigger
     assert workflow["concurrency"] == {
         "group": "daily-research-pipeline",
+        "queue": "max",
         "cancel-in-progress": False,
     }
     assert "python-version: ${{ env.PYTHON_VERSION }}" in text
@@ -42,6 +43,25 @@ def test_daily_schedule_dispatch_lock_and_runtime_contract() -> None:
     assert "SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT }}" in text
     assert "TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}" in text
     assert "TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}" in text
+
+
+def test_shared_production_lock_preserves_pending_runs() -> None:
+    participants = []
+    for path in sorted((ROOT / ".github/workflows").glob("*.yml")):
+        workflow, _ = _workflow(path)
+        concurrency = workflow.get("concurrency")
+        if (isinstance(concurrency, dict)
+                and concurrency.get("group") == "daily-research-pipeline"):
+            participants.append(path.name)
+            assert concurrency == {
+                "group": "daily-research-pipeline",
+                "queue": "max",
+                "cancel-in-progress": False,
+            }, path.name
+    assert participants == [
+        "daily.yml", "pages.yml", "publication-watchdog.yml",
+        "sec-daily-acquisition.yml", "test-alert-delivery.yml",
+    ]
 
 
 def test_daily_has_fixture_mode_quality_gate_safe_state_sync_and_release() -> None:
@@ -259,3 +279,48 @@ def test_sec_acquisition_workflow_has_no_state_secrets_alerts_or_pages_writes() 
     assert "path: work/sec-acquisition/acquisition-status.json" in text
     daily, _ = _workflow(DAILY)
     assert "github.event_name != 'schedule'" in daily["jobs"]["daily"]["if"]
+
+
+def test_watchdog_is_independent_trusted_main_only_and_has_a_scheduled_fallback() -> None:
+    workflow, text = _workflow(ROOT / ".github/workflows/publication-watchdog.yml")
+    trigger = workflow.get("on", workflow.get(True))
+    assert trigger["workflow_run"] == {
+        "workflows": ["Deploy dashboard"], "branches": ["main"], "types": ["completed"],
+    }
+    assert trigger["schedule"] == [{"cron": "45 17 * * 2-6"}]
+    assert workflow["permissions"] == {"contents": "read", "actions": "read"}
+    assert workflow["concurrency"]["group"] == "daily-research-pipeline"
+    assert "github.event.workflow_run.head_repository.full_name == github.repository" in text
+    assert "github.run_attempt == 1" in workflow["jobs"]["inspect"]["if"]
+    assert "github.run_attempt == 1" in workflow["jobs"]["report"]["if"]
+    assert "pipeline.daily_research" not in text and "backfill-sec" not in text
+    assert "head_sha" not in text
+    for job in workflow["jobs"].values():
+        checkout = next(step for step in job["steps"] if step.get("uses") == "actions/checkout@v4")
+        assert checkout["with"]["ref"] == "main"
+    assert "always()" in workflow["jobs"]["report"]["if"]
+
+
+def test_saved_artifact_recovery_is_bounded_and_keeps_delivery_gates() -> None:
+    workflow, text = _workflow(ROOT / ".github/workflows/publication-watchdog.yml")
+    steps = workflow["jobs"]["recover"]["steps"]
+    deployments = [step for step in steps if step.get("uses") == "actions/deploy-pages@v4"]
+    assert len(deployments) == 3
+    assert all(step["continue-on-error"] is True for step in deployments)
+    assert deployments[1]["if"] == "steps.deploy1.outcome == 'failure'"
+    assert deployments[2]["if"] == "steps.deploy2.outcome == 'failure'"
+    assert [step["run"] for step in steps if step.get("run", "").startswith("sleep")] == [
+        "sleep 900", "sleep 1800",
+    ]
+    prepare = next(step for step in steps if step.get("id") == "prepare")
+    upload = next(step for step in steps if step.get("uses") == "actions/upload-pages-artifact@v3")
+    assert steps.index(prepare) < steps.index(upload)
+    assert upload["with"]["path"] == "work/recovery/site"
+    digest = workflow["jobs"]["digest"]
+    assert "needs.recover.outputs.deployed == 'true'" in digest["if"]
+    assert "needs.recover.outputs.digest_expected == 'true'" in digest["if"]
+    assert "github.run_attempt == 1" in digest["if"]
+    assert "notifications.digest_cli" in text
+    _, pages = _workflow(PAGES)
+    assert pages.index("publication_recovery") < pages.index("actions/upload-pages-artifact@v3")
+    assert "--force" not in text and "curl" not in text

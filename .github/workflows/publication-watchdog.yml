@@ -1,0 +1,222 @@
+name: Daily publication watchdog
+run-name: Check daily publication after ${{ github.event.workflow_run.id || inputs.source_run || 'scheduled health check' }}
+
+on:
+  workflow_run:
+    workflows: [Deploy dashboard]
+    branches: [main]
+    types: [completed]
+  schedule:
+    # Independent fallback, late enough for normal delayed daily starts.
+    - cron: '45 17 * * 2-6'
+  workflow_dispatch:
+    inputs:
+      source_run:
+        description: Original main Pages run ID (empty checks latest production health)
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: daily-research-pipeline
+  queue: max
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    if: >-
+      github.ref == 'refs/heads/main' && github.run_attempt == 1 &&
+      (github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.head_branch == 'main'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      source_run: ${{ steps.plan.outputs.source_run }}
+      recover: ${{ steps.plan.outputs.recover }}
+    steps:
+      # Never check out a head SHA or scripts obtained from an artifact.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - name: Inspect trusted production source independently
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ github.event.workflow_run.id || inputs.source_run }}
+        shell: bash
+        run: |
+          args=()
+          if [[ -n "${SOURCE_RUN:-}" ]]; then
+            args=(--source-run "$SOURCE_RUN")
+          fi
+          uv run python -m insider_turning_engine.notifications.pipeline_watchdog inspect "${args[@]}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: watchdog-plan-${{ github.run_id }}
+          path: work/watchdog-plan.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  recover:
+    if: needs.inspect.outputs.recover == 'true'
+    needs: inspect
+    runs-on: ubuntu-latest
+    timeout-minutes: 90 # at most 15+30 minutes backoff and three bounded deploy attempts
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy1.outputs.page_url || steps.deploy2.outputs.page_url || steps.deploy3.outputs.page_url }}
+    permissions:
+      contents: write # durable one-time recovery reservation, never raw/cache files
+      actions: read
+      pages: write
+      id-token: write
+    outputs:
+      deployed: ${{ steps.prepare.outputs.published == 'true' || steps.deploy1.outcome == 'success' || steps.deploy2.outcome == 'success' || steps.deploy3.outcome == 'success' }}
+      digest_expected: ${{ steps.prepare.outputs.digest_expected }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - name: Restore exact artifact, validate lineage and persist recovery claim
+        id: prepare
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ needs.inspect.outputs.source_run }}
+        run: >-
+          uv run python -m insider_turning_engine.notifications.publication_recovery
+          prepare --source-run "$SOURCE_RUN" --directory work/recovery/site
+      - uses: actions/upload-artifact@v4
+        if: steps.prepare.outputs.ready == 'true' || steps.prepare.outputs.published == 'true'
+        with:
+          name: recovered-digest-publication-${{ github.run_id }}
+          path: work/recovery/site/data
+          retention-days: 7
+      - uses: actions/configure-pages@v5
+        if: steps.prepare.outputs.ready == 'true'
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.prepare.outputs.ready == 'true'
+        with:
+          path: work/recovery/site
+      - name: Deploy saved validated artifact
+        id: deploy1
+        if: steps.prepare.outputs.ready == 'true'
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+      - name: Back off 15 minutes before first retry
+        if: steps.deploy1.outcome == 'failure'
+        run: sleep 900
+      - name: First bounded deploy retry
+        id: deploy2
+        if: steps.deploy1.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+      - name: Back off 30 minutes before final retry
+        if: steps.deploy2.outcome == 'failure'
+        run: sleep 1800
+      - name: Final bounded deploy retry
+        id: deploy3
+        if: steps.deploy2.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+      - name: Fail visibly after exhausted recovery
+        if: steps.prepare.outputs.ready != 'true' && steps.prepare.outputs.published != 'true' || steps.deploy3.outcome == 'failure'
+        run: exit 1
+
+  digest:
+    if: >-
+      needs.recover.outputs.deployed == 'true' &&
+      needs.recover.outputs.digest_expected == 'true' && github.run_attempt == 1
+    needs: [inspect, recover]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - uses: actions/download-artifact@v4
+        with:
+          name: recovered-digest-publication-${{ github.run_id }}
+          path: work/recovered-digest
+      - name: Freshness and existing durable claim gate before the only send
+        env:
+          ITE_ENVIRONMENT: production
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: >-
+          uv run python -m insider_turning_engine.notifications.digest_cli
+          --directory work/recovered-digest --execute
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: recovered-digest-status-${{ github.run_id }}
+          path: work/digest-status.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  report:
+    if: >-
+      always() && github.ref == 'refs/heads/main' && github.run_attempt == 1 &&
+      (github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.head_branch == 'main'))
+    needs: [inspect, recover, digest]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: watchdog-plan-${{ github.run_id }}
+          path: work
+      - name: Independently report failure or missing current digest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ needs.inspect.outputs.source_run }}
+          RECOVERY_DEPLOYED: ${{ needs.recover.outputs.deployed }}
+          RECOVERY_DIGEST: ${{ needs.digest.result }}
+          RECOVERY_DIGEST_EXPECTED: ${{ needs.recover.outputs.digest_expected }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: uv run python -m insider_turning_engine.notifications.pipeline_watchdog report
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: watchdog-status-${{ github.run_id }}
+          path: work/watchdog-status.json
+          if-no-files-found: warn
+          retention-days: 30

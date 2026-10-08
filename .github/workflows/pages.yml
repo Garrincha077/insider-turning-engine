@@ -24,6 +24,7 @@ permissions:
 
 concurrency:
   group: daily-research-pipeline
+  queue: max
   cancel-in-progress: false
 
 env:
@@ -171,6 +172,14 @@ jobs:
           name: digest-publication-${{ github.run_id }}
           path: app/dist/data
           retention-days: 7
+      - name: Seal validated publication for bounded recovery
+        if: github.ref == 'refs/heads/main' && github.run_attempt == 1
+        env:
+          REFRESH_DATA: ${{ inputs.refresh_data }}
+          SEND_DIGEST: ${{ inputs.send_digest }}
+        run: >-
+          uv run python -m insider_turning_engine.notifications.publication_recovery
+          seal --directory app/dist
       - uses: actions/configure-pages@v5
         with:
           enablement: true
