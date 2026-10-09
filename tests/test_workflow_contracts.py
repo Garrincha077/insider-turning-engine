@@ -185,7 +185,7 @@ def test_pages_validates_manifest_and_hashes_before_upload() -> None:
     assert "pipeline.daily_research" in text and "pipeline.live_experimental" not in text
     assert '--repository "$GITHUB_REPOSITORY"' in text
     assert '--target "$GITHUB_SHA"' in text
-    assert workflow["jobs"]["build"]["timeout-minutes"] == 75
+    assert workflow["jobs"]["build"]["timeout-minutes"] == 90
     assert workflow["jobs"]["build"]["permissions"]["contents"] == "write"
     assert "GH_TOKEN: ${{ github.token }}" in text
     assert "work/daily-research/identities/identity-manifest.json" in text

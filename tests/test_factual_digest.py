@@ -26,21 +26,25 @@ POLICY = DigestPolicy(schemaVersion="1.0.0", enabled=True, channel="telegram",
                       minimumPurchaseUsd=250000, maximumItems=5)
 
 
-def snapshot(*, complete=True, value=250000, count=1, joint=False):
+def snapshot(*, complete=True, value=250000, count=1, joint=False, distinct=False):
     rows = []
     for index in range(count):
         row = _record(accession=f"0001234567-26-{index + 1:06d}")
         row.transaction.shares = value + index
         row.transaction.price_per_share = 1
         row.transaction.value = value + index
+        if distinct:
+            row.issuer.cik = f"{1234567 + index:010d}"
         rows.append(row)
         if joint:
             # Rebuild proper source/transaction/revision identity through the fixture parser.
             owner = _record(accession=f"0001234567-26-{index + 1:06d}", owner="0001999102")
             owner.transaction = row.transaction.model_copy(deep=True)
+            owner.issuer = row.issuer.model_copy(deep=True)
             rows.append(owner)
     return build_research_snapshot(rows, as_of=NOW, run_id="run_digest_fixture_001",
-        identities={rows[0].issuer.cik: {"ticker": "ACME"}}, expected_sec_days=[DAY],
+        identities={row.issuer.cik: {"ticker": f"ACME{row.issuer.cik}" if distinct else "ACME"}
+                    for row in rows}, expected_sec_days=[DAY],
         sec_day_by_accession={row.source.accession_number: DAY for row in rows},
         day_evidence=[DayEvidence(day=DAY, discovered_filings=count, stored_filings=count,
             parse_rows=len(rows), quarantined_rows=0 if complete else 1, failures=0,
@@ -71,6 +75,42 @@ def test_versioned_policy_controls_threshold_and_daily_item_limit():
     assert draft.text.count("Transaction:") == 10
     assert "≥ $100,000; largest 10" in draft.text
     assert not preview_digest(snapshot(value=99999), policy).event_ids
+
+
+def test_distinct_company_policy_selects_largest_buy_once_per_cik_and_is_deterministic():
+    policy = DigestPolicy(schemaVersion="1.0.0", enabled=True, channel="telegram",
+                          minimumPurchaseUsd=25000, maximumItems=10, distinctCompanies=True)
+    data = snapshot(value=25000, count=12, distinct=True, joint=True)
+    # Two real economic events for the same company: do not invent their sum or
+    # let a second row consume another company's place in the digest.
+    data.economic_transactions[-1].issuer_cik = data.economic_transactions[0].issuer_cik
+    draft = preview_digest(data, policy)
+    by_id = {row.event_id: row for row in data.economic_transactions}
+    assert len(draft.event_ids) == 10
+    assert len({by_id[key].issuer_cik for key in draft.event_ids}) == 10
+    assert "largest qualifying buy per company" in draft.text
+    largest = max(data.economic_transactions, key=lambda row: row.value or 0)
+    assert draft.event_ids[0] == largest.event_id
+    data.economic_transactions.reverse()
+    assert preview_digest(data, policy) == draft
+    assert not preview_digest(snapshot(value=24999), policy).event_ids
+    one_company = preview_digest(snapshot(value=25000, count=12, joint=True), policy)
+    assert len(one_company.event_ids) == 1
+    assert "25,011" in one_company.text
+
+
+def test_policy_expansion_never_resends_an_already_claimed_sec_day(tmp_path):
+    from insider_turning_engine.notifications.digest import load_digest_policy
+
+    data, path = snapshot(), tmp_path / "alerts.sqlite"
+    original = preview_digest(data, POLICY)
+    assert deliver_digest(original, outbox=path, now=NOW, persist=lambda: None,
+                          send=lambda text: SendResult.sent()) == "SENT"
+    expanded = preview_digest(data, load_digest_policy())
+    assert expanded.content_hash != original.content_hash
+    assert deliver_digest(expanded, outbox=path, now=NOW, persist=lambda: None,
+                          send=lambda text: pytest.fail("policy change resent history")) \
+        == "ALREADY_CLAIMED_OR_OLDER_DAY"
 
 
 @pytest.mark.parametrize("text,expected", [
@@ -341,9 +381,10 @@ def test_production_ten_item_digest_can_attach_without_changing_source_snapshot(
     from insider_turning_engine.notifications.digest import load_digest_policy
     from insider_turning_engine.notifications.settings import build_settings_status
 
-    research = snapshot(count=12)
+    research = snapshot(count=12, distinct=True)
     policy = load_digest_policy()
-    assert policy.maximumItems == 10 and policy.minimumPurchaseUsd == 100000
+    assert policy.maximumItems == 10 and policy.minimumPurchaseUsd == 25000
+    assert policy.distinctCompanies is True
     status = build_settings_status(load_notification_policy(), environment="production",
                                   alerts_allowed=False, blocking_reasons=[], secrets={})
     status["digest"] = public_digest_status(research, policy, now=NOW, production=True,

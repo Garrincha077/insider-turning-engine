@@ -58,6 +58,7 @@ export type SettingsStatus = {
     enabled: boolean; secDay: string | null; status: 'READY' | 'BLOCKED';
     reasons: string[]; eventIds: string[]; excludedIssuers: number | null;
     minimumPurchaseUsd?: number; maximumItems?: number;
+    distinctCompanies?: boolean;
   };
   deliveryHistory?: Array<{
     kind: 'TEST' | 'SIGNAL' | 'DIGEST'; channel: 'telegram' | 'email';
@@ -80,6 +81,9 @@ export type SettingsStatus = {
 export function digestPolicySummary(digest: SettingsStatus['digest']) {
   if (digest?.minimumPurchaseUsd == null || digest.maximumItems == null) {
     return 'Selection thresholds are unavailable in this snapshot.';
+  }
+  if (digest.distinctCompanies) {
+    return `Up to ${digest.maximumItems} companies with purchases ≥ $${digest.minimumPurchaseUsd.toLocaleString('en-US')}. Largest qualifying buy per company.`;
   }
   return `Up to ${digest.maximumItems} purchases ≥ $${digest.minimumPurchaseUsd.toLocaleString('en-US')}.`;
 }

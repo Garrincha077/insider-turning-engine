@@ -78,7 +78,7 @@ def test_invalid_refresh_bounds_fail_before_network(tmp_path, workers, budget):
 
 def test_shards_record_scrubbed_partial_coverage_and_budget_reason(tmp_path, monkeypatch):
     def fetch(symbols, **kwargs):
-        assert kwargs["max_workers"] == 4 and kwargs["budget_seconds"] == 1800
+        assert kwargs["max_workers"] == 4 and kwargs["budget_seconds"] in {1800, 600}
         assert kwargs["required_cache_session"] is not None
         return ({symbol: () for symbol in symbols if symbol == "AAA"},
                 {symbol: "MARKET_REFRESH_BUDGET_EXHAUSTED" if symbol == "BBB"
@@ -91,6 +91,7 @@ def test_shards_record_scrubbed_partial_coverage_and_budget_reason(tmp_path, mon
     report = json.loads((tmp_path / "market-status.json").read_text())
     assert report["requested"] == 3 and report["available"] == len(bars) == 1
     assert report["status"] == "PARTIAL" and report["failures"] == failed
+    assert report["recoveryAttempted"] == 1 and report["recovered"] == 0
     assert failed["BBB"] == "MARKET_REFRESH_BUDGET_EXHAUSTED"
     assert "private" not in json.dumps(report)
 
@@ -138,3 +139,33 @@ def test_shards_forward_benchmark_priority_without_changing_requested_inventory(
     assert sorted(symbol for shard in calls for symbol in shard) == ["AAA", "CCC", "SPY", "XLK"]
     assert len(calls) == 3 and set(bars) == {"AAA", "CCC", "SPY", "XLK"}
     assert not failed
+
+
+def test_recovery_retries_only_budget_deferred_symbols_once_and_preserves_successes(
+    tmp_path, monkeypatch,
+):
+    calls = []
+
+    def fetch(symbols, **kwargs):
+        symbols = tuple(symbols)
+        calls.append((symbols, kwargs["budget_seconds"]))
+        assert kwargs["required_cache_session"] is not None
+        assert kwargs["max_workers"] == 4
+        if kwargs["budget_seconds"] == 600:
+            assert symbols == ("BBB",)
+            return {"BBB": ()}, {}, {}, set()
+        return ({symbol: () for symbol in symbols if symbol == "AAA"},
+                {symbol: "MARKET_REFRESH_BUDGET_EXHAUSTED" if symbol == "BBB"
+                 else "source mismatch" for symbol in symbols if symbol != "AAA"}, {}, set())
+
+    monkeypatch.setattr(daily_research, "_fetch_market", fetch)
+    bars, failed = daily_research.market_shards(["CCC", "AAA", "BBB"],
+                                               cache_dir=tmp_path / "market")
+    assert list(bars) == ["AAA", "BBB"]
+    assert failed == {"CCC": "MARKET_PROVIDER_UNAVAILABLE"}
+    assert sum(budget == 600 for _, budget in calls) == 1
+    assert sum("AAA" in symbols for symbols, _ in calls) == 1
+    assert sum("CCC" in symbols for symbols, _ in calls) == 1
+    report = json.loads((tmp_path / "market-status.json").read_text())
+    assert report["recoveryAttempted"] == report["recovered"] == 1
+    assert report["available"] == 2 and report["requested"] == 3

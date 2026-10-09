@@ -87,6 +87,27 @@ def expected_digest_day(now: datetime) -> str:
     return latest_closed_session(anchor).isoformat()
 
 
+def daily_market_warning(manifest: dict[str, Any]) -> str | None:
+    """Judge daily-use coverage from counts, not the separate predictive gate."""
+    quality = manifest.get("quality", {})
+    coverage = quality.get("marketCoverage", {}) if isinstance(quality, dict) else {}
+    if not isinstance(coverage, dict):
+        return "Daily-use market coverage evidence is missing or invalid."
+    numerator, denominator = coverage.get("numerator"), coverage.get("denominator")
+    if (type(numerator) is not int or type(denominator) is not int
+            or not 0 <= numerator <= denominator or denominator == 0):
+        return "Daily-use market coverage evidence is missing or invalid."
+    rate = numerator / denominator
+    if rate < 0.80:
+        return (f"Fresh selected-stock market coverage: {numerator}/{denominator} "
+                f"({rate:.2%}), below the 80% daily-use target. "
+                "Check market-status.json and provider/cache recovery; price-dependent views "
+                "remain incomplete.")
+    if quality.get("benchmarkFresh") is not True:
+        return "Market benchmarks are stale or unverified; price-dependent views are incomplete."
+    return None
+
+
 def inspect_source(repository: str, source_run: str | None) -> dict[str, Any]:
     base = f"repos/{repository}"
     if source_run:
@@ -132,9 +153,10 @@ def report_health(plan: dict[str, Any], *, repository: str, recovery_deployed: b
             digest_expected or not plan.get("explicit_source")):
         expected_day = expected_digest_day(now) if not plan.get("explicit_source") else ""
         try:
-            _manifest, settings = public_status()
+            manifest, settings = public_status()
             observed = settings.get("digest", {}).get("secDay")
         except (httpx.HTTPError, ValueError, KeyError, TypeError):
+            manifest = {}
             observed = "UNVERIFIED"
         try:
             day = date.fromisoformat(str(observed))
@@ -150,6 +172,13 @@ def report_health(plan: dict[str, Any], *, repository: str, recovery_deployed: b
                 f"Public SEC day: {observed}.\n"
                 "Current public snapshot or durable Telegram delivery is missing/unverified.\n"
                 "No automatic historical digest will be sent.\n"
+                f"Details: https://github.com/{repository}/actions/runs/{source}"))
+        elif warning := daily_market_warning(manifest):
+            report.update(status="FAILED", text=(
+                "Insider Turning Engine — operational warning\n"
+                f"{warning}\n"
+                "SEC facts were published and the factual Telegram digest was sent. "
+                "No historical resend or automatic workflow restart will be initiated.\n"
                 f"Details: https://github.com/{repository}/actions/runs/{source}"))
     if plan["status"] == "PROBE_FAILED":
         report["text"] = (

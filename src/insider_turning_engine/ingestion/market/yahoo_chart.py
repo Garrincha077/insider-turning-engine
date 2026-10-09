@@ -70,7 +70,7 @@ class YahooChartProvider:
         root = self.cache_dir / "yahoo-chart"
         return root / f"{safe}.json", root / f"{safe}.manifest.json"
 
-    def _read_cache(self, symbol: str) -> bytes | None:
+    def _read_cached_bars(self, symbol: str) -> tuple[DailyBar, ...] | None:
         paths = self._cache_paths(symbol)
         if paths is None:
             return None
@@ -99,14 +99,20 @@ class YahooChartProvider:
             return None
         if len(payload) > self.max_bytes:
             return None
-        if self.required_cache_session is not None:
-            try:
-                bars = self._parse(payload, symbol, self._url(symbol))
-            except ValueError:
+        # A hint can only reject stale cache, never prove freshness. Older
+        # manifests remain supported; every accepted payload is fully parsed.
+        try:
+            last_session = manifest.get("lastSession")
+            if (self.required_cache_session is not None and last_session is not None
+                    and date.fromisoformat(last_session) < self.required_cache_session):
                 return None
-            if not any(row.date == self.required_cache_session for row in bars):
-                return None
-        return payload
+            bars = self._parse(payload, symbol, self._url(symbol))
+        except (TypeError, ValueError):
+            return None
+        if (self.required_cache_session is not None
+                and not any(row.date == self.required_cache_session for row in bars)):
+            return None
+        return bars
 
     @staticmethod
     def _atomic_write(path: Path, content: bytes) -> None:
@@ -133,7 +139,9 @@ class YahooChartProvider:
                 except FileNotFoundError:
                     pass
 
-    def _write_cache(self, symbol: str, payload: bytes, source_url: str) -> None:
+    def _write_cache(
+        self, symbol: str, payload: bytes, source_url: str, *, last_session: date,
+    ) -> None:
         paths = self._cache_paths(symbol)
         if paths is None:
             return
@@ -145,6 +153,7 @@ class YahooChartProvider:
             "sha256": "sha256:" + hashlib.sha256(payload).hexdigest(),
             "byteLength": len(payload),
             "fetchedAt": datetime.now(UTC).isoformat(),
+            "lastSession": last_session.isoformat(),
         }
         self._atomic_write(payload_path, payload)
         self._atomic_write(
@@ -155,14 +164,13 @@ class YahooChartProvider:
     def fetch_cached_daily(self, symbol: str) -> tuple[DailyBar, ...] | None:
         """Read the verified disk cache only; never initiate HTTP."""
         normalized, _ = self._symbol(symbol)
-        payload = self._read_cache(normalized)
-        return None if payload is None else self._parse(payload, normalized, self._url(normalized))
+        return self._read_cached_bars(normalized)
 
     def fetch_daily(self, symbol: str) -> tuple[DailyBar, ...]:
         normalized, _ = self._symbol(symbol)
         source_url = self._url(normalized)
-        payload = self._read_cache(normalized)
-        if payload is None:
+        bars = self._read_cached_bars(normalized)
+        if bars is None:
             response = self.client.get(
                 source_url,
                 headers={
@@ -177,8 +185,10 @@ class YahooChartProvider:
             payload = response.content
             if len(payload) > self.max_bytes:
                 raise ValueError("Yahoo chart response exceeds the configured size limit")
-            self._write_cache(normalized, payload, source_url)
-        return self._parse(payload, normalized, source_url)
+            bars = self._parse(payload, normalized, source_url)
+            self._write_cache(normalized, payload, source_url,
+                              last_session=max(row.date for row in bars))
+        return bars
 
     @staticmethod
     def _parse(payload: bytes, symbol: str, source_url: str) -> tuple[DailyBar, ...]:
