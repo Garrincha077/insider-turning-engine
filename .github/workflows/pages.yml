@@ -33,7 +33,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 90
     permissions:
       contents: write # immutable normalized Releases and small allow-listed operational state
       pages: write
@@ -77,7 +77,7 @@ jobs:
           restore-keys: daily-market-v2-${{ runner.os }}-
       - name: Acquire latest SEC days and materialize canonical daily research
         if: github.event_name == 'schedule' || inputs.refresh_data == true
-        timeout-minutes: 60 # bounded market recovery, then cache/diagnostics and independent report
+        timeout-minutes: 75 # one bounded deferred-market pass; leave time to save cache/report
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-

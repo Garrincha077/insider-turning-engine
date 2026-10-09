@@ -92,7 +92,7 @@ the live integration, not inferred from offline fixtures.
 ## Package 3 — factual digest and operational acceptance
 
 Separate policy and preview: latest complete SEC day, up to ten new qualified
-open-market purchases >= $100,000 (`config/digest.v1.json`), largest first,
+open-market purchases >= $25,000 (`config/digest.v1.json`), largest first,
 no score predicate or advice.
 Durably persist channel/day claim before sending; uncertain delivery is never
 retried automatically. Initial enablement never sends historical backlog. Existing

@@ -10,8 +10,14 @@ configured production secrets, and a remotely durable unclaimed day.
 
 - Backend selection: newest inventoried SEC day only, complete acquisition and
   parsing required. No fallback to an older complete day or backfill backlog.
-- At most ten resolved, eligible, non-derivative P purchases ≥ $100,000, ranked
-  by dollars and stable event ID. Joint-owner economic events count once.
+- At most ten distinct resolved, eligible companies with non-derivative P
+  purchases ≥ $25,000, ranked by the largest qualifying purchase and stable
+  event ID. Show only that largest purchase per issuer CIK, not an invented
+  aggregate. Joint-owner economic events count once. The lower threshold and
+  distinct-company mode are explicit in the versioned policy and public status.
+- A quiet SEC day may still have only one or two qualifying companies. Do not
+  fill the message with older days, unresolved issuers, awards or derivatives.
+  Changing the policy never resets an existing day claim or resends that day.
 - No score, market-price or backtest requirements. Unknown purchase amounts or
   unresolved issuers prevent an unsupported empty-day assertion.
 - Exact immutable publication artifact passed from build to the post-Pages job;
@@ -30,7 +36,8 @@ configured production secrets, and a remotely durable unclaimed day.
   A failed claim push means no send. A crash, failed result push, any existing
   claim, or ambiguous receipt means **no automatic resend**, including FAILED.
 - Public Settings/Alert Center share backend selection and suppression. The
-  public digest status carries `minimumPurchaseUsd` and `maximumItems` from the
+  public digest status carries `minimumPurchaseUsd`, `maximumItems` and
+  `distinctCompanies` from the
   active policy; both views describe those values rather than hardcoded limits.
   Older snapshots without thresholds label them unavailable. Without an exported
   server preview the browser does not invent its own digest selection. The

@@ -7,6 +7,9 @@ from test_publication_recovery import NOW, _environment, _run
 
 from insider_turning_engine.notifications import pipeline_watchdog as watchdog
 
+MARKET_OK = {"quality": {"marketCoverage": {"numerator": 80, "denominator": 100},
+                          "benchmarkFresh": True}}
+
 
 def _api(run, jobs):
     def fetch(path):
@@ -78,7 +81,7 @@ def test_fallback_requires_current_sec_day_and_durable_sent_not_preview(tmp_path
     plan = {"status": "SUCCESS", "source_run": "123", "explicit_source": False,
             "results": {"build": "success", "deploy": "success", "digest": "success"}}
     day = "2026-10-06"
-    monkeypatch.setattr(watchdog, "public_status", lambda: ({}, {"digest": {
+    monkeypatch.setattr(watchdog, "public_status", lambda: (MARKET_OK, {"digest": {
         "secDay": day, "status": "READY", "deliveryHistory": [{"status": "SENT"}]}}))
     ledger = tmp_path / "ledger.sqlite"
     common = {"repository": "owner/repo", "recovery_deployed": False,
@@ -122,7 +125,7 @@ def test_successful_recovery_digest_job_is_not_proof_of_sent(tmp_path, monkeypat
     plan = {"status": "FAILED", "source_run": "123", "explicit_source": True}
     ledger = tmp_path / "ledger.sqlite"
     monkeypatch.setattr(watchdog, "public_status",
-                        lambda: ({}, {"digest": {"secDay": "2026-10-06"}}))
+                        lambda: (MARKET_OK, {"digest": {"secDay": "2026-10-06"}}))
     common = {"repository": "owner/repo", "recovery_deployed": True,
               "recovery_digest": "success", "digest_expected": True, "now": NOW,
               "outbox": ledger}
@@ -134,3 +137,33 @@ def test_successful_recovery_digest_job_is_not_proof_of_sent(tmp_path, monkeypat
     with sqlite3.connect(ledger) as db:
         db.execute("UPDATE factual_digest_claims SET status='SENT'")
     assert watchdog.report_health(plan, **common)["status"] == "SUCCESS"
+
+
+@pytest.mark.parametrize("numerator,denominator,benchmark,warning", [
+    (80, 100, True, None), (89, 100, True, None), (79, 100, True, "below the 80%"),
+    (80, 100, False, "benchmarks"), (0, 0, True, "invalid"),
+    (True, 100, True, "invalid"), (101, 100, True, "invalid"),
+])
+def test_watchdog_daily_use_target_is_80_not_predictive_90(
+    numerator, denominator, benchmark, warning,
+):
+    value = watchdog.daily_market_warning({"quality": {
+        "marketCoverage": {"numerator": numerator, "denominator": denominator,
+                           "rate": 1.0, "threshold": 0.9},
+        "benchmarkFresh": benchmark}})
+    assert value is None if warning is None else warning in value
+
+
+def test_green_deploy_and_sent_digest_do_not_hide_low_market_coverage(tmp_path, monkeypatch):
+    manifest = {"quality": {"marketCoverage": {"numerator": 1380, "denominator": 1846},
+                            "benchmarkFresh": True}}
+    monkeypatch.setattr(watchdog, "public_status",
+                        lambda: (manifest, {"digest": {"secDay": "2026-10-06"}}))
+    monkeypatch.setattr(watchdog, "digest_sent", lambda *args: True)
+    plan = {"status": "SUCCESS", "source_run": "123", "explicit_source": True,
+            "results": {"build": "success", "deploy": "success", "digest": "success"}}
+    report = watchdog.report_health(plan, repository="owner/repo", recovery_deployed=False,
+        recovery_digest="skipped", digest_expected=True, now=NOW, outbox=tmp_path / "missing")
+    assert report["status"] == "FAILED"
+    assert "74.76%" in report["text"] and "digest was sent" in report["text"]
+    assert not (tmp_path / "missing").exists()

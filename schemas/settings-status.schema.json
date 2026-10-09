@@ -29,6 +29,7 @@
         "enabled": { "type": "boolean" },
         "minimumPurchaseUsd": { "type": "integer", "minimum": 10000, "maximum": 10000000 },
         "maximumItems": { "type": "integer", "minimum": 1, "maximum": 10 },
+        "distinctCompanies": { "type": "boolean" },
         "secDay": { "type": ["string", "null"], "format": "date" },
         "status": { "enum": ["READY", "BLOCKED"] },
         "reasons": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,63}$" } },

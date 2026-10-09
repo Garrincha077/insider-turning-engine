@@ -156,7 +156,8 @@ class StooqMarketDataProvider:
                 payload = response.text
                 locator = response.url.__str__()
                 bars = self._parse(payload, symbol, locator)
-                self._write_disk_cache(symbol, payload, locator)
+                self._write_disk_cache(symbol, payload, locator,
+                                       last_session=max((row.date for row in bars), default=None))
                 self._last_health = ProviderHealth(
                     provider=self.name,
                     available=True,
@@ -220,8 +221,14 @@ class StooqMarketDataProvider:
         ):
             return None
         try:
+            # This untrusted hint may reject stale cache but cannot certify a
+            # fresh session. Hash/provenance and parsed dates still gate reuse.
+            last_session = manifest.get("lastSession")
+            if (self.required_cache_session is not None and last_session is not None
+                    and date.fromisoformat(last_session) < self.required_cache_session):
+                return None
             bars = self._parse(payload.decode("utf-8"), symbol, str(manifest["sourceUrl"]))
-        except (UnicodeError, ValueError):
+        except (UnicodeError, TypeError, ValueError):
             return None
         # A closed session remains fresh over weekends/holidays. A missing newer
         # session forces a refresh even if wall-clock TTL has not yet expired.
@@ -231,7 +238,9 @@ class StooqMarketDataProvider:
         self._cache_hits += 1
         return bars
 
-    def _write_disk_cache(self, symbol: str, payload: str, locator: str) -> None:
+    def _write_disk_cache(
+        self, symbol: str, payload: str, locator: str, *, last_session: date | None,
+    ) -> None:
         paths = self._disk_paths(symbol)
         if paths is None:
             return
@@ -245,6 +254,7 @@ class StooqMarketDataProvider:
             "sha256": "sha256:" + hashlib.sha256(content).hexdigest(),
             "byteLength": len(content),
             "fetchedAt": datetime.now(UTC).isoformat(),
+            "lastSession": last_session.isoformat() if last_session is not None else None,
         }
         manifest_content = (
             json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n"

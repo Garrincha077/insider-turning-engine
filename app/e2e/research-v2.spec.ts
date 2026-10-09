@@ -790,15 +790,18 @@ test('digest policy and exact suppression are visible independently of predictiv
 });
 
 for (const policy of [
-  { minimumPurchaseUsd: 100000, maximumItems: 10 },
-  { minimumPurchaseUsd: 250000, maximumItems: 5 },
-]) test(`digest preview and Settings describe the published ${policy.maximumItems}-item policy`, async ({ page }) => {
+  { minimumPurchaseUsd: 100000, maximumItems: 10, distinctCompanies: false },
+  { minimumPurchaseUsd: 250000, maximumItems: 5, distinctCompanies: false },
+  { minimumPurchaseUsd: 25000, maximumItems: 10, distinctCompanies: true },
+]) test(`digest preview and Settings describe the published ${policy.maximumItems}-item ${policy.minimumPurchaseUsd}-USD ${policy.distinctCompanies ? 'company' : 'purchase'} policy`, async ({ page }) => {
   await v2(page, undefined, { enabled: true,
     secDay: [...fixture.coverage.expectedSecDays].sort((a: string, b: string) => a.localeCompare(b)).at(-1) ?? null,
     status: 'BLOCKED', reasons: ['LATEST_SEC_DAY_INCOMPLETE'], eventIds: [],
     excludedIssuers: 0, ...policy });
   await ready(page);
-  const summary = `Up to ${policy.maximumItems} purchases ≥ $${policy.minimumPurchaseUsd.toLocaleString('en-US')}.`;
+  const summary = policy.distinctCompanies
+    ? `Up to ${policy.maximumItems} companies with purchases ≥ $${policy.minimumPurchaseUsd.toLocaleString('en-US')}. Largest qualifying buy per company.`
+    : `Up to ${policy.maximumItems} purchases ≥ $${policy.minimumPurchaseUsd.toLocaleString('en-US')}.`;
   for (const view of ['Alert Center', 'Settings']) {
     await section(page, view);
     await expect(page.getByText(summary, { exact: false })).toBeVisible();

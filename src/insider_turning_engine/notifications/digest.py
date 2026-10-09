@@ -55,6 +55,7 @@ class DigestPolicy(BaseModel):
     channel: Literal["telegram"]
     minimumPurchaseUsd: int = Field(ge=10_000, le=10_000_000)
     maximumItems: int = Field(ge=1, le=10)
+    distinctCompanies: bool = False
 
 
 class DigestDraft(BaseModel):
@@ -116,19 +117,28 @@ def preview_digest(
                 and row.value is not None and row.value >= policy.minimumPurchaseUsd
                 and company.identity_status == "RESOLVED" and company.insider_status == "AVAILABLE")
 
-    selected = sorted((row for row in latest if eligible(row)),
-                      key=lambda row: (-(row.value or 0), row.event_id))[
-                          :policy.maximumItems
-                      ]
+    ranked = sorted((row for row in latest if eligible(row)),
+                    key=lambda row: (-(row.value or 0), row.event_id))
+    selected: list[EconomicEvent] = []
+    seen_issuers: set[str] = set()
+    for row in ranked:
+        if policy.distinctCompanies and row.issuer_cik in seen_issuers:
+            continue
+        selected.append(row)
+        seen_issuers.add(row.issuer_cik)
+        if len(selected) == policy.maximumItems:
+            break
     # An unknown purchase value cannot support a negative factual assertion.
     unknown = any(row.table == "NON_DERIVATIVE" and row.code == "P"
                   and row.value is None for row in latest)
     if not selected and (excluded or unknown):
         return DigestDraft(run_id=snapshot.run_id, sec_day=day, excluded_issuers=len(excluded),
                            reasons=("EMPTY_DIGEST_HAS_UNRESOLVED_INPUTS",))
+    selection = (f"up to {policy.maximumItems} companies, largest qualifying buy per company"
+                 if policy.distinctCompanies else f"largest {policy.maximumItems}")
     parts = [f"<b>Insider Turning Engine — daily facts</b>\nSEC day: {day}",
              f"Observed eligible US common-stock purchases ≥ "
-             f"${policy.minimumPurchaseUsd:,.0f}; largest {policy.maximumItems}. "
+             f"${policy.minimumPurchaseUsd:,.0f}; {selection}. "
              "Not a market-wide census. No score criteria or trading recommendations."]
     footer = ([f"{len(excluded)} unresolved issuer(s) excluded; see Data Coverage."]
               if excluded else [])
@@ -270,6 +280,7 @@ def public_digest_status(
                                         for row in history):
         reasons += ("ALREADY_CLAIMED_OR_OLDER_DAY",)
     return {"enabled": policy.enabled, "minimumPurchaseUsd": policy.minimumPurchaseUsd,
+            "distinctCompanies": policy.distinctCompanies,
             "maximumItems": policy.maximumItems,
             "secDay": str(draft.sec_day) if draft.sec_day else None,
             "status": "BLOCKED" if reasons else "READY", "reasons": sorted(set(reasons)),

@@ -63,30 +63,49 @@ def discover_research_days(source: SECDailyIndexSource, *, end: date) -> tuple[d
 def market_shards(
     symbols: Sequence[str], *, cache_dir: Path, priority_symbols: Sequence[str] = (),
 ) -> tuple[dict[str, tuple[DailyBar, ...]], dict[str, str]]:
-    """Three deterministic disjoint shards; existing providers/cache/fallback retained."""
+    """Three shards plus one bounded recovery of requests skipped by the budget.
+
+    Recovery never reacquires SEC, refetches successful symbols, reuses stale
+    prices, or retries source disagreements. Provider/cache safeguards remain.
+    """
     selected = sorted(set(symbols))
-    shards = [selected[index::3] for index in range(3) if selected[index::3]]
     bars: dict[str, tuple[DailyBar, ...]] = {}
     failures: dict[str, str] = {}
     session = latest_closed_session(datetime.now(UTC))
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        jobs = [executor.submit(_fetch_market, shard, cache_dir=cache_dir, max_workers=4,
-                                budget_seconds=1800, priority_symbols=priority_symbols,
-                                required_cache_session=session)
-                for shard in shards]
-        for job in jobs:
-            batch, failed, _sources, _cross_validated = job.result()
-            bars.update(batch)
-            failures.update({symbol: (reason if reason == "MARKET_REFRESH_BUDGET_EXHAUSTED"
-                                      else "MARKET_PROVIDER_UNAVAILABLE")
-                             for symbol, reason in failed.items()})
+
+    def wave(requested: Sequence[str], budget: int) -> None:
+        shards = [requested[index::3] for index in range(3) if requested[index::3]]
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            jobs = [executor.submit(_fetch_market, shard, cache_dir=cache_dir, max_workers=4,
+                                    budget_seconds=budget, priority_symbols=priority_symbols,
+                                    required_cache_session=session)
+                    for shard in shards]
+            for job in jobs:
+                batch, failed, _sources, _cross_validated = job.result()
+                bars.update(batch)
+                for symbol in batch:
+                    failures.pop(symbol, None)
+                failures.update({symbol: (reason if reason == "MARKET_REFRESH_BUDGET_EXHAUSTED"
+                                          else "MARKET_PROVIDER_UNAVAILABLE")
+                                 for symbol, reason in failed.items()})
+
+    wave(selected, 1800)
+    pending = sorted(symbol for symbol, reason in failures.items()
+                     if reason == "MARKET_REFRESH_BUDGET_EXHAUSTED")
+    if pending:
+        print(f"MARKET_RECOVERY: {len(pending)} budget-deferred symbols, one bounded pass",
+              flush=True)
+        wave(pending, 600)
     _write_json(cache_dir.parent / "market-status.json", {
         "schemaVersion": "1.0.0", "requested": len(selected), "available": len(bars),
         "requiredCacheSession": session.isoformat(), "budgetSecondsPerShard": 1800,
+        "recoveryBudgetSecondsPerShard": 600,
+        "recoveryAttempted": len(pending),
+        "recovered": sum(symbol in bars for symbol in pending),
         "failures": dict(sorted(failures.items())),
         "status": "COMPLETE" if not failures else "PARTIAL",
     })
-    return bars, failures
+    return dict(sorted(bars.items())), dict(sorted(failures.items()))
 
 
 def materialize_research(
