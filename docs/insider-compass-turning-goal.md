@@ -1,5 +1,9 @@
 # Insider Compass & Turning Engine — active delivery contract
 
+Status update 2026-10-26: superseded as the active goal by
+[Predictive validation](predictive-validation-goal.md). This file preserves the
+previous scope and evidence; it does not claim all former requirements finished.
+
 Started 2026-10-26. Source objective: owner-provided goal, reproduced by the
 requirements below. This supersedes earlier MVP exclusions of fundamentals,
 not earlier frozen research results. Working branch: codex/insider-compass-turning-v2.

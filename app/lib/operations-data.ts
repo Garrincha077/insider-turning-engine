@@ -88,6 +88,18 @@ export function digestPolicySummary(digest: SettingsStatus['digest']) {
   return `Up to ${digest.maximumItems} purchases ≥ $${digest.minimumPurchaseUsd.toLocaleString('en-US')}.`;
 }
 
+export function digestReadinessDisplay(digest: { status: string; reasons: string[] }) {
+  const replayOnly = digest.status === 'BLOCKED' &&
+    digest.reasons.includes('ALREADY_CLAIMED_OR_OLDER_DAY') &&
+    digest.reasons.every(reason => ['ALREADY_CLAIMED_OR_OLDER_DAY', 'DIGEST_SNAPSHOT_STALE'].includes(reason));
+  return {
+    label: replayOnly ? 'REPLAY SUPPRESSED' : digest.status,
+    detail: replayOnly
+      ? 'An existing claim or an older SEC day prevents another send. This alone proves neither delivery failure nor successful delivery; inspect the recorded delivery result below.'
+      : null,
+  };
+}
+
 export function rateLabel(measurement: QualityMeasurement) {
   return measurement.rate === null ? 'Not evaluated' : `${(measurement.rate * 100).toFixed(2)}%`;
 }

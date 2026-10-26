@@ -1,0 +1,84 @@
+name: Audit predictive research baseline
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: research-predictive-baseline-audit-v1
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups --frozen
+      - name: Check audit contracts before accessing real outcomes
+        run: uv run pytest tests/test_predictive_baseline_audit.py -q
+      - name: Verify and restore the exact development-only source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          uv run python - <<'PY'
+          import hashlib
+          import io
+          import json
+          import os
+          import subprocess
+          import zipfile
+          from pathlib import Path
+
+          contract = json.loads(Path('research/predictive-baseline-audit.v1.json').read_text())
+          repo = os.environ['GITHUB_REPOSITORY']
+          def read_api(endpoint):
+              process = subprocess.run(['gh', 'api', endpoint], capture_output=True, timeout=120)
+              if process.returncode:
+                  raise RuntimeError('GitHub artifact retrieval failed; no alternate source used')
+              return process.stdout
+          endpoint = f"repos/{repo}/actions/artifacts/{contract['sourceArtifactId']}"
+          metadata = json.loads(read_api(endpoint))
+          assert metadata['workflow_run']['id'] == int(contract['sourceRunId'])
+          assert metadata['name'] == contract['sourceArtifactName']
+          assert metadata['digest'] == contract['sourceArtifactDigest']
+          assert metadata['size_in_bytes'] == contract['sourceArtifactBytes']
+          assert metadata['expired'] is False
+          archive = read_api(endpoint + '/zip')
+          assert len(archive) == contract['sourceArtifactBytes']
+          assert 'sha256:' + hashlib.sha256(archive).hexdigest() == contract['sourceArtifactDigest']
+          output = Path('work/predictive-validation/source')
+          output.mkdir(parents=True, exist_ok=True)
+          with zipfile.ZipFile(io.BytesIO(archive)) as bundle:
+              for name, key in [('b1-corrected-event-horizons.csv', 'sourceCsvSha256'),
+                                ('summary.json', 'sourceSummarySha256')]:
+                  matches = [entry for entry in bundle.infolist() if entry.filename == name]
+                  assert len(matches) == 1 and matches[0].file_size <= 16_000_000
+                  payload = bundle.read(matches[0])
+                  assert hashlib.sha256(payload).hexdigest() == contract[key]
+                  (output / name).write_bytes(payload)
+          print('Exact development archive and both input hashes independently verified')
+          PY
+      - name: Reproduce costs and attrition without opening OOS
+        run: >-
+          uv run python -m insider_turning_engine.backtest.baseline_audit
+          --csv work/predictive-validation/source/b1-corrected-event-horizons.csv
+          --summary work/predictive-validation/source/summary.json
+          --output work/predictive-validation/baseline-cost-audit.json
+      - name: Verify the committed report reproduces exactly
+        run: cmp research/results/predictive-baseline-cost-audit.v1.json work/predictive-validation/baseline-cost-audit.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: predictive-baseline-cost-audit-${{ github.run_id }}
+          path: work/predictive-validation/baseline-cost-audit.json
+          if-no-files-found: error
+          retention-days: 90
