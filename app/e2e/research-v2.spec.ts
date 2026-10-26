@@ -86,12 +86,12 @@ test('missing market reference discloses concentration without inventing a sourc
   await expect(page.locator('tbody tr').first().getByText(/not a verified normal price/)).toBeVisible();
 });
 
-async function v2(page: Page, mutate?: (value: Fixture) => void, digest?: SettingsStatus['digest'], compressed = false) {
+async function v2(page: Page, mutate?: (value: Fixture) => void, digest?: SettingsStatus['digest'], compressed = false, history?: SettingsStatus['deliveryHistory']) {
   const data: Fixture = structuredClone(fixture); mutate?.(data);
   const bytes = JSON.stringify(data);
   const gzipBytes = gzipSync(bytes);
-  const settingsBytes = JSON.stringify({ ...originalSettings, digest });
-  if (digest) await page.route('**/data/settings-status.json', (route) => route.fulfill({ body: settingsBytes, contentType: 'application/json' }));
+  const settingsBytes = JSON.stringify({ ...originalSettings, digest, ...(history ? {deliveryHistory: history} : {}) });
+  if (digest || history) await page.route('**/data/settings-status.json', (route) => route.fulfill({ body: settingsBytes, contentType: 'application/json' }));
   if (!compressed) await page.route('**/data/research-v2.json', (route) => route.fulfill({ body: bytes, contentType: 'application/json' }));
   if (compressed) await page.route('**/data/research-v2.json.gz', (route) => route.fulfill({ body: gzipBytes, contentType: 'application/gzip' }));
   await page.route('**/data/manifest.json', async (route) => {
@@ -100,10 +100,29 @@ async function v2(page: Page, mutate?: (value: Fixture) => void, digest?: Settin
     manifest.runId = fixture.runId; manifest.asOf = fixture.asOf;
     manifest.files.push({ path: 'research-v2.json', size: Buffer.byteLength(bytes), sha256: createHash('sha256').update(bytes).digest('hex') });
     if (compressed) manifest.files.push({ path: 'research-v2.json.gz', size: gzipBytes.byteLength, sha256: createHash('sha256').update(gzipBytes).digest('hex') });
-    if (digest) manifest.files = manifest.files.map((file: { path: string }) => file.path !== 'settings-status.json' ? file : { path: file.path, size: Buffer.byteLength(settingsBytes), sha256: createHash('sha256').update(settingsBytes).digest('hex') });
+    if (digest || history) manifest.files = manifest.files.map((file: { path: string }) => file.path !== 'settings-status.json' ? file : { path: file.path, size: Buffer.byteLength(settingsBytes), sha256: createHash('sha256').update(settingsBytes).digest('hex') });
     await route.fulfill({ json: manifest });
   });
 }
+
+test('System Health separates suppressed replay, recorded delivery and unvalidated research', async ({ page }) => {
+  await v2(page, undefined, {enabled:true,secDay:fixture.coverage.expectedSecDays.at(-1) ?? null,
+    status:'BLOCKED', reasons:['ALREADY_CLAIMED_OR_OLDER_DAY','DIGEST_SNAPSHOT_STALE'],
+    eventIds:[],excludedIssuers:0}, false, [
+      {kind:'DIGEST',channel:'telegram',status:'SENT',at:'2026-09-07T10:00:00Z'},
+      {kind:'TEST',channel:'telegram',status:'SENT',at:'2026-09-09T10:00:00Z'},
+      {kind:'DIGEST',channel:'telegram',status:'UNCERTAIN',at:'2026-09-08T10:00:00Z'},
+    ]);
+  await ready(page); await section(page,'System Health');
+  await expect(page.getByText('REPLAY SUPPRESSED',{exact:true})).toBeVisible();
+  await expect(page.getByTestId('health-last-digest')).toContainText('UNCERTAIN');
+  await expect(page.getByTestId('health-last-digest')).toContainText('8 Sept 2026');
+  await expect(page.getByTestId('health-research-readiness')).toContainText('Valuation predictive power is not established');
+  await expect(page.getByTestId('health-research-readiness')).toContainText('Methodology remains a candidate');
+  await page.getByRole('link',{name:'Inspect digest preview and delivery history'}).click();
+  await expect(page.getByRole('heading',{name:'Alert Center',exact:true})).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
 
 test('verified compressed research loads without requesting the large JSON source', async ({ page }) => {
   let jsonRequests = 0;

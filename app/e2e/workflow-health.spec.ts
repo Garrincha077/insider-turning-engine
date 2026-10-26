@@ -1,6 +1,18 @@
 import { expect, test } from '@playwright/test';
 import { parseWorkflowRuns, workflowDuration } from '../lib/workflow-health';
 import { ready, section } from './helpers';
+import { digestReadinessDisplay } from '../lib/operations-data';
+
+test('replay suppression does not claim successful delivery or hide a new failure', () => {
+  const replay = digestReadinessDisplay({status:'BLOCKED', reasons:[
+    'ALREADY_CLAIMED_OR_OLDER_DAY', 'DIGEST_SNAPSHOT_STALE']});
+  expect(replay.label).toBe('REPLAY SUPPRESSED');
+  expect(replay.detail).toContain('neither delivery failure nor successful delivery');
+  expect(digestReadinessDisplay({status:'BLOCKED', reasons:[
+    'ALREADY_CLAIMED_OR_OLDER_DAY', 'LATEST_SEC_DAY_INCOMPLETE']}).label).toBe('BLOCKED');
+  expect(digestReadinessDisplay({status:'BLOCKED', reasons:['DIGEST_SNAPSHOT_STALE']}).label).toBe('BLOCKED');
+  expect(digestReadinessDisplay({status:'READY', reasons:[]}).label).toBe('READY');
+});
 
 const run = (id: number, event: string, conclusion: string, created: string) => ({
   id, event, conclusion, status: 'completed', head_branch: 'main',

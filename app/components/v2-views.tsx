@@ -1,5 +1,5 @@
 import type { ResearchSnapshot } from '@/lib/research-v2';
-import { digestPolicySummary, type SettingsStatus } from '@/lib/operations-data';
+import { digestPolicySummary, digestReadinessDisplay, type SettingsStatus } from '@/lib/operations-data';
 import { controlClass, downloadCsv, metric, money, reasonText } from '@/lib/research';
 import { isString, usePreference } from '@/lib/local-preferences';
 import { isReportedPriceExtreme, purchasePriceReviews, reportedPriceCaution } from '@/lib/reported-price';
@@ -135,7 +135,10 @@ export function CoverageV2({ data }: { data: ResearchSnapshot }) {
 
 export function ReadinessV2({ data, digest }: { data: ResearchSnapshot; digest?: SettingsStatus['digest'] }) {
   const readiness = { ...data.readiness, digest: digest ?? data.readiness.digest };
-  return <section className="grid gap-3 md:grid-cols-3">{Object.entries(readiness).map(([name, state]) => <div key={name} className="rounded-xl border border-border bg-card p-4"><h2 className="text-sm font-semibold capitalize">{name === 'predictive' ? 'Predictive model' : name === 'digest' ? 'Informational digest' : 'Factual dashboard'}</h2><p className={`my-3 font-mono text-sm ${state.status === 'READY' ? 'text-emerald-200' : 'text-amber-200'}`}>{state.status}</p>{state.reasons.map((reason) => <p key={reason} className="mt-2 text-xs text-muted-foreground">{reasonText(reason)}</p>)}</div>)}</section>;
+  return <section className="grid gap-3 md:grid-cols-3">{Object.entries(readiness).map(([name, state]) => {
+    const display = name === 'digest' ? digestReadinessDisplay(state) : { label: state.status, detail: null };
+    return <div key={name} className="rounded-xl border border-border bg-card p-4"><h2 className="text-sm font-semibold capitalize">{name === 'predictive' ? 'Predictive model' : name === 'digest' ? 'Informational digest' : 'Factual dashboard'}</h2><p className={`my-3 font-mono text-sm ${state.status === 'READY' ? 'text-emerald-200' : 'text-amber-200'}`}>{display.label}</p>{display.detail && <p className="mb-3 text-xs leading-5 text-muted-foreground">{display.detail}</p>}{state.reasons.map((reason) => <p key={reason} className="mt-2 text-xs text-muted-foreground">{reasonText(reason)}</p>)}</div>;
+  })}</section>;
 }
 
 export function DigestPreviewV2({ data, digest }: { data: ResearchSnapshot; digest?: SettingsStatus['digest'] }) {
