@@ -4,6 +4,8 @@ export type RatioPoint = {
   label: string; start: string; end: string; ratio: number | null;
   buys: number; sales: number; partial: boolean; mean3m: number | null;
   spy: number | null; spyDate: string | null;
+  buyDollars: number | null; saleDollars: number | null; dollarRatio: number | null;
+  buyingCompanies: number; sellingCompanies: number; activeCompanies: number;
 };
 
 export function dateOffset(day: string, offset: number): string {
@@ -23,16 +25,22 @@ export function secDayEnd(day: string): number {
 const ratio = (buys: number, sales: number) => sales ? buys / sales : null;
 
 /** A descriptive count ratio, never a calibrated forecast of market extremes. */
-export function buildInsiderBarometer(data: ResearchSnapshot, sector = 'All sectors') {
+export function buildInsiderBarometer(data: ResearchSnapshot, sector = 'All sectors', history: '90D' | 'ALL' = '90D') {
   const asOf = Date.parse(data.asOf);
   const asOfDay = new Date(asOf).toISOString().slice(0, 10);
   const expected = [...new Set(data.coverage.expectedSecDays.filter((day) => day <= asOfDay))].sort();
   const evidence = new Map(data.coverage.days.map((row) => [row.day, row]));
-  const complete = expected.filter((day) => evidence.get(day)?.complete);
+  const completeDay = (day: string) => {
+    const row = evidence.get(day);
+    return Boolean(row?.complete && row.storedFilings === row.discoveredFilings
+      && row.quarantinedRows === 0 && row.failures === 0);
+  };
+  const complete = expected.filter(completeDay);
   const latestDay = complete.at(-1) ?? null;
   const firstDay = expected[0] ?? null;
   const start = latestDay ? dateOffset(latestDay, -89) : null;
-  const monthStart = start ? `${start.slice(0, 7)}-01` : null;
+  const monthStart = history === 'ALL' && firstDay ? `${firstDay.slice(0, 7)}-01`
+    : start ? `${start.slice(0, 7)}-01` : null;
   const priorMonths = monthStart ? new Date(`${monthStart}T00:00:00Z`) : null;
   priorMonths?.setUTCMonth(priorMonths.getUTCMonth() - 2);
   const historyStart = priorMonths?.toISOString().slice(0, 10) ?? null;
@@ -57,16 +65,30 @@ export function buildInsiderBarometer(data: ResearchSnapshot, sector = 'All sect
   });
   const windowPartial = (from: string, to: string) => !firstDay || from < firstDay
     || !latestDay || to > latestDay
-    || expected.some((day) => day >= from && day <= to && !evidence.get(day)?.complete);
+    || expected.some((day) => day >= from && day <= to && !completeDay(day));
   const count = (from: string, to: string, cutoff: string, currentKnowledge: boolean) => {
     let buys = 0, sales = 0;
+    let buyDollars = 0, saleDollars = 0, missingBuyValue = false, missingSaleValue = false;
+    const buyers = new Set<string>(), sellers = new Set<string>();
     const knownBy = currentKnowledge ? asOf : Math.min(asOf, secDayEnd(cutoff));
     for (const row of eligible) {
       if (row.transactionDate < from || row.transactionDate > to || row.secDay! > cutoff
         || Math.max(Date.parse(row.knownAt), Date.parse(row.acceptedAt)) > knownBy) continue;
-      if (row.side === 'BUY') buys++; else sales++;
+      const validValue = row.value != null && Number.isFinite(row.value) && row.value >= 0;
+      if (row.side === 'BUY') {
+        buys++; buyers.add(row.issuerCik);
+        if (validValue) buyDollars += row.value!; else missingBuyValue = true;
+      } else {
+        sales++; sellers.add(row.issuerCik);
+        if (validValue) saleDollars += row.value!; else missingSaleValue = true;
+      }
     }
-    return { buys, sales, ratio: ratio(buys, sales) };
+    return { buys, sales, ratio: ratio(buys, sales),
+      buyDollars: missingBuyValue ? null : buyDollars,
+      saleDollars: missingSaleValue ? null : saleDollars,
+      dollarRatio: missingBuyValue || missingSaleValue ? null : ratio(buyDollars, saleDollars),
+      buyingCompanies: buyers.size, sellingCompanies: sellers.size,
+      activeCompanies: new Set([...buyers, ...sellers]).size };
   };
   const benchmarks = (data.benchmarkSeries ?? []).filter((row) => row.symbol === 'SPY'
     && monthStart != null && latestDay != null && row.date >= monthStart && row.date <= latestDay
