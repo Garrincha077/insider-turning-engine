@@ -96,6 +96,17 @@ def test_newer_quarterly_balance_does_not_change_annual_roe_denominator():
     assert result["annual_return_on_equity"] == panel(original)["annual_return_on_equity"]
 
 
+def test_intentional_prior_year_comparison_does_not_make_current_metric_stale():
+    original = facts()
+    result = {row.name: row for row in financial_evidence(original,
+        as_of=datetime(2027, 1, 1, tzinfo=UTC), sector_profile="OPERATING")}
+    assert not result["annual_diluted_share_change"].reasons
+    assert not result["annual_return_on_equity"].reasons
+    truly_old = {row.name: row for row in financial_evidence(original,
+        as_of=datetime(2028, 1, 1, tzinfo=UTC), sector_profile="OPERATING")}
+    assert "STALE_FINANCIAL_PERIOD" in truly_old["annual_diluted_share_change"].reasons
+
+
 def test_profitability_loss_remains_negative_and_pe_does_not_become_negative_cheapness():
     original = facts()
     rows = tuple(replace(row, value=-row.value) if row.tag in {

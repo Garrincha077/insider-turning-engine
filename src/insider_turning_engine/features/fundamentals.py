@@ -68,9 +68,12 @@ def financial_evidence(
 
     def metric(name: str, value: Decimal | None, unit: str,
                rows: tuple[FinancialFact, ...], *reasons: str) -> FundamentalMetric:
+        latest_end = max((row.end for row in rows), default=None)
+        # An intentionally older comparison period (ROE opening equity or prior
+        # annual shares) is not evidence that the newest reported metric is stale.
         reasons = tuple(sorted({*reasons, *(
-            ["STALE_FINANCIAL_PERIOD"] if any((as_of.date() - row.end).days > 550
-                                             for row in rows) else [])}))
+            ["STALE_FINANCIAL_PERIOD"] if latest_end is not None
+            and (as_of.date() - latest_end).days > 550 else [])}))
         return FundamentalMetric(name, value, unit,
             min((row.start for row in rows if row.start is not None), default=None),
             max((row.end for row in rows), default=None),
