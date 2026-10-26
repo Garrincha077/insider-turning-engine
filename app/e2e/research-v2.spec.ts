@@ -420,6 +420,34 @@ test('twenty overlapping rolling observations do not manufacture calibrated mark
   await expect(page.locator('canvas').first()).toBeVisible();
 });
 
+test('Compass presents monthly counts, separate dollars and company breadth with working history controls', async ({ page }) => {
+  await v2(page, (value) => {
+    const research = value as unknown as ResearchSnapshot;
+    research.coverage.expectedSecDays = ['2026-08-28', '2026-08-31'];
+    research.coverage.days = research.coverage.expectedSecDays.map((day) => ({ day,
+      discoveredFilings: 1, storedFilings: 1, parseRows: 1, quarantinedRows: 0, failures: 0, complete: true }));
+    research.economicTransactions.forEach((row) => { row.secDay = '2026-08-28'; });
+    research.economicTransactions.push({ ...research.economicTransactions[0],
+      eventId: 'evt_compass_sale', accession: '0001234567-26-000003', code: 'S', side: 'SELL',
+      value: 500, secDay: '2026-08-31', owners: [research.economicTransactions[0].owners[0]] });
+    research.coverage.economicEvents += 1; research.coverage.canonicalOwnerRows += 1;
+  });
+  await ready(page); await section(page, 'Insider Ratio');
+  await expect(page.getByText('Count ratio · 2026-08', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('insider-ratio-current')).toHaveText('2×');
+  await expect(page.getByTestId('compass-dollar-ratio')).toHaveText('4×');
+  await expect(page.getByTestId('compass-breadth')).toHaveText('1 / 1');
+  await expect(page.getByTestId('compass-percentile')).toHaveText('—');
+  await expect(page.getByTestId('compass-summary')).toContainText('not classified');
+  await page.getByLabel('Compass history').selectOption('ALL');
+  await expect(page.getByText(/All calendar months in the exported SEC inventory/)).toBeVisible();
+  await section(page, 'Radar'); await section(page, 'Insider Ratio');
+  await expect(page.getByLabel('Compass history')).toHaveValue('ALL');
+  await page.getByRole('button', { name: 'Daily rolling 30D' }).click();
+  await expect(page.getByText('Current rolling 30D ratio', { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
 test('v2.3 SPY chart uses actual prices and source metadata with working sector/reference controls', async ({ page }) => {
   await v2(page, (value) => {
     const research = value as unknown as ResearchSnapshot;

@@ -56,6 +56,21 @@ def test_no_market_does_not_hide_source_linked_sec_facts(tmp_path):
     assert json.loads((output / "dashboard.json").read_text())["marketPulse"] is None
 
 
+def test_compass_population_preserves_seller_only_issuer_without_prices_or_scores(tmp_path):
+    record, identity, history = _inputs()
+    record.transaction.code = "S"
+    record.transaction.acquired_disposed = "D"
+    result = daily_research.materialize_research(history, identity_rows=[identity], market={},
+        as_of=POINT, run_id="run_compass_seller_only_001", output=tmp_path)
+    data = json.loads((tmp_path / "research-v2.json").read_bytes())
+    assert result["activeIssuerCount"] == 1
+    assert data["companies"][0]["identityStatus"] == "RESOLVED"
+    assert data["companies"][0]["currentPrice"] is None
+    assert data["researchScores"][0]["total"] is None
+    assert data["economicTransactions"][0]["side"] == "SELL"
+    assert data["economicTransactions"][0]["aggregateEligible"] is True
+
+
 def test_full_materialization_replay_and_future_bars(tmp_path):
     _record_value, identity, history = _inputs()
     output = tmp_path / "public"
