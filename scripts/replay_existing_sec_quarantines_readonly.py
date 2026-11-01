@@ -13,7 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
@@ -108,17 +108,23 @@ def replay_filing(filing: dict[str, Any], raw: Any) -> dict[str, Any]:
                     for key, value in old_by_identity.items()) if lineage_ok else False
 
     outcomes: Counter[str] = Counter()
+    by_row_kind: dict[str, Counter[str]] = defaultdict(Counter)
     for key in expected:
+        kind = ("DERIVATIVE" if key.startswith("DERIVATIVE:") else
+                "NON_DERIVATIVE" if key.startswith("NON_DERIVATIVE:") else "UNKNOWN")
         if key in current_bad:
-            outcomes["STILL_REJECTED_" + safe_cause(current_bad[key].message)] += 1
+            outcome = "STILL_REJECTED_" + safe_cause(current_bad[key].message)
         elif key in current_valid:
-            outcomes["PARSES_WITH_CURRENT_PARSER"] += 1
+            outcome = "PARSES_WITH_CURRENT_PARSER"
         else:
-            outcomes["NOT_REPRODUCED_BY_CURRENT_PARSER"] += 1
+            outcome = "NOT_REPRODUCED_BY_CURRENT_PARSER"
+        outcomes[outcome] += 1
+        by_row_kind[kind][outcome] += 1
 
     # Additional quarantine/record differences block any "safe repair" claim.
     extras = (set(current_bad) - set(expected))
-    source_status = ("CANONICAL_UNCHANGED" if preserved else "CANONICAL_UNVERIFIED_OR_CHANGED")
+    source_status = ("NO_PRIOR_CANONICAL_ROWS" if not old else
+                     "CANONICAL_UNCHANGED" if preserved else "PRIOR_CANONICAL_CHANGED")
     if extras or any(q.source_row_key is None for q in current.quarantines):
         source_status = "NEW_OR_UNSCOPED_QUARANTINES"
     derivative_only = bool(expected) and all(
@@ -143,6 +149,9 @@ def replay_filing(filing: dict[str, Any], raw: Any) -> dict[str, Any]:
         "sourceStatus": source_status,
         "lineageAvailable": bool(old) and lineage_ok,
         "outcomes": dict(sorted(outcomes.items())),
+        "outcomesByRowKind": {
+            key: dict(sorted(counts.items())) for key, counts in sorted(by_row_kind.items())
+        },
         "derivativeOnlyReplayPrecheck": possible_derivative_replay,
         "eligibleForAutomaticRepair": False,
     }
@@ -169,7 +178,9 @@ def audit(store: ReleaseCheckpointStore, source: SECDailyIndexSource,
 
     outcomes: Counter[str] = Counter()
     source_statuses: Counter[str] = Counter()
+    kind_outcomes: dict[str, Counter[str]] = defaultdict(Counter)
     precheck = 0
+    precheck_rows = 0
     checked = 0
     day_summary = []
     for checkpoint, day_row in checkpoints:
@@ -210,7 +221,11 @@ def audit(store: ReleaseCheckpointStore, source: SECDailyIndexSource,
                     continue
                 day_outcomes.update(result["outcomes"])
                 source_statuses[result["sourceStatus"]] += expected_count
-                precheck += int(result.get("derivativeOnlyReplayPrecheck", False))
+                for kind, counts in result.get("outcomesByRowKind", {}).items():
+                    kind_outcomes[kind].update(counts)
+                if result.get("derivativeOnlyReplayPrecheck", False):
+                    precheck += 1
+                    precheck_rows += expected_count
                 checked += expected_count
         if sum(day_outcomes.values()) != rows_targeted:
             raise SourceDriftError("replay categories fail to reconcile with pinned quarantine")
@@ -234,7 +249,11 @@ def audit(store: ReleaseCheckpointStore, source: SECDailyIndexSource,
         "sourceVerifiedRowsParsed": checked,
         "outcomeTotals": dict(sorted(outcomes.items())),
         "sourceStatusTotals": dict(sorted(source_statuses.items())),
+        "outcomesByRowKind": {
+            key: dict(sorted(counts.items())) for key, counts in sorted(kind_outcomes.items())
+        },
         "derivativePrecheckFilings": precheck,
+        "derivativePrecheckRows": precheck_rows,
         "days": day_summary,
         "limitations": (
             "Checked currently latest immutable releases, not exact pinned old release tags. "
@@ -273,6 +292,9 @@ def main() -> int:
         "sourceVerifiedRowsParsed": report["sourceVerifiedRowsParsed"],
         "outcomeTotals": report["outcomeTotals"],
         "derivativePrecheckFilings": report["derivativePrecheckFilings"],
+        "derivativePrecheckRows": report["derivativePrecheckRows"],
+        "sourceStatusTotals": report["sourceStatusTotals"],
+        "outcomesByRowKind": report["outcomesByRowKind"],
         "scoresChanged": False, "alertsSent": False,
     }, sort_keys=True))
     return 0 if report["status"] == "COMPLETE_DIAGNOSTIC_NOT_A_REPAIR" else 2
