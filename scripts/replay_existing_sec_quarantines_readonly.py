@@ -167,8 +167,6 @@ def audit(store: ReleaseCheckpointStore, source: SECDailyIndexSource,
         raise SourceDriftError("bounded SEC submission budget exceeded")
 
     outcomes: Counter[str] = Counter()
-    cause_total: Counter[str] = Counter()
-    row_kinds: Counter[str] = Counter()
     source_statuses: Counter[str] = Counter()
     precheck = 0
     checked = 0
