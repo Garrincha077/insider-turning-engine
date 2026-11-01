@@ -73,6 +73,10 @@ def test_legacy_derivative_dry_run_calls_real_repair_without_writing():
     assert result["status"] == "COMPLETE_DIAGNOSTIC_NOT_AN_ARCHIVE_REPAIR"
     assert result["summary"]["candidateDerivativeFilings"] == 1
     assert result["summary"]["candidateDerivativeRows"] == 1
+    assert result["summary"]["totalQuarantinedRows"] == 1
+    assert result["summary"]["derivativeQuarantineRows"] == 1
+    assert result["summary"]["nonDerivativeQuarantineRows"] == 0
+    assert result["summary"]["derivativeRowsOutsideWholeFilingPredicate"] == 0
     assert result["summary"]["verifiedDryRunFilings"] == 1
     assert result["summary"]["verifiedDryRunRows"] == 1
     assert result["days"][0]["result"] == "FULL_DAY_REPAIR_DRY_RUN_VERIFIED"
@@ -192,3 +196,24 @@ def test_unaware_clock_fails_closed():
                   repair_at=REPAIRED.replace(tzinfo=None))
     finally:
         sec.close()
+
+def test_mixed_derivative_and_nonderivative_quarantines_are_not_eligible():
+    original = legacy_checkpoint()
+    original["filings"][0]["quarantines"].append({
+        "reason_code": "INVALID_TRANSACTION",
+        "message": "Inspect original SEC filing",
+        "source_row_key": "NON_DERIVATIVE:1:0001999103",
+    })
+    calls = []
+    source = provider(calls)
+    try:
+        result = audit(FakeStore(original), source, pinned(original), repair_at=REPAIRED)
+    finally:
+        source.close()
+    assert result["summary"]["totalQuarantinedRows"] == 2
+    assert result["summary"]["derivativeQuarantineRows"] == 1
+    assert result["summary"]["nonDerivativeQuarantineRows"] == 1
+    assert result["summary"]["candidateDerivativeFilings"] == 0
+    assert result["summary"]["derivativeRowsOutsideWholeFilingPredicate"] == 1
+    assert result["summary"].get("verifiedDryRunRows", 0) == 0
+    assert calls == []
