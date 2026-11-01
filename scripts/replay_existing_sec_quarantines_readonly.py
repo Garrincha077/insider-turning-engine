@@ -18,15 +18,16 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
-from insider_turning_engine.domain.models import CanonicalTransaction
-from insider_turning_engine.ingestion.sec.daily_index import SECDailyIndexSource
-from insider_turning_engine.ingestion.sec.parser import parse_sec_filing
-from insider_turning_engine.ingestion.sec.release_store import ReleaseCheckpointStore
 from triage_existing_sec_quarantines import (
     SourceDriftError,
     aggregate_verified_checkpoint,
     verify_expectation,
 )
+
+from insider_turning_engine.domain.models import CanonicalTransaction
+from insider_turning_engine.ingestion.sec.daily_index import SECDailyIndexSource
+from insider_turning_engine.ingestion.sec.parser import parse_sec_filing
+from insider_turning_engine.ingestion.sec.release_store import ReleaseCheckpointStore
 
 # These correspond to explicit, static validation conditions in parser.py.
 # Unknown/untrusted exception prose is never copied to output.
