@@ -1,0 +1,113 @@
+{
+  "schemaVersion": "sec-quarantine-triage-input-v1",
+  "sourceRunId": "run_research_20261101T104911Z",
+  "sourceAsOf": "2026-11-01T11:25:54.886900Z",
+  "sourceResearchSha256": "7e71f2af8167c58f15c2df7dd5c56ffb8a5d8f530495fe5fc21b8cbb6ff652fd",
+  "incompleteDays": [
+    {
+      "day": "2026-08-03",
+      "discoveredFilings": 642,
+      "storedFilings": 642,
+      "quarantinedRows": 2,
+      "failures": 0
+    },
+    {
+      "day": "2026-08-04",
+      "discoveredFilings": 1017,
+      "storedFilings": 1017,
+      "quarantinedRows": 1,
+      "failures": 0
+    },
+    {
+      "day": "2026-08-06",
+      "discoveredFilings": 672,
+      "storedFilings": 672,
+      "quarantinedRows": 1,
+      "failures": 0
+    },
+    {
+      "day": "2026-08-13",
+      "discoveredFilings": 512,
+      "storedFilings": 512,
+      "quarantinedRows": 1,
+      "failures": 0
+    },
+    {
+      "day": "2026-08-21",
+      "discoveredFilings": 614,
+      "storedFilings": 614,
+      "quarantinedRows": 1,
+      "failures": 0
+    },
+    {
+      "day": "2026-08-28",
+      "discoveredFilings": 433,
+      "storedFilings": 433,
+      "quarantinedRows": 3,
+      "failures": 0
+    },
+    {
+      "day": "2026-09-01",
+      "discoveredFilings": 616,
+      "storedFilings": 616,
+      "quarantinedRows": 1,
+      "failures": 0
+    },
+    {
+      "day": "2026-09-02",
+      "discoveredFilings": 878,
+      "storedFilings": 878,
+      "quarantinedRows": 2,
+      "failures": 0
+    },
+    {
+      "day": "2026-09-03",
+      "discoveredFilings": 1056,
+      "storedFilings": 1056,
+      "quarantinedRows": 3,
+      "failures": 0
+    },
+    {
+      "day": "2026-09-04",
+      "discoveredFilings": 496,
+      "storedFilings": 496,
+      "quarantinedRows": 8,
+      "failures": 0
+    },
+    {
+      "day": "2026-09-08",
+      "discoveredFilings": 554,
+      "storedFilings": 554,
+      "quarantinedRows": 5,
+      "failures": 0
+    },
+    {
+      "day": "2026-09-09",
+      "discoveredFilings": 553,
+      "storedFilings": 553,
+      "quarantinedRows": 2,
+      "failures": 0
+    },
+    {
+      "day": "2026-09-10",
+      "discoveredFilings": 622,
+      "storedFilings": 622,
+      "quarantinedRows": 4,
+      "failures": 0
+    },
+    {
+      "day": "2026-09-14",
+      "discoveredFilings": 664,
+      "storedFilings": 664,
+      "quarantinedRows": 2,
+      "failures": 0
+    },
+    {
+      "day": "2026-09-16",
+      "discoveredFilings": 659,
+      "storedFilings": 659,
+      "quarantinedRows": 2,
+      "failures": 0
+    }
+  ]
+}
