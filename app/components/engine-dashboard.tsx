@@ -153,8 +153,8 @@ export function EngineDashboard() {
           <button className={controlClass} onClick={() => navigate('alert-center')}><BellRing className="mr-2 inline size-4" />Alerts</button>
         </div>
       </div>
-      {!pwa.online && <div role="status" className="border-t border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs text-amber-100">Offline — only previously loaded data is visible. Reconnect to verify a new snapshot.</div>}
-      {pwa.updateReady && <div role="status" className="flex items-center justify-between gap-3 border-t border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs text-emerald-100"><span>App update ready. Restart to use the new version.</span><button className={controlClass} onClick={pwa.applyUpdate}>Update app</button></div>}
+      {!pwa.online && <output className="block border-t border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs text-amber-100">Offline — only previously loaded data is visible. Reconnect to verify a new snapshot.</output>}
+      {pwa.updateReady && <output className="flex items-center justify-between gap-3 border-t border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs text-emerald-100"><span>App update ready. Restart to use the new version.</span><button className={controlClass} onClick={pwa.applyUpdate}>Update app</button></output>}
       <label className="flex items-center gap-3 border-t border-border px-4 py-2 text-xs xl:hidden">Section
         <select aria-label="Dashboard section" className={`${controlClass} min-w-0 flex-1`} value={view} onChange={(event) => navigate(event.target.value)}>
           {groups.map((group) => <optgroup key={group.label} label={group.label}>{group.views.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</optgroup>)}
