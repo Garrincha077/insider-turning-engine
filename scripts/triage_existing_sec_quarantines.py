@@ -11,7 +11,7 @@ import hashlib
 import json
 import re
 from collections import Counter
-from datetime import UTC, date, datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
