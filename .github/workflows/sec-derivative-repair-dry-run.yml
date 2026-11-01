@@ -1,0 +1,72 @@
+name: SEC derivative repair dry-run (no publication)
+
+on:
+  push:
+    branches: [ops/sec-derivative-repair-dry-run-20261101]
+    paths:
+      - 'scripts/dry_run_sec_derivative_repair.py'
+      - 'tests/test_sec_derivative_repair_dry_run.py'
+      - '.github/workflows/sec-derivative-repair-dry-run.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/dry_run_sec_derivative_repair.py'
+      - 'tests/test_sec_derivative_repair_dry_run.py'
+      - '.github/workflows/sec-derivative-repair-dry-run.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sec-derivative-repair-dry-run-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  offline-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --all-groups --frozen
+      - name: Verify no-write repair replay invariants
+        run: |
+          uv run python -m py_compile scripts/dry_run_sec_derivative_repair.py
+          uv run ruff check scripts/dry_run_sec_derivative_repair.py tests/test_sec_derivative_repair_dry_run.py
+          uv run pytest tests/test_sec_derivative_repair_dry_run.py -q
+
+  actual-source-dry-run:
+    # A single branch-only audit. No production/PR repair, no automatic recurrence.
+    if: github.event_name == 'push' && github.ref_name == 'ops/sec-derivative-repair-dry-run-20261101'
+    needs: offline-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - name: Verify source, original canonical bytes and simulated repair PIT
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT }}
+        run: >-
+          uv run python scripts/dry_run_sec_derivative_repair.py
+          --repository "$GITHUB_REPOSITORY"
+          --target "$GITHUB_SHA"
+          --source ops/sec_quarantine_source_20261101.json
+          --output work/ops/sec-derivative-repair-dry-run.json
+          --execute
+      - name: Keep only aggregate diagnostic findings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sec-derivative-repair-dry-run-${{ github.run_id }}
+          path: work/ops/sec-derivative-repair-dry-run.json
+          if-no-files-found: warn
+          retention-days: 30
