@@ -135,6 +135,7 @@ export function EngineDashboard() {
   }
 
   if (error) return <main className="grid min-h-screen place-items-center p-6"><Panel title={pwa.online ? 'Dashboard snapshot unavailable' : 'Offline — snapshot unavailable'} subtitle="No sample data or unverified market data is substituted."><ShieldAlert className="text-rose-300" /><p className="my-4 text-sm" role="alert">{pwa.online ? error : 'You are offline. Reconnect to load the latest verified SEC and market snapshot. Offline app shell does not cache financial data.'}</p><button className={controlClass} disabled={!pwa.online} onClick={() => window.location.reload()}>Retry snapshot</button></Panel></main>;
+  if (!publication && !pwa.online) return <main className="grid min-h-screen place-items-center p-6"><Panel title="Offline — snapshot unavailable" subtitle="Financial data is never stored in the PWA shell cache."><ShieldAlert className="text-amber-300" /><p className="my-4 text-sm" role="alert">You are offline. Reconnect to load a freshly verified snapshot. No sample or stale market data is substituted.</p><button className={controlClass} disabled>Retry snapshot</button></Panel></main>;
   if (!publication) return <main className="grid min-h-screen place-items-center p-6"><output>Checking snapshot schema and integrity…</output></main>;
   const { data, manifest, settings } = publication;
   const view = route.view;
