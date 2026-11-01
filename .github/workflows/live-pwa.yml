@@ -1,0 +1,61 @@
+name: Verify live Android PWA
+
+on:
+  workflow_run:
+    workflows: ['Deploy dashboard']
+    types: [completed]
+  schedule:
+    - cron: '10 9 * * *'
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/live-pwa.yml'
+      - 'app/pwa-live/**'
+      - 'app/playwright.pwa-live.config.ts'
+      - 'app/scripts/check-live-pwa.mjs'
+      - 'app/package.json'
+      - 'app/tsconfig.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-pwa-verification
+  cancel-in-progress: false
+
+jobs:
+  production-pwa:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PWA_SITE_URL: https://garrincha077.github.io/insider-turning-engine/
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Check live Pages assets, scoped worker and publication hashes
+        run: node app/scripts/check-live-pwa.mjs
+      - run: npm ci
+        working-directory: app
+      - run: npx playwright install --with-deps chromium
+        working-directory: app
+      - name: Exercise actual Pages in Pixel 7 Chromium, offline and reconnected
+        run: npm run test:pwa-live
+        working-directory: app
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: live-pwa-failure
+          path: app/test-results
+          if-no-files-found: ignore
+          retention-days: 7

@@ -9,11 +9,12 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vite build && node scripts/build-pwa.mjs && node scripts/verify-pwa.mjs",
     "start": "vite preview --host 0.0.0.0",
-    "lint": "oxlint main.tsx components lib e2e pwa scripts vite.config.ts playwright.config.ts playwright.pwa.config.ts",
+    "lint": "oxlint main.tsx components lib e2e pwa pwa-live scripts vite.config.ts playwright.config.ts playwright.pwa.config.ts playwright.pwa-live.config.ts",
     "format": "oxfmt",
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
-    "test:pwa": "playwright test --config playwright.pwa.config.ts"
+    "test:pwa": "playwright test --config playwright.pwa.config.ts",
+    "test:pwa-live": "playwright test --config playwright.pwa-live.config.ts"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",

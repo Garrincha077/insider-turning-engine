@@ -35,6 +35,8 @@
     "vite.config.ts",
     "playwright.config.ts",
     "pwa/**/*.ts",
+    "pwa-live/**/*.ts",
+    "playwright.pwa-live.config.ts",
     "scripts/**/*.mjs",
     "playwright.pwa.config.ts"
   ],
