@@ -19,6 +19,48 @@ it is not permission for unbounded individual market requests.
 Inspect the final `report` job and its GitHub run summary for build, deployment
 and digest outcomes. Diagnostic artifacts include `market-status.json`, SEC
 acquisition evidence and `daily-report.json` when materialization completes.
+
+### Separate, non-scoring coverage diagnostics
+
+Successful daily data refreshes now also retain **aggregate only** evidence:
+`sec-quarantine-reasons.json` reports per-day parser reason-code counts from
+verified immutable SEC checkpoints, and `coverage-diagnostics.json` reconciles
+issuer-level score blockers, state missing-component reason codes, SEC day
+evidence, current identity-lookup coverage and market-source availability.
+Neither file is published in Pages, written to the state branch, used for
+ranking/scoring/backtests, or eligible to trigger Telegram/digest delivery.
+Generation of this diagnostic is `continue-on-error` so it cannot block an
+otherwise valid factual publication; a missing report remains an inspection
+issue, **never** evidence of complete scoring. Tests explicitly fail on
+misleading denominators, day/count mismatches and fabricated complete scores.
+
+**Interpretation:** a `63/63` day count does not mean all SEC transactions
+parsed correctly. `SEC_WINDOW_PARTIAL` also covers individual parser
+quarantines, incomplete filing downloads or failures; consult per-day counts
+rather than treating every partial day as a missing day. Similarly, a score
+blocked by `UNRESOLVED_IDENTITY` is not necessarily a failed identity API call:
+the public factual research universe includes issuers without an eligible
+current US common-stock listing. The current `identities.json` lookup universe
+is smaller/different; the two unresolved counts must not be subtracted.
+`INSUFFICIENT_COMPONENT_DATA` may reflect the absence of a qualifying
+historical purchase/cluster, not a broken market feed; reason tags can overlap
+and are **not** added as independent blocked issuers. `STALE_DATA_HOLD` is an
+overlay, not a new primary blocker.
+
+Example from 2026-11-01 (historical, not a target threshold): 63 observed SEC
+checkpoint days with **zero missing dates**, but 38 quarantined parser rows
+across 15 days. Among 4,110 issuer research rows, 73 complete scores;
+2,147 unresolved score identity, 1,471 incomplete components, 277 unresolved
+amendments (including 5 stale holds), 139 joint-owner exclusions and 3
+source-quarantine exclusions. These are overlapping-evidence categories
+resolved to **one primary blocker per issuer** for diagnostics only.
+
+Next investigate the concrete parser reason codes with SEC XML fixture cases.
+Do not re-download or automatically discard 38 quarantined rows, fabricate
+purchase basis, translate absent historical observations to zero, relax
+amendment/common-stock restrictions or mark predictive readiness complete.
+Actual 365-day PIT SEC history requires a distinct verified historical
+acquisition/identity/adjudication workflow under the sealed OOS rules.
 The report job runs even when publication fails and sends an operational
 Telegram warning on failure, independently of the snapshot and score gates.
 Notice claims are persisted before sending; reruns and uncertain delivery do
