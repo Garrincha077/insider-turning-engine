@@ -111,7 +111,7 @@ const html = builtHtml.replace('</head>', [
   '  </head>',
 ].join('\n'));
 writeFileSync(join(dist, 'index.html'), html);
-const assets = [...html.matchAll(/(?:src|href)=["']([^"']+\/assets\/[^"']+\.(?:js|css))["']/g)]
+const assets = [...html.matchAll(/(?:src|href)=["']([^"']*\/assets\/[^"']+\.(?:js|css))["']/g)]
   .map((match) => new URL(match[1], 'https://pwa.invalid' + base).pathname);
 if (!assets.some((p) => p.endsWith('.js')) ||
     !assets.some((p) => p.endsWith('.css')) ||
