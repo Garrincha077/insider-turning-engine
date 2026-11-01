@@ -203,3 +203,60 @@ def test_partitioned_issuers_keep_every_issuer_and_original_observation():
     assert decode_identity_bundle(tag, files) == [row, other]
     _, manifest = _manifest(tag, files)
     assert {part["bucket"] for part in manifest["shards"]} == {7, 8}
+
+
+class DelayedDraftInventory(ShardReleases):
+    """Simulate a draft temporarily absent from the paginated release index."""
+
+    def __init__(self, *, visible_after: int = 2):
+        super().__init__()
+        self.visible_after = visible_after
+        self.lookups = 0
+        self.hidden_once = False
+
+    def _releases(self):
+        items = super()._releases()
+        if self.releases and self.releases[-1]["draft"] and not self.hidden_once:
+            self.hidden_once = True
+            return [item for item in items
+                    if item["tag_name"] != self.releases[-1]["tag_name"]]
+        return items
+
+    def _gh(self, *args):
+        if args[:2] == ("api", "repos/owner/repo/releases?per_page=100"):
+            self.commands.append(args)
+            self.lookups += 1
+            return json.dumps(self.releases if self.lookups >= self.visible_after else [])
+        return super()._gh(*args)
+
+
+def test_created_draft_recovers_from_lagged_authenticated_inventory(monkeypatch):
+    monkeypatch.setattr(module, "CHUNK_TARGET_BYTES", 1200)
+    monkeypatch.setattr(module.time, "sleep", lambda _: None)
+    store = ReleaseIdentityStore("owner/repo", target="a" * 40)
+    remote = DelayedDraftInventory()
+    store.transport = remote
+    rows = observations()
+    receipt = store.persist(rows)
+    assert receipt["storageStatus"] == "VERIFIED"
+    assert remote.lookups == 2
+    assert len(remote.releases) == 1
+    assert remote.releases[0]["draft"] is False
+    assert store.latest() == rows
+    assert len([command for command in remote.commands
+                if command[:2] == ("release", "create")]) == 1
+
+
+def test_missing_draft_visibility_fails_closed_without_publication(monkeypatch):
+    monkeypatch.setattr(module, "CHUNK_TARGET_BYTES", 1200)
+    monkeypatch.setattr(module.time, "sleep", lambda _: None)
+    store = ReleaseIdentityStore("owner/repo", target="a" * 40)
+    remote = DelayedDraftInventory(visible_after=99)
+    store.transport = remote
+    with pytest.raises(ValueError, match="bounded authenticated lookup"):
+        store.persist(observations())
+    assert remote.lookups == 5
+    assert len(remote.releases) == 1
+    assert remote.releases[0]["draft"] is True
+    assert len(remote.releases[0]["assets"]) == 1
+    assert not any(command[:2] == ("release", "edit") for command in remote.commands)
