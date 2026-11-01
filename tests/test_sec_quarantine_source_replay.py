@@ -9,13 +9,15 @@ from pathlib import Path
 
 import pytest
 from test_sec_amount_repair import (
-    DAY, INDEX, XML, legacy_checkpoint, provider,
+    DAY,
+    INDEX,
+    XML,
+    legacy_checkpoint,
+    provider,
 )
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from replay_existing_sec_quarantines_readonly import (  # noqa: E402
-    audit, replay_filing, safe_cause,
-)
+from replay_existing_sec_quarantines_readonly import audit, safe_cause  # noqa: E402
 from triage_existing_sec_quarantines import SourceDriftError  # noqa: E402
 
 
