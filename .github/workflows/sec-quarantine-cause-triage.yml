@@ -1,0 +1,75 @@
+name: SEC quarantine cause triage (read-only)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ops/sec-quarantine-triage-20261101
+    paths:
+      - scripts/triage_existing_sec_quarantines.py
+      - tests/test_triage_existing_sec_quarantines.py
+      - ops/sec_quarantine_source_20261101.json
+      - .github/workflows/sec-quarantine-cause-triage.yml
+  pull_request:
+    branches: [main]
+    paths:
+      - scripts/triage_existing_sec_quarantines.py
+      - tests/test_triage_existing_sec_quarantines.py
+      - ops/sec_quarantine_source_20261101.json
+      - .github/workflows/sec-quarantine-cause-triage.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sec-quarantine-cause-triage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --all-groups --frozen
+      - name: Verify script syntax and static lint
+        run: |
+          uv run python -m py_compile scripts/triage_existing_sec_quarantines.py
+          uv run ruff check scripts/triage_existing_sec_quarantines.py tests/test_triage_existing_sec_quarantines.py
+      - name: Reconcile mock SEC release and fail-closed fixture cases
+        run: uv run pytest tests/test_triage_existing_sec_quarantines.py -q
+
+  triage:
+    if: github.event_name == 'push' && github.ref_name == 'ops/sec-quarantine-triage-20261101'
+    needs: regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - name: Read only prior verified SEC checkpoint releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          uv run python scripts/triage_existing_sec_quarantines.py
+          --repository "$GITHUB_REPOSITORY"
+          --target "$GITHUB_SHA"
+          --source ops/sec_quarantine_source_20261101.json
+          --output work/ops/sec-quarantine-causes.json
+          --execute
+      - name: Preserve aggregate reason evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sec-quarantine-causes-${{ github.run_id }}
+          path: work/ops/sec-quarantine-causes.json
+          if-no-files-found: warn
+          retention-days: 30
