@@ -95,7 +95,22 @@ function icon(size) {
   ]);
 }
 
-const html = readFileSync(join(dist, 'index.html'), 'utf8');
+const builtHtml = readFileSync(join(dist, 'index.html'), 'utf8');
+// Inject only into the production HTML, not Vite's fixture/dev server:
+// no non-existent manifest/icon requests may disturb existing E2E tests.
+if (!builtHtml.includes('</head>') || builtHtml.includes('rel="manifest"')) {
+  throw new Error('Unexpected HTML head; refusing an ambiguous PWA install');
+}
+const html = builtHtml.replace('</head>', [
+  '    <meta name="theme-color" content="#091221" />',
+  '    <meta name="mobile-web-app-capable" content="yes" />',
+  '    <meta name="apple-mobile-web-app-capable" content="yes" />',
+  '    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />',
+  '    <link rel="manifest" href="' + base + 'manifest.webmanifest" />',
+  '    <link rel="apple-touch-icon" href="' + base + 'icon-192.png" />',
+  '  </head>',
+].join('\n'));
+writeFileSync(join(dist, 'index.html'), html);
 const assets = [...html.matchAll(/(?:src|href)=["']([^"']+\/assets\/[^"']+\.(?:js|css))["']/g)]
   .map((match) => new URL(match[1], 'https://pwa.invalid' + base).pathname);
 if (!assets.some((p) => p.endsWith('.js')) ||
