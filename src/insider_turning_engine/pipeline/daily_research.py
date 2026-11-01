@@ -316,6 +316,14 @@ def main() -> None:
         raise RuntimeError("no verified canonical SEC facts; previous snapshot preserved")
     point = datetime.now(UTC)
     run_id = f"run_research_{started:%Y%m%dT%H%M%SZ}"
+    # Preserve aggregate per-day parser quarantine causes, even if a later stage fails.
+    # This evidence is not published in Pages and does not change any score/quality gate.
+    _write_json(args.work / "sec-quarantine-reasons.json", {
+        "schemaVersion": "sec-quarantine-reasons-v1",
+        "runId": run_id,
+        "source": "verified-sec-checkpoints",
+        "days": history.quarantine_reason_counts,
+    })
     ciks = sorted({row.issuer.cik for row in history.records
                    if row.transaction.code in {"P", "S"}})
     identity_store = ReleaseIdentityStore(args.repository, target=args.target)

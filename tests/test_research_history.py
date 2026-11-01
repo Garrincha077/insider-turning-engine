@@ -33,6 +33,7 @@ def test_partial_research_keeps_facts_and_explicit_day_evidence(tmp_path):
     assert first.records
     assert first.expected_days == (DAY, missing_day)
     assert first.evidence[0].complete
+    assert first.quarantine_reason_counts == {}
     assert set(first.sec_day_by_accession.values()) == {DAY}
 
 
@@ -41,6 +42,11 @@ def test_quarantined_checkpoint_is_not_complete_and_schema_damage_is_fatal(tmp_p
     history = research_history([value], expected_days=[DAY])
     assert history.evidence[0].quarantined_rows > 0
     assert not history.evidence[0].complete
+    assert sum(history.quarantine_reason_counts[DAY.isoformat()].values()) == (
+        history.evidence[0].quarantined_rows
+    )
+    assert all(reason.isupper() and len(reason) <= 64
+               for reason in history.quarantine_reason_counts[DAY.isoformat()])
     value["indexHash"] = "fake"
     with pytest.raises(ValueError):
         research_history([value], expected_days=[DAY])
