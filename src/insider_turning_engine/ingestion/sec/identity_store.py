@@ -8,6 +8,7 @@ import io
 import json
 import re
 import tempfile
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -284,6 +285,37 @@ class ReleaseIdentityStore:
         return self._download(max(matches, key=lambda item: (
             item["tag_name"].startswith(SHARDED_PREFIX), int(item["id"])))) if matches else None
 
+    def _find_recent_created_release(self, tag: str) -> dict[str, Any] | None:
+        """Resolve a newly created draft by stable ID if the paginated inventory lags.
+
+        Draft releases return HTTP 404 at the public tags endpoint. Only an
+        authenticated, exact-tag match from the recent release list is trusted;
+        an unverified draft is never published or overwritten.
+        """
+        for attempt in range(5):
+            recent = json.loads(self.transport._gh(
+                "api", f"repos/{self.transport.repository}/releases?per_page=100",
+            ))
+            if not isinstance(recent, list):
+                raise ValueError("invalid recent GitHub release inventory")
+            matches = [release for release in recent
+                       if isinstance(release, dict) and release.get("tag_name") == tag]
+            if len(matches) > 1:
+                raise ValueError("ambiguous identity release inventory")
+            if matches:
+                release_id = matches[0].get("id")
+                if type(release_id) is not int or release_id <= 0:
+                    raise ValueError("identity release has invalid ID")
+                result = json.loads(self.transport._gh(
+                    "api", f"repos/{self.transport.repository}/releases/{release_id}",
+                ))
+                if result.get("tag_name") != tag:
+                    raise ValueError("identity release ID/tag mismatch")
+                return result
+            if attempt < 4:
+                time.sleep(min(2 ** attempt, 8))
+        return None
+
     def persist(self, rows: list[dict[str, Any]]) -> dict[str, str]:
         self.transport._inventory = None
         previous = self.latest() or []
@@ -314,7 +346,11 @@ class ReleaseIdentityStore:
             existing = next((item for item in self.transport._releases()
                              if item["tag_name"] == tag), None)
             if existing is None:
-                raise ValueError("created identity release missing from authenticated inventory")
+                existing = self._find_recent_created_release(tag)
+            if existing is None:
+                raise ValueError(
+                    "created identity release still absent after bounded authenticated lookup"
+                )
         if sharded and existing["draft"]:
             present = {asset["name"] for asset in existing["assets"]}
             if not present <= set(files):
