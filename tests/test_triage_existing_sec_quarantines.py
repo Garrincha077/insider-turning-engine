@@ -53,7 +53,9 @@ def test_real_parser_fixture_reconciles_and_never_exports_raw(tmp_path):
     assert result["incompleteDays"] == 1
     assert result["totalQuarantinedRows"] > 0
     assert sum(result["reasonCounts"].values()) == result["totalQuarantinedRows"]
-    assert sum(result["days"][0]["quarantineReasonCodes"].values()) == result["totalQuarantinedRows"]
+    assert sum(result["days"][0]["quarantineReasonCodes"].values()) == (
+        result["totalQuarantinedRows"]
+    )
     assert store.requested == [DAY]
     assert (result["scoringModified"], result["stateModified"], result["alertsSent"]) == (
         False, False, False,
