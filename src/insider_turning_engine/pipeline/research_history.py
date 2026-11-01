@@ -5,8 +5,10 @@ Completeness evidence remains attached to every day, including zero-row days.
 """
 
 import json
+import re
+from collections import Counter
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
 
@@ -23,6 +25,8 @@ class ResearchHistory:
     evidence: tuple[DayEvidence, ...]
     sec_day_by_accession: dict[str, date]
     quarantined_issuers: frozenset[str] = frozenset()
+    # Diagnostic-only reason counts, not scoring evidence or a cursor.
+    quarantine_reason_counts: dict[str, dict[str, int]] = field(default_factory=dict)
 
 
 def _filing_identity(filing: dict[str, Any]) -> tuple[Any, ...]:
@@ -58,6 +62,7 @@ def research_history(
     accession_days: dict[str, date] = {}
     selected_filings: dict[str, tuple[date, dict[str, Any], list[CanonicalTransaction]]] = {}
     quarantined_issuers: set[str] = set()
+    quarantine_reason_counts: dict[str, dict[str, int]] = {}
     for item in checkpoints:
         day = date.fromisoformat(item["day"])
         if day not in expected or day in evidence:
@@ -66,6 +71,17 @@ def research_history(
         filing_rows = [CanonicalTransaction.model_validate(value)
                        for filing in checkpoint["filings"] for value in filing["records"]]
         quarantines = sum(len(filing["quarantines"]) for filing in checkpoint["filings"])
+        # Preserve source-reported parser reason codes without exposing free text,
+        # accession IDs, owner identities or raw SEC payloads in diagnostics.
+        reason_counts = Counter(
+            reason if isinstance(reason, str) and re.fullmatch(r"[A-Z][A-Z0-9_]{0,63}", reason)
+            else "UNRECOGNIZED_REASON_CODE"
+            for filing in checkpoint["filings"]
+            for quarantine in filing["quarantines"]
+            for reason in [quarantine["reason_code"]]
+        )
+        if reason_counts:
+            quarantine_reason_counts[day.isoformat()] = dict(sorted(reason_counts.items()))
         failures = len(checkpoint["failures"])
         discovered = len(checkpoint["discoveredAccessions"])
         stored = len(checkpoint["filings"])
@@ -95,4 +111,4 @@ def research_history(
         rows.extend(typed)
     return ResearchHistory(tuple(_merge_records(rows)), expected,
                            tuple(evidence[day] for day in sorted(evidence)), accession_days,
-                           frozenset(quarantined_issuers))
+                           frozenset(quarantined_issuers), quarantine_reason_counts)
