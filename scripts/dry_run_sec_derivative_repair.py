@@ -15,16 +15,17 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
-from insider_turning_engine.domain.models import CanonicalTransaction
-from insider_turning_engine.ingestion.sec.checkpoint import encode_checkpoint
-from insider_turning_engine.ingestion.sec.daily_index import SECDailyIndexSource
-from insider_turning_engine.ingestion.sec.release_store import ReleaseCheckpointStore
-from insider_turning_engine.ingestion.sec.repair_amounts import repair_checkpoint
 from triage_existing_sec_quarantines import (
     SourceDriftError,
     aggregate_verified_checkpoint,
     verify_expectation,
 )
+
+from insider_turning_engine.domain.models import CanonicalTransaction
+from insider_turning_engine.ingestion.sec.checkpoint import encode_checkpoint
+from insider_turning_engine.ingestion.sec.daily_index import SECDailyIndexSource
+from insider_turning_engine.ingestion.sec.release_store import ReleaseCheckpointStore
+from insider_turning_engine.ingestion.sec.repair_amounts import repair_checkpoint
 
 MAX_DAYS = 20
 MAX_DERIVATIVE_FILES = 30
