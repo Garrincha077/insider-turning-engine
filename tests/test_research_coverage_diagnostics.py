@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from research_coverage_diagnostics import CoverageEvidenceError, summarize
+from research_coverage_diagnostics import CoverageEvidenceError, summarize  # noqa: E402
 
 
 def inputs():
