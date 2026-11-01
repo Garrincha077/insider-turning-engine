@@ -86,7 +86,8 @@ def aggregate_verified_checkpoint(checkpoint: dict[str, Any], *, day: date,
     for filing in filings:
         for row in filing["quarantines"]:
             raw = row.get("reason_code")
-            key = raw if isinstance(raw, str) and _CODE.fullmatch(raw) else "UNRECOGNIZED_REASON_CODE"
+            key = (raw if isinstance(raw, str) and _CODE.fullmatch(raw)
+                   else "UNRECOGNIZED_REASON_CODE")
             counts[key] += 1
     if sum(counts.values()) != actual["quarantinedRows"]:
         raise SourceDriftError(f"SEC reason counts do not reconcile for {day.isoformat()}")
