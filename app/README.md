@@ -100,3 +100,24 @@ the same built-site test. This covers Pixel 7 Chromium emulation, offline
 shell reload, asset paths and data-cache isolation. It is not equivalent to
 testing a real Android handset, cellular interruptions or Chrome WebAPK
 installation. Those are required for final on-device acceptance.
+
+
+## Post-deploy live PWA smoke
+
+The read-only GitHub workflow .github/workflows/live-pwa.yml runs after each
+successful GitHub Pages deployment, daily, and by manual dispatch. It probes
+the actual hosted app: scoped manifest, icons, deployed CSS/JS, worker's
+financial-data cache exclusion, and exact SHA-256 of the published dashboard
+and settings files. Pixel 7 Chromium also checks hydrated live data,
+offline reopening without stale financial data and reconnect behavior.
+
+This check never downloads SEC source records, changes scoring, refreshes
+research, publishes a snapshot or sends a Telegram digest. A passing
+browser smoke is not evidence of actual Android WebAPK installation,
+mobile carrier conditions or source-data freshness.
+
+Physical Android acceptance remains: install from Chrome, launch standalone
+from home screen, verify the visible published source timestamp, reopen in
+airplane mode to see the offline warning, reconnect and load a verified
+snapshot, then confirm opt-in app updates after a later release.
+Browser-local watchlists may be lost if site storage is cleared.
