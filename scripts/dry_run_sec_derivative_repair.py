@@ -63,6 +63,10 @@ def _failure_category(exc: Exception) -> str:
         return "MISSING_ORIGINAL_LINEAGE"
     if "mixed prior observation lineage" in message:
         return "MIXED_PRIOR_LINEAGE"
+    if "repair cannot precede original observation" in message:
+        return "REPAIR_CLOCK_BEFORE_ORIGINAL"
+    if "recovered row availability does not match receipt" in message:
+        return "INVALID_REPAIR_AVAILABILITY"
     if "repair changed or removed an existing canonical revision" in message:
         return "EXISTING_CANONICAL_FACTS_CHANGED"
     if "recovered rows do not exactly resolve" in message:
@@ -192,6 +196,8 @@ def audit(store: ReleaseCheckpointStore, source: SECDailyIndexSource,
                 day_status = "FULL_DAY_REPAIR_DRY_RUN_VERIFIED"
                 counters["verifiedDryRunFilings"] += eligible
                 counters["verifiedDryRunRows"] += returned_rows
+            except SourceDriftError:
+                raise
             except (ValueError, RuntimeError, OSError, TypeError, KeyError) as exc:
                 if encode_checkpoint(checkpoint) != before:
                     raise SourceDriftError("exception mutated immutable checkpoint") from None
