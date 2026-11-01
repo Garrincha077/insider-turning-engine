@@ -167,6 +167,25 @@ def audit(store: ReleaseCheckpointStore, source: SECDailyIndexSource,
         counts = Counter(_lineage_status(f) for f in candidates)
         eligible = counts["HAS_PRIOR_CANONICAL_LINEAGE"]
         total_rows = sum(len(f["quarantines"]) for f in candidates)
+        all_quarantines = [
+            q for filing in checkpoint["filings"] for q in filing["quarantines"]
+        ]
+        derivatives = sum(
+            q["source_row_key"].startswith("DERIVATIVE:") for q in all_quarantines
+        )
+        non_derivatives = sum(
+            q["source_row_key"].startswith("NON_DERIVATIVE:") for q in all_quarantines
+        )
+        excluded_derivatives = derivatives - total_rows
+        if excluded_derivatives < 0:
+            raise SourceDriftError("candidate derivative rows exceed SEC quarantine")
+        counters["totalQuarantinedRows"] += len(all_quarantines)
+        counters["derivativeQuarantineRows"] += derivatives
+        counters["nonDerivativeQuarantineRows"] += non_derivatives
+        counters["otherQuarantineRows"] += (
+            len(all_quarantines) - derivatives - non_derivatives
+        )
+        counters["derivativeRowsOutsideWholeFilingPredicate"] += excluded_derivatives
         counters["candidateDerivativeFilings"] += len(candidates)
         counters["candidateDerivativeRows"] += total_rows
         counters["candidateFilingsWithLineage"] += eligible
@@ -209,11 +228,21 @@ def audit(store: ReleaseCheckpointStore, source: SECDailyIndexSource,
             "day": day.isoformat(),
             "candidateDerivativeFilings": len(candidates),
             "candidateDerivativeRows": total_rows,
+            "derivativeRowsOutsideWholeFilingPredicate": excluded_derivatives,
             "lineageBackedFilings": eligible,
             "result": day_status,
             "verifiedDryRunRows": returned_rows,
         })
 
+    if counters["totalQuarantinedRows"] != (
+            counters["derivativeQuarantineRows"]
+            + counters["nonDerivativeQuarantineRows"]
+            + counters["otherQuarantineRows"]):
+        raise SourceDriftError("SEC quarantine type totals do not reconcile")
+    if counters["derivativeQuarantineRows"] != (
+            counters["candidateDerivativeRows"]
+            + counters["derivativeRowsOutsideWholeFilingPredicate"]):
+        raise SourceDriftError("derivative quarantine inventory does not reconcile")
     if counters["candidateDerivativeFilings"] != (
             counters["candidateFilingsWithLineage"]
             + counters["candidateFilingsWithoutLineage"]
