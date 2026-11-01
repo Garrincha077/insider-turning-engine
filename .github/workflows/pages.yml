@@ -97,6 +97,17 @@ jobs:
           --store work/research-state-commit
           --incoming work/daily-research/incoming-state
           --expected-head "$EXPECTED_STATE_HEAD"
+      - name: Explain SEC and scoring coverage (read-only diagnostic)
+        if: github.event_name == 'schedule' || inputs.refresh_data == true
+        continue-on-error: true # A diagnostic must never veto valid factual publication.
+        run: >-
+          uv run python scripts/research_coverage_diagnostics.py
+          --research app/public/data/research-v2.json
+          --daily-report work/daily-research/daily-report.json
+          --identity-manifest work/daily-research/identities/identity-manifest.json
+          --market-status work/daily-research/market-status.json
+          --sec-quarantine-reasons work/daily-research/sec-quarantine-reasons.json
+          --output work/daily-research/coverage-diagnostics.json
       - name: Preserve market progress even when refresh fails
         if: always() && (github.event_name == 'schedule' || inputs.refresh_data == true)
         uses: actions/cache/save@v4
@@ -114,6 +125,8 @@ jobs:
             work/daily-research/acquisition/acquisition-status.json
             work/daily-research/daily-report.json
             work/daily-research/market-status.json
+            work/daily-research/sec-quarantine-reasons.json
+            work/daily-research/coverage-diagnostics.json
           if-no-files-found: warn
           retention-days: 90
       - name: Export masked operational settings
