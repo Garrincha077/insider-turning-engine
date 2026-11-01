@@ -62,6 +62,10 @@ def test_derivative_new_parser_replay_is_preflight_only():
     assert report["quarantinedRows"] == 1
     assert report["sourceVerifiedRowsParsed"] == 1
     assert report["derivativePrecheckFilings"] == 1
+    assert report["derivativePrecheckRows"] == 1
+    assert report["outcomesByRowKind"] == {
+        "DERIVATIVE": {"PARSES_WITH_CURRENT_PARSER": 1},
+    }
     assert report["outcomeTotals"] == {"PARSES_WITH_CURRENT_PARSER": 1}
     assert report["sourceStatusTotals"] == {"CANONICAL_UNCHANGED": 1}
     assert (report["checkpointUpdated"], report["scoreChanged"], report["alertsSent"]) == (
@@ -86,6 +90,9 @@ def test_current_parser_still_rejects_invalid_derivative_source():
     assert report["derivativePrecheckFilings"] == 0
     assert report["outcomeTotals"] == {
         "STILL_REJECTED_DERIVATIVE_TOTAL_VALUE_UNAVAILABLE": 1,
+    }
+    assert report["outcomesByRowKind"] == {
+        "DERIVATIVE": {"STILL_REJECTED_DERIVATIVE_TOTAL_VALUE_UNAVAILABLE": 1},
     }
 
 
@@ -125,7 +132,7 @@ def test_no_original_canonical_lineage_is_never_preapproved():
         sec.close()
     assert report["status"] == "COMPLETE_DIAGNOSTIC_NOT_A_REPAIR"
     assert report["derivativePrecheckFilings"] == 0
-    assert report["sourceStatusTotals"] == {"CANONICAL_UNVERIFIED_OR_CHANGED": 1}
+    assert report["sourceStatusTotals"] == {"NO_PRIOR_CANONICAL_ROWS": 1}
 
 
 def test_checkpoint_count_drift_fails_before_any_source_gets():
