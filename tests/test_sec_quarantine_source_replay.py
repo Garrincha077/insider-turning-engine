@@ -17,7 +17,11 @@ from test_sec_amount_repair import (
 )
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from replay_existing_sec_quarantines_readonly import audit, safe_cause  # noqa: E402
+from replay_existing_sec_quarantines_readonly import (  # noqa: E402
+    audit,
+    missing_required_fields,
+    safe_cause,
+)
 from triage_existing_sec_quarantines import SourceDriftError  # noqa: E402
 
 
@@ -175,3 +179,14 @@ def test_stale_row_or_missing_source_status_stays_unverified():
             audit(FakeStore(old), sec, evidence)
     finally:
         sec.close()
+
+def test_missing_non_derivative_code_is_described_without_issuing_a_score():
+    path = Path(__file__).parent / "fixtures/form4_non_derivative.xml"
+    xml = path.read_bytes()
+    assert b"<transactionCode>P</transactionCode>" in xml
+    missing_code = xml.replace(b"<transactionCode>P</transactionCode>", b"", 1)
+    category = missing_required_fields(missing_code, "NON_DERIVATIVE:1:0001999101")
+    assert category == ("MISSING_TRANSACTION_CODE",)
+    assert missing_required_fields(b"<invalid>", "NON_DERIVATIVE:1:0001999101") == (
+        "UNDETERMINED_REQUIRED_FIELD",
+    )
