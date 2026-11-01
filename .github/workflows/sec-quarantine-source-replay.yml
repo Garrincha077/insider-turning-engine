@@ -1,0 +1,73 @@
+name: SEC source-hash replay audit (no writes)
+
+on:
+  push:
+    branches: [ops/sec-quarantine-source-replay-20261101]
+    paths:
+      - 'scripts/replay_existing_sec_quarantines_readonly.py'
+      - 'tests/test_sec_quarantine_source_replay.py'
+      - '.github/workflows/sec-quarantine-source-replay.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/replay_existing_sec_quarantines_readonly.py'
+      - 'tests/test_sec_quarantine_source_replay.py'
+      - '.github/workflows/sec-quarantine-source-replay.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sec-quarantine-readonly-replay-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  offline-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --all-groups --frozen
+      - name: Validate Python and inspectable source-replay guards
+        run: |
+          uv run python -m py_compile scripts/replay_existing_sec_quarantines_readonly.py
+          uv run ruff check scripts/replay_existing_sec_quarantines_readonly.py tests/test_sec_quarantine_source_replay.py
+          uv run pytest tests/test_sec_quarantine_source_replay.py -q
+
+  compare-source:
+    # No replay from main, PRs or historical runs. Audit one isolated push.
+    if: github.event_name == 'push' && github.ref_name == 'ops/sec-quarantine-source-replay-20261101'
+    needs: offline-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - name: Compare verified SEC source hashes and replay current parser in memory
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT }}
+        run: >-
+          uv run python scripts/replay_existing_sec_quarantines_readonly.py
+          --repository "$GITHUB_REPOSITORY"
+          --target "$GITHUB_SHA"
+          --source ops/sec_quarantine_source_20261101.json
+          --output work/ops/sec-quarantine-source-replay.json
+          --execute
+      - name: Preserve only aggregate operational findings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sec-quarantine-source-replay-${{ github.run_id }}
+          path: work/ops/sec-quarantine-source-replay.json
+          if-no-files-found: warn
+          retention-days: 30
