@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import xml.etree.ElementTree as ET
 from collections import Counter, defaultdict
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -26,7 +27,13 @@ from triage_existing_sec_quarantines import (
 
 from insider_turning_engine.domain.models import CanonicalTransaction
 from insider_turning_engine.ingestion.sec.daily_index import SECDailyIndexSource
-from insider_turning_engine.ingestion.sec.parser import parse_sec_filing
+from insider_turning_engine.ingestion.sec.parser import (
+    _children,
+    _first,
+    _text,
+    _value_text,
+    parse_sec_filing,
+)
 from insider_turning_engine.ingestion.sec.release_store import ReleaseCheckpointStore
 
 # These correspond to explicit, static validation conditions in parser.py.
@@ -55,6 +62,33 @@ def safe_cause(message: str) -> str:
     if "date" in message.lower():
         return "INVALID_DATE_OR_TIMESTAMP"
     return "OTHER_MODEL_OR_PARSER_VALIDATION"
+
+
+def missing_required_fields(payload: bytes, key: str) -> tuple[str, ...]:
+    """Read only field presence from the verified SEC XML; no values are exported."""
+    tokens = key.split(":")
+    if len(tokens) != 3 or tokens[0] != "NON_DERIVATIVE":
+        return ("UNSCOPED_ROW_TYPE",)
+    try:
+        sequence = int(tokens[1])
+        root = ET.fromstring(payload)
+    except (ValueError, ET.ParseError):
+        return ("UNDETERMINED_REQUIRED_FIELD",)
+    rows = _children(_first(root, "nonDerivativeTable"), "nonDerivativeTransaction")
+    if sequence < 1 or sequence > len(rows):
+        return ("UNDETERMINED_REQUIRED_FIELD",)
+    row = rows[sequence - 1]
+    amounts = _first(row, "transactionAmounts")
+    missing = []
+    if not _value_text(row, "securityTitle"):
+        missing.append("MISSING_SECURITY_TITLE")
+    if not _value_text(row, "transactionDate"):
+        missing.append("MISSING_TRANSACTION_DATE")
+    if not _text(_first(row, "transactionCoding"), "transactionCode"):
+        missing.append("MISSING_TRANSACTION_CODE")
+    if not _text(_first(amounts, "transactionAcquiredDisposedCode"), "value"):
+        missing.append("MISSING_ACQUIRED_DISPOSED")
+    return tuple(missing or ("UNDETERMINED_REQUIRED_FIELD",))
 
 
 def old_lineage(filing: dict[str, Any]) -> tuple[dict[str, Any], bool]:
@@ -108,6 +142,7 @@ def replay_filing(filing: dict[str, Any], raw: Any) -> dict[str, Any]:
                     for key, value in old_by_identity.items()) if lineage_ok else False
 
     outcomes: Counter[str] = Counter()
+    mandatory_missing: Counter[str] = Counter()
     by_row_kind: dict[str, Counter[str]] = defaultdict(Counter)
     for key in expected:
         kind = ("DERIVATIVE" if key.startswith("DERIVATIVE:") else
@@ -120,6 +155,8 @@ def replay_filing(filing: dict[str, Any], raw: Any) -> dict[str, Any]:
             outcome = "NOT_REPRODUCED_BY_CURRENT_PARSER"
         outcomes[outcome] += 1
         by_row_kind[kind][outcome] += 1
+        if outcome == "STILL_REJECTED_REQUIRED_TRANSACTION_FIELDS":
+            mandatory_missing.update(missing_required_fields(raw.payload, key))
 
     # Additional quarantine/record differences block any "safe repair" claim.
     extras = (set(current_bad) - set(expected))
@@ -149,6 +186,7 @@ def replay_filing(filing: dict[str, Any], raw: Any) -> dict[str, Any]:
         "sourceStatus": source_status,
         "lineageAvailable": bool(old) and lineage_ok,
         "outcomes": dict(sorted(outcomes.items())),
+        "missingRequiredFieldCountsOverlapping": dict(sorted(mandatory_missing.items())),
         "outcomesByRowKind": {
             key: dict(sorted(counts.items())) for key, counts in sorted(by_row_kind.items())
         },
@@ -179,6 +217,7 @@ def audit(store: ReleaseCheckpointStore, source: SECDailyIndexSource,
     outcomes: Counter[str] = Counter()
     source_statuses: Counter[str] = Counter()
     kind_outcomes: dict[str, Counter[str]] = defaultdict(Counter)
+    mandatory_missing: Counter[str] = Counter()
     precheck = 0
     precheck_rows = 0
     checked = 0
@@ -221,6 +260,7 @@ def audit(store: ReleaseCheckpointStore, source: SECDailyIndexSource,
                     continue
                 day_outcomes.update(result["outcomes"])
                 source_statuses[result["sourceStatus"]] += expected_count
+                mandatory_missing.update(result.get("missingRequiredFieldCountsOverlapping", {}))
                 for kind, counts in result.get("outcomesByRowKind", {}).items():
                     kind_outcomes[kind].update(counts)
                 if result.get("derivativeOnlyReplayPrecheck", False):
@@ -249,6 +289,7 @@ def audit(store: ReleaseCheckpointStore, source: SECDailyIndexSource,
         "sourceVerifiedRowsParsed": checked,
         "outcomeTotals": dict(sorted(outcomes.items())),
         "sourceStatusTotals": dict(sorted(source_statuses.items())),
+        "missingRequiredFieldCountsOverlapping": dict(sorted(mandatory_missing.items())),
         "outcomesByRowKind": {
             key: dict(sorted(counts.items())) for key, counts in sorted(kind_outcomes.items())
         },
@@ -295,6 +336,7 @@ def main() -> int:
         "derivativePrecheckRows": report["derivativePrecheckRows"],
         "sourceStatusTotals": report["sourceStatusTotals"],
         "outcomesByRowKind": report["outcomesByRowKind"],
+        "missingRequiredFieldCountsOverlapping": report["missingRequiredFieldCountsOverlapping"],
         "scoresChanged": False, "alertsSent": False,
     }, sort_keys=True))
     return 0 if report["status"] == "COMPLETE_DIAGNOSTIC_NOT_A_REPAIR" else 2
