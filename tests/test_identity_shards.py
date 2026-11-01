@@ -223,7 +223,7 @@ class DelayedDraftInventory(ShardReleases):
         return items
 
     def _gh(self, *args):
-        if args[:2] == ("api", "repos/owner/repo/releases?per_page=100"):
+        if args == ("api", "repos/owner/repo/releases?per_page=100"):
             self.commands.append(args)
             self.lookups += 1
             return json.dumps(self.releases if self.lookups >= self.visible_after else [])
