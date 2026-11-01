@@ -134,7 +134,11 @@ export function EngineDashboard() {
     if (/^\d{10}$/.test(cik)) setWatchlist((previous) => previous.includes(cik) ? previous.filter((id) => id !== cik) : [...previous, cik]);
   }
 
-  if (error) return <main className="grid min-h-screen place-items-center p-6"><Panel title={pwa.online ? 'Dashboard snapshot unavailable' : 'Offline — snapshot unavailable'} subtitle="No sample data or unverified market data is substituted."><ShieldAlert className="text-rose-300" /><p className="my-4 text-sm" role="alert">{pwa.online ? error : 'You are offline. Reconnect to load the latest verified SEC and market snapshot. Offline app shell does not cache financial data.'}</p><button className={controlClass} disabled={!pwa.online} onClick={() => window.location.reload()}>Retry snapshot</button></Panel></main>;
+  // navigator.onLine may still report true when the network stack is offline.
+  // Treat fetch transport failures as connection issues, never as valid data.
+  const connectionError = !pwa.online || (error != null &&
+    /failed to fetch|networkerror|network request failed|load failed|offline:/i.test(error));
+  if (error) return <main className="grid min-h-screen place-items-center p-6"><Panel title={connectionError ? 'Connection unavailable' : 'Dashboard snapshot unavailable'} subtitle="No sample data or unverified market data is substituted."><ShieldAlert className="text-rose-300" /><p className="my-4 text-sm" role="alert">{connectionError ? 'You are offline or the publication server cannot be reached. Reconnect and retry to load a freshly verified SEC and market snapshot.' : error}</p><button className={controlClass} disabled={!pwa.online} onClick={() => window.location.reload()}>Retry snapshot</button></Panel></main>;
   if (!publication && !pwa.online) return <main className="grid min-h-screen place-items-center p-6"><Panel title="Offline — snapshot unavailable" subtitle="Financial data is never stored in the PWA shell cache."><ShieldAlert className="text-amber-300" /><p className="my-4 text-sm" role="alert">You are offline. Reconnect to load a freshly verified snapshot. No sample or stale market data is substituted.</p><button className={controlClass} disabled>Retry snapshot</button></Panel></main>;
   if (!publication) return <main className="grid min-h-screen place-items-center p-6"><output>Checking snapshot schema and integrity…</output></main>;
   const { data, manifest, settings } = publication;
