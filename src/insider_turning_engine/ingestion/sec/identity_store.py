@@ -309,9 +309,9 @@ class ReleaseIdentityStore:
                 result = json.loads(self.transport._gh(
                     "api", f"repos/{self.transport.repository}/releases/{release_id}",
                 ))
-                if result.get("tag_name") != tag:
+                if not isinstance(result, dict) or result.get("tag_name") != tag:
                     raise ValueError("identity release ID/tag mismatch")
-                return result
+                return dict(result)
             if attempt < 4:
                 time.sleep(min(2 ** attempt, 8))
         return None
