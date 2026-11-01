@@ -7,12 +7,13 @@
   },
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "vite build",
+    "build": "vite build && node scripts/build-pwa.mjs && node scripts/verify-pwa.mjs",
     "start": "vite preview --host 0.0.0.0",
-    "lint": "oxlint main.tsx components lib e2e vite.config.ts playwright.config.ts",
+    "lint": "oxlint main.tsx components lib e2e pwa scripts vite.config.ts playwright.config.ts playwright.pwa.config.ts",
     "format": "oxfmt",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:pwa": "playwright test --config playwright.pwa.config.ts"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",

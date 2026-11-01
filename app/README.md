@@ -61,3 +61,42 @@ or export must include survivorship, coverage, point-in-time ticker mapping,
 sector revision, and delisted/return attrition caveats. See
 [`../docs/methodology.md`](../docs/methodology.md) and
 [`../docs/data-caveats.md`](../docs/data-caveats.md).
+
+
+## Android PWA v1 (online-first)
+
+The production npm run build step generates the PWA manifest, opaque 192/512px
+PNG app icons, and the service worker in app/dist. The manifest, worker scope,
+start URL and icon/asset paths all use the same PAGES_BASE_PATH as Vite for
+GitHub Pages. Generated assets do not modify the research snapshot.
+
+After a successful production deploy, open the GitHub Pages URL in Chrome on
+Android. Use Chrome's menu > Install app (or Add to Home screen; wording
+varies). Chrome may also offer an in-app Install app button when its own
+installation conditions are met. An installed PWA opens in standalone mode.
+
+### Data integrity and offline policy
+
+Only the application shell (HTML, versioned JS/CSS, icons and app manifest)
+is cached. No files under /data/ are cached by the PWA worker. An offline cold
+start displays an explicit error and never substitutes sample research,
+unverified snapshots or stale market sessions. If the connection drops after
+data is loaded, the UI shows an offline banner. Those on-screen facts are not
+presented as newly verified.
+
+App updates are opt-in: the previous version remains active until the user
+chooses Update app. Browser-local watchlist/timezone settings remain separate
+from the PWA cache; users may lose them if they clear site storage. No API
+credentials or data files are written to the PWA cache.
+
+### Verification
+
+Run from app/: npm run lint; npm run typecheck; npm run test:e2e;
+npm run build; npm run test:pwa.
+
+For the project-pages URL, set PAGES_BASE_PATH=insider-turning-engine for BOTH
+the build and PWA smoke test. The GitHub Pages workflow gates publishing on
+the same built-site test. This covers Pixel 7 Chromium emulation, offline
+shell reload, asset paths and data-cache isolation. It is not equivalent to
+testing a real Android handset, cellular interruptions or Chrome WebAPK
+installation. Those are required for final on-device acceptance.

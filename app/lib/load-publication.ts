@@ -11,6 +11,8 @@ addFormats(settingsValidator);
 const validSettings = settingsValidator.compile<SettingsStatus>(settingsSchema);
 
 export async function loadPublication(signal: AbortSignal) {
+  // Offline cold starts never wait for the manifest deadline or fall back to samples.
+  if (!navigator.onLine) throw new Error('Offline: a verified snapshot requires a network connection');
   const root = `${import.meta.env.BASE_URL}data/`;
   const manifest = await withDownloadDeadline(signal, 'Publication manifest', async (requestSignal) => {
     const response = await fetch(`${root}manifest.json`, { cache: 'no-store', signal: requestSignal });

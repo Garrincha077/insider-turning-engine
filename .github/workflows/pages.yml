@@ -171,6 +171,9 @@ jobs:
           PAGES_BASE_PATH: ''
       - run: npm run build
         working-directory: app
+      - name: Test actual built PWA scope, Android install and offline behavior
+        run: npm run test:pwa
+        working-directory: app
       - name: Validate atomic live snapshot and publication policy
         shell: bash
         run: |

@@ -48,3 +48,5 @@ jobs:
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+      - name: Test installed Android PWA, offline shell and data-cache isolation
+        run: npm run test:pwa

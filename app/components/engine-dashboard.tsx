@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Activity, BellRing, Radar, ShieldAlert } from 'lucide-react';
 import { loadPublication } from '@/lib/load-publication';
+import { usePwa } from '@/lib/use-pwa';
 import { companyCatalog, instant, scoreLabel, controlClass } from '@/lib/research';
 import { isCikList, isTimezone, resetPreferences, usePreference } from '@/lib/local-preferences';
 import { AlertCenterView, DataCoverageView, SettingsView, SystemHealthView } from './operations-views';
@@ -50,6 +51,7 @@ function readRoute() {
 
 export function EngineDashboard() {
   const [route, setRoute] = useState(readRoute);
+  const pwa = usePwa();
   const [publication, setPublication] = useState<Awaited<ReturnType<typeof loadPublication>> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [transfer, setTransfer] = useState<SnapshotTransfer | null>(null);
@@ -132,7 +134,12 @@ export function EngineDashboard() {
     if (/^\d{10}$/.test(cik)) setWatchlist((previous) => previous.includes(cik) ? previous.filter((id) => id !== cik) : [...previous, cik]);
   }
 
-  if (error) return <main className="grid min-h-screen place-items-center p-6"><Panel title="Dashboard snapshot unavailable" subtitle="No sample data is substituted."><ShieldAlert className="text-rose-300" /><p className="my-4 text-sm" role="alert">{error}</p><button className={controlClass} onClick={() => window.location.reload()}>Retry snapshot</button></Panel></main>;
+  // navigator.onLine may still report true when the network stack is offline.
+  // Treat fetch transport failures as connection issues, never as valid data.
+  const connectionError = !pwa.online || (error != null &&
+    /failed to fetch|networkerror|network request failed|load failed|offline:/i.test(error));
+  if (error) return <main className="grid min-h-screen place-items-center p-6"><Panel title={connectionError ? 'Connection unavailable' : 'Dashboard snapshot unavailable'} subtitle="No sample data or unverified market data is substituted."><ShieldAlert className="text-rose-300" /><p className="my-4 text-sm" role="alert">{connectionError ? 'You are offline or the publication server cannot be reached. Reconnect and retry to load a freshly verified SEC and market snapshot.' : error}</p><button className={controlClass} disabled={!pwa.online} onClick={() => window.location.reload()}>Retry snapshot</button></Panel></main>;
+  if (!publication && !pwa.online) return <main className="grid min-h-screen place-items-center p-6"><Panel title="Offline — snapshot unavailable" subtitle="Financial data is never stored in the PWA shell cache."><ShieldAlert className="text-amber-300" /><p className="my-4 text-sm" role="alert">You are offline. Reconnect to load a freshly verified snapshot. No sample or stale market data is substituted.</p><button className={controlClass} disabled>Retry snapshot</button></Panel></main>;
   if (!publication) return <main className="grid min-h-screen place-items-center p-6"><output>Checking snapshot schema and integrity…</output></main>;
   const { data, manifest, settings } = publication;
   const view = route.view;
@@ -146,8 +153,13 @@ export function EngineDashboard() {
       <div className="mx-auto flex h-16 max-w-[1680px] items-center justify-between gap-4 px-4 sm:px-7">
         <button onClick={() => navigate('radar')} className="flex items-center gap-3 text-left"><Radar className="size-7 text-emerald-300" /><span><span className="block text-sm font-semibold">Insider Turning Engine</span><span className="hidden text-xs text-muted-foreground sm:block">SEC research · daily close</span></span></button>
         <div className="hidden text-xs text-muted-foreground lg:block">SEC through {instant(manifest.watermarks.secAcceptedThrough, timezone)} · {timezone}</div>
-        <button className={controlClass} onClick={() => navigate('alert-center')}><BellRing className="mr-2 inline size-4" />Alerts</button>
+        <div className="flex items-center gap-2">
+          {pwa.installAvailable && <button className={controlClass} onClick={() => void pwa.install()}>Install app</button>}
+          <button className={controlClass} onClick={() => navigate('alert-center')}><BellRing className="mr-2 inline size-4" />Alerts</button>
+        </div>
       </div>
+      {!pwa.online && <output className="block border-t border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs text-amber-100">Offline — only previously loaded data is visible. Reconnect to verify a new snapshot.</output>}
+      {pwa.updateReady && <output className="flex items-center justify-between gap-3 border-t border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs text-emerald-100"><span>App update ready. Restart to use the new version.</span><button className={controlClass} onClick={pwa.applyUpdate}>Update app</button></output>}
       <label className="flex items-center gap-3 border-t border-border px-4 py-2 text-xs xl:hidden">Section
         <select aria-label="Dashboard section" className={`${controlClass} min-w-0 flex-1`} value={view} onChange={(event) => navigate(event.target.value)}>
           {groups.map((group) => <optgroup key={group.label} label={group.label}>{group.views.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</optgroup>)}

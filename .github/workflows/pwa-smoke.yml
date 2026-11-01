@@ -1,0 +1,53 @@
+name: Android PWA Pages-scope smoke
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - '.github/workflows/pwa-smoke.yml'
+  push:
+    branches: [feature/android-pwa-v1-20261101]
+    paths:
+      - 'app/**'
+      - '.github/workflows/pwa-smoke.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pwa-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Test the real GitHub Pages subdirectory, not just the localhost root.
+      PAGES_BASE_PATH: insider-turning-engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+        working-directory: app
+      - run: npm run lint && npm run typecheck
+        working-directory: app
+      - run: npm run build
+        working-directory: app
+      - run: npx playwright install --with-deps chromium
+        working-directory: app
+      - name: Verify Android install, offline shell and financial-data cache exclusion
+        run: npm run test:pwa
+        working-directory: app
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: android-pwa-smoke-failure-${{ github.run_id }}
+          path: app/test-results
+          if-no-files-found: ignore
+          retention-days: 7
