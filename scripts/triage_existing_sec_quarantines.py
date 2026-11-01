@@ -83,12 +83,21 @@ def aggregate_verified_checkpoint(checkpoint: dict[str, Any], *, day: date,
             f"SEC day aggregate drift for {day.isoformat()}; no source rows changed"
         )
     counts: Counter[str] = Counter()
+    row_kinds: Counter[str] = Counter()
     for filing in filings:
         for row in filing["quarantines"]:
             raw = row.get("reason_code")
             key = (raw if isinstance(raw, str) and _CODE.fullmatch(raw)
                    else "UNRECOGNIZED_REASON_CODE")
             counts[key] += 1
+            locator = row.get("source_row_key", "")
+            kind = (
+                "DERIVATIVE" if isinstance(locator, str) and locator.startswith("DERIVATIVE:")
+                else "NON_DERIVATIVE" if isinstance(locator, str)
+                and locator.startswith("NON_DERIVATIVE:")
+                else "FILING_LEVEL_OR_UNKNOWN"
+            )
+            row_kinds[kind] += 1
     if sum(counts.values()) != actual["quarantinedRows"]:
         raise SourceDriftError(f"SEC reason counts do not reconcile for {day.isoformat()}")
     archive_name, archive_bytes = encode_checkpoint(verified)
@@ -100,6 +109,7 @@ def aggregate_verified_checkpoint(checkpoint: dict[str, Any], *, day: date,
         "parserVersion": verified["parserVersion"],
         "checkpointSha256": digest,
         "quarantineReasonCodes": dict(sorted(counts.items())),
+        "quarantineRowKinds": dict(sorted(row_kinds.items())),
     }
 
 
@@ -107,6 +117,7 @@ def audit(store: ReleaseCheckpointStore, pinned: dict[str, Any]) -> dict[str, An
     rows = verify_expectation(pinned)
     seen: list[dict[str, Any]] = []
     reasons: Counter[str] = Counter()
+    kinds: Counter[str] = Counter()
     for row in rows:
         day = date.fromisoformat(row["day"])
         checkpoint = store.latest(day)
@@ -114,6 +125,7 @@ def audit(store: ReleaseCheckpointStore, pinned: dict[str, Any]) -> dict[str, An
             raise SourceDriftError(f"verified SEC release missing for {day}")
         details = aggregate_verified_checkpoint(checkpoint, day=day, expected=row)
         reasons.update(details["quarantineReasonCodes"])
+        kinds.update(details["quarantineRowKinds"])
         seen.append(details)
     if sum(reasons.values()) != sum(row["quarantinedRows"] for row in rows):
         raise SourceDriftError("global SEC quarantine totals disagree")
@@ -126,6 +138,7 @@ def audit(store: ReleaseCheckpointStore, pinned: dict[str, Any]) -> dict[str, An
         "incompleteDays": len(rows),
         "totalQuarantinedRows": sum(reasons.values()),
         "reasonCounts": dict(sorted(reasons.items())),
+        "rowKindCounts": dict(sorted(kinds.items())),
         "days": seen,
         "sourceIdentityCaveat": (
             "Remote latest verified SEC releases match pinned day counts. "
@@ -155,7 +168,8 @@ def main() -> None:
     args.output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps({"status": result["status"], "days": result["incompleteDays"],
                       "quarantinedRows": result["totalQuarantinedRows"],
-                      "reasonCounts": result["reasonCounts"], "alertsSent": False},
+                      "reasonCounts": result["reasonCounts"],
+                      "rowKindCounts": result["rowKindCounts"], "alertsSent": False},
                      sort_keys=True))
 
 
