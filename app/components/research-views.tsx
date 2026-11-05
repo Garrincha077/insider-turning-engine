@@ -11,6 +11,7 @@ import { isReportedPriceExtreme, reportedPriceCaution, reportedPriceReviewStatus
 import { evidenceFor, type TechnicalEvidence } from '@/lib/technical-evidence';
 import { ClustersV2 } from './v2-views';
 import { PaginatedRows } from './paginated-rows';
+import { BaselineValidation } from './baseline-validation';
 
 type ResearchProps = {
   data: DashboardData; catalog: Candidate[]; watchlist: string[]; timezone: string;
@@ -196,13 +197,14 @@ export function CompanyLab({ data, catalog, company, watchlist, toggleWatch, ope
 export function MethodologyView({ data, manifest }: { data: DashboardData; manifest: PublicationManifest }) {
   return <>
     <Panel title="Research model status" subtitle="Factual SEC exploration does not require a profitable backtest."><div className="grid gap-3 sm:grid-cols-3"><Fact label="Score version" value={data.scoreVersion} /><Fact label="Methodology lock" value={manifest.quality.methodologyComplete ? 'Complete per published evidence' : 'Candidate / incomplete'} /><Fact label="Historical validation" value={data.status === 'VALIDATED' ? 'Validated per published gate' : 'Not established'} /></div><p className="mt-4 text-sm leading-6 text-muted-foreground">Scores describe observed insider activity and price structure. They have not demonstrated predictive returns. Predictive alerts remain gated; an informational daily digest has a separate completeness and delivery policy.</p></Panel>
+    <BaselineValidation />
     <Panel title="Score components" subtitle="View filters change the screen, never the formulas or score date."><div className="space-y-4 text-sm leading-6">
       <p><strong>Company Insider:</strong> conviction 45%, cluster 25%, opportunistic activity 20%, net buying 10%.</p>
       <p><strong>Divergence:</strong> price weakness 35%, insider-activity percentile 35%, acceleration/cluster 20%, absence of relevant sales 10%.</p>
       <p><strong>Turn:</strong> base structure 35%, ordinary RS turn 25%, Mansfield market 15%, Mansfield sector 10%, volume accumulation 10%, cost-basis reclaim 5%.</p>
-      <p><strong>Missing inputs:</strong> incomplete required components are unavailable, not zero. Fundamentals are outside this release. Limited history reduces confidence; a short observed window is not a complete 90-day record.</p>
+      <p><strong>Missing inputs:</strong> incomplete required components are unavailable, not zero. Published scores do not yet include valuation evidence. Limited history reduces confidence; a short observed window is not a complete 90-day record.</p>
     </div><a className="mt-4 inline-block text-sm text-emerald-200 underline" href="https://github.com/Garrincha077/insider-turning-engine/tree/main/config" target="_blank" rel="noreferrer">Inspect versioned methodology and weights</a></Panel>
-    <Panel title="Validation protocol — a separate future goal" subtitle="No empty graph or invented performance results."><p className="text-sm leading-6 text-muted-foreground">Development: 2016–2020. Validation: 2021–2022. Sealed OOS starts in 2023 only after methodology freeze. A PASS requires at least 200 observed six-month comparable outcomes and a positive bootstrap 95% interval against the best simple benchmark. This daily-use release does not claim that gate is complete.</p></Panel>
+    <Panel title="Final evaluation boundary" subtitle="Previously viewed data cannot become an untouched test by changing its label."><p className="text-sm leading-6 text-muted-foreground">Development formation in 2016–2020 and outcomes through 2022 have already been inspected. The next study compares insider, technical and valuation components before a final methodology freeze. Audit all previous evaluations and live observations before selecting a genuinely unused final period; the whole 2023+ calendar cannot be assumed untouched. Report costs, liquidity, missing/delisted outcomes and dependence-aware uncertainty. The existing B1 robustness restriction does not disappear when a new study starts.</p></Panel>
   </>;
 }
 
