@@ -4,6 +4,7 @@ This does not weaken the sealed/backtest history contract or create a cursor.
 Completeness evidence remains attached to every day, including zero-row days.
 """
 
+import hashlib
 import json
 import re
 from collections import Counter
@@ -95,8 +96,23 @@ def research_history(
             typed = [CanonicalTransaction.model_validate(row) for row in filing["records"]]
             previous = selected_filings.get(accession)
             if previous is not None:
-                if _filing_identity(previous[1]) != _filing_identity(filing):
-                    raise ValueError("filing appears in conflicting SEC day inventories")
+                prior_identity = _filing_identity(previous[1])
+                current_identity = _filing_identity(filing)
+                if prior_identity != current_identity:
+                    # Diagnostics only: keep the integrity rejection unchanged.
+                    # Never print raw accession IDs, owner names or SEC content.
+                    components = ("submission_hash", "parsed_records", "quarantines")
+                    differing = [name for name, old, new in zip(
+                        components, prior_identity, current_identity, strict=True
+                    ) if old != new]
+                    fingerprint = hashlib.sha256(accession.encode("utf-8")).hexdigest()[:12]
+                    raise ValueError(
+                        "filing appears in conflicting SEC day inventories"
+                        f"; first_day={previous[0].isoformat()}"
+                        f"; duplicate_day={day.isoformat()}"
+                        f"; accession_sha256_prefix={fingerprint}"
+                        f"; changed_components={','.join(differing)}"
+                    )
                 # SEC can republish an unchanged accession in a later master
                 # index. Attribute it to the first observed index and count its
                 # economics once; each day's acquisition evidence remains intact.
