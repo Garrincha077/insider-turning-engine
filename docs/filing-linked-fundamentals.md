@@ -73,9 +73,26 @@ Raw/cache and the local receipt stay outside git in .codex/fundamentals-20261026
 
 ## Remaining before delivery
 
-Add bounded identified SEC acquisition with checksum-backed persistent cache,
-source manifests and archived-submissions acceptance joins. Test corruption,
-staleness and incomplete-source isolation. Hydrate relevant current candidates,
+The next component adds bounded identified SEC acquisition, an exact-byte
+checksum-backed persistent cache, source receipts and at most three archived
+submissions documents per issuer. It reuses the six-request/second transport,
+host/redirect/content-type/size guards and two-attempt bounded retry policy.
+Recent submissions expire after six hours. Company Facts can replay for seven
+days only when it already includes the newest relevant financial accession;
+a newly observed filing forces refresh. Archives are chosen by their actual
+filing-to metadata, not an assumption about filename ordering. Invalid/misaligned
+acceptance arrays, conflicting timestamps and unsafe archive names fail closed.
+
+Actual Apple seven-concept cache probe: three official sources,132 financial
+acceptance joins,976 usable facts and164 unresolved/invalid context issues.
+One archive was requested with no remaining archive inventory. Repeated replay
+was byte/hash-identical and all three resources came from verified disk cache.
+This does not mean every requested historical context is usable: the164 issues
+remain explicit, not silently date-imputed. The four non-price financial metrics
+were reproducible; P/E stayed null without price/share-basis evidence. This is
+not yet a scheduled fundamental-refresh or public Company Lab delivery.
+
+Next: hydrate relevant current candidates,
 measure actual concept/sector coverage, extend public schema/export/TypeScript
 together and display the panel in Company Lab without blocking independent facts.
 Only then consider the separate Turning v2 candidate/valuation integration.
