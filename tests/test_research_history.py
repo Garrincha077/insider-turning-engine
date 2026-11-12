@@ -105,6 +105,8 @@ def test_identical_primary_xml_repackaged_submission_is_deduped_and_audited(tmp_
         "sha256:" + "8" * 64
     )
     history = research_history([value, duplicate], expected_days=[DAY, later_day])
+    reverse = research_history([duplicate, value], expected_days=[later_day, DAY])
+    assert history == reverse
     assert len(history.records) == sum(len(filing["records"]) for filing in value["filings"])
     assert set(history.sec_day_by_accession.values()) == {DAY}
     assert history.transport_republication_days == ((DAY, later_day),)
