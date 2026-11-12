@@ -1,0 +1,31 @@
+name: Recover SEC production refresh (one-shot)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - src/insider_turning_engine/pipeline/research_history.py
+
+jobs:
+  dispatch_recovery:
+    # Only the explicitly tagged, audited incident-fix merge can trigger a
+    # one-off normal producer refresh. The original pipeline still owns every
+    # validation, archive, Pages publish, and factual digest gate.
+    if: >-
+      github.repository == 'Garrincha077/insider-turning-engine' &&
+      contains(github.event.head_commit.message, '[recover-sec-20261112]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Dispatch the existing validated research producer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run pages.yml \
+            --repo "$GITHUB_REPOSITORY" --ref main \
+            -f refresh_data=true -f send_digest=true
+          echo "Triggered the existing guarded SEC research pipeline; no gates bypassed."
