@@ -28,6 +28,9 @@ class ResearchHistory:
     quarantined_issuers: frozenset[str] = frozenset()
     # Diagnostic-only reason counts, not scoring evidence or a cursor.
     quarantine_reason_counts: dict[str, dict[str, int]] = field(default_factory=dict)
+    # Same canonical XML/economics but different complete-submission transport bytes.
+    # Not a failed source day, not a signal and not a cursor transition.
+    transport_republication_days: tuple[tuple[date, date], ...] = ()
 
 
 def _filing_identity(filing: dict[str, Any]) -> tuple[Any, ...]:
@@ -52,6 +55,34 @@ def _filing_identity(filing: dict[str, Any]) -> tuple[Any, ...]:
     )
 
 
+
+def _same_canonical_source_except_submission_transport(
+    previous: dict[str, Any], current: dict[str, Any],
+    old_identity: tuple[Any, ...], new_identity: tuple[Any, ...],
+) -> bool:
+    """Accept a republished accession only if the parsed source is *identical*.
+
+    SEC may repack a complete submission (header / container bytes) without
+    changing its primary ownership XML. Source content hashes, all canonical
+    economics/owner/quality fields, quarantines and primary-document locations
+    must still match. Never use this exception for changed facts or parser
+    versions, and never revise the first-observed point-in-time attribution.
+    """
+    if (old_identity[0] == new_identity[0]
+            or old_identity[1:] != new_identity[1:]
+            or previous["parserVersion"] != current["parserVersion"]
+            or previous["provenance"]["filer_cik"] != current["provenance"]["filer_cik"]):
+        return False
+
+    def source_urls(filing: dict[str, Any]) -> tuple[tuple[str, str], ...]:
+        return tuple(sorted(
+            (row["source"]["sourceRowKey"], row["source"]["sourceUrl"])
+            for row in filing["records"]
+        ))
+
+    return source_urls(previous) == source_urls(current)
+
+
 def research_history(
     checkpoints: Sequence[dict[str, Any]], *, expected_days: Sequence[date],
 ) -> ResearchHistory:
@@ -64,6 +95,7 @@ def research_history(
     selected_filings: dict[str, tuple[date, dict[str, Any], list[CanonicalTransaction]]] = {}
     quarantined_issuers: set[str] = set()
     quarantine_reason_counts: dict[str, dict[str, int]] = {}
+    transport_republication_days: list[tuple[date, date]] = []
     for item in checkpoints:
         day = date.fromisoformat(item["day"])
         if day not in expected or day in evidence:
@@ -99,20 +131,35 @@ def research_history(
                 prior_identity = _filing_identity(previous[1])
                 current_identity = _filing_identity(filing)
                 if prior_identity != current_identity:
-                    # Diagnostics only: keep the integrity rejection unchanged.
-                    # Never print raw accession IDs, owner names or SEC content.
-                    components = ("submission_hash", "parsed_records", "quarantines")
-                    differing = [name for name, old, new in zip(
-                        components, prior_identity, current_identity, strict=True
-                    ) if old != new]
-                    fingerprint = hashlib.sha256(accession.encode("utf-8")).hexdigest()[:12]
-                    raise ValueError(
-                        "filing appears in conflicting SEC day inventories"
-                        f"; first_day={previous[0].isoformat()}"
-                        f"; duplicate_day={day.isoformat()}"
-                        f"; accession_sha256_prefix={fingerprint}"
-                        f"; changed_components={','.join(differing)}"
-                    )
+                    if _same_canonical_source_except_submission_transport(
+                        previous[1], filing, prior_identity, current_identity,
+                    ):
+                        # Explicit source-transport-only reconciliation. The
+                        # earlier SEC day keeps PIT attribution; one economics
+                        # inventory survives. Keep a sanitized audit count.
+                        transport_republication_days.append((previous[0], day))
+                    else:
+                        components = ("submission_hash", "parsed_records", "quarantines")
+                        differing = [name for name, old, new in zip(
+                            components, prior_identity, current_identity, strict=True
+                        ) if old != new]
+                        if previous[1]["parserVersion"] != filing["parserVersion"]:
+                            differing.append("parser_version")
+                        if (previous[1]["provenance"]["filer_cik"]
+                                != filing["provenance"]["filer_cik"]):
+                            differing.append("filer_cik")
+                        if (sorted(row["source"]["sourceUrl"] for row in previous[1]["records"])
+                                != sorted(row["source"]["sourceUrl"]
+                                          for row in filing["records"])):
+                            differing.append("source_urls")
+                        fingerprint = hashlib.sha256(accession.encode("utf-8")).hexdigest()[:12]
+                        raise ValueError(
+                            "filing appears in conflicting SEC day inventories"
+                            f"; first_day={previous[0].isoformat()}"
+                            f"; duplicate_day={day.isoformat()}"
+                            f"; accession_sha256_prefix={fingerprint}"
+                            f"; changed_components={','.join(differing)}"
+                        )
                 # SEC can republish an unchanged accession in a later master
                 # index. Attribute it to the first observed index and count its
                 # economics once; each day's acquisition evidence remains intact.
@@ -127,4 +174,5 @@ def research_history(
         rows.extend(typed)
     return ResearchHistory(tuple(_merge_records(rows)), expected,
                            tuple(evidence[day] for day in sorted(evidence)), accession_days,
-                           frozenset(quarantined_issuers), quarantine_reason_counts)
+                           frozenset(quarantined_issuers), quarantine_reason_counts,
+                           tuple(sorted(transport_republication_days)))
