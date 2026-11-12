@@ -85,19 +85,76 @@ def test_republished_accession_with_changed_economics_is_fatal(tmp_path):
     later_day = date(2026, 9, 1)
     duplicate = _republished(value, later_day)
     duplicate["filings"][0]["records"][0]["transaction"]["value"] = "999999"
-    with pytest.raises(ValueError, match="conflicting SEC day"):
+    with pytest.raises(ValueError, match="conflicting SEC day") as exc:
         research_history([value, duplicate], expected_days=[DAY, later_day])
+    message = str(exc.value)
+    assert f"first_day={DAY.isoformat()}" in message
+    assert f"duplicate_day={later_day.isoformat()}" in message
+    assert "changed_components=parsed_records" in message
+    assert "accession_sha256_prefix=" in message
+    assert value["filings"][0]["accession"] not in message
 
 
-def test_republished_accession_with_different_source_hash_is_fatal(tmp_path):
+def test_identical_primary_xml_repackaged_submission_is_deduped_and_audited(tmp_path):
+    value = checkpoint(tmp_path)
+    later_day = date(2026, 9, 1)
+    duplicate = _republished(value, later_day)
+    # The complete-submission wrapper changed; canonical XML content,
+    # transaction economics, record sources and quarantine evidence did not.
+    duplicate["filings"][0]["provenance"]["complete_submission_hash"] = (
+        "sha256:" + "8" * 64
+    )
+    history = research_history([value, duplicate], expected_days=[DAY, later_day])
+    reverse = research_history([duplicate, value], expected_days=[later_day, DAY])
+    assert history == reverse
+    assert len(history.records) == sum(len(filing["records"]) for filing in value["filings"])
+    assert set(history.sec_day_by_accession.values()) == {DAY}
+    assert history.transport_republication_days == ((DAY, later_day),)
+    assert len(history.evidence) == 2
+    assert all(day.complete for day in history.evidence)
+
+
+def test_repackaged_submission_with_changed_economics_still_fails_closed(tmp_path):
     value = checkpoint(tmp_path)
     later_day = date(2026, 9, 1)
     duplicate = _republished(value, later_day)
     duplicate["filings"][0]["provenance"]["complete_submission_hash"] = (
         "sha256:" + "8" * 64
     )
-    with pytest.raises(ValueError, match="conflicting SEC day"):
+    duplicate["filings"][0]["records"][0]["transaction"]["value"] = "999999"
+    with pytest.raises(ValueError, match="conflicting SEC day") as exc:
         research_history([value, duplicate], expected_days=[DAY, later_day])
+    assert "changed_components=submission_hash,parsed_records" in str(exc.value)
+
+
+def test_repackaged_submission_with_changed_primary_source_url_still_fails(tmp_path):
+    value = checkpoint(tmp_path)
+    later_day = date(2026, 9, 1)
+    duplicate = _republished(value, later_day)
+    duplicate["filings"][0]["provenance"]["complete_submission_hash"] = (
+        "sha256:" + "8" * 64
+    )
+    source = duplicate["filings"][0]["records"][0]["source"]
+    source["sourceUrl"] = source["sourceUrl"].rsplit("/", 1)[0] + "/alternate.xml"
+    with pytest.raises(ValueError, match="conflicting SEC day") as exc:
+        research_history([value, duplicate], expected_days=[DAY, later_day])
+    assert "source_urls" in str(exc.value)
+
+
+def test_repackaged_submission_with_changed_filer_cik_still_fails(tmp_path):
+    value = checkpoint(tmp_path)
+    later_day = date(2026, 9, 1)
+    duplicate = _republished(value, later_day)
+    duplicate["filings"][0]["provenance"]["complete_submission_hash"] = (
+        "sha256:" + "8" * 64
+    )
+    original = value["filings"][0]["provenance"]["filer_cik"]
+    duplicate["filings"][0]["provenance"]["filer_cik"] = (
+        "9999999999" if original != "9999999999" else "0000000001"
+    )
+    with pytest.raises(ValueError, match="conflicting SEC day") as exc:
+        research_history([value, duplicate], expected_days=[DAY, later_day])
+    assert "filer_cik" in str(exc.value)
 
 
 def test_newest_first_prioritizes_current_day_without_silencing_failure(tmp_path, monkeypatch):
