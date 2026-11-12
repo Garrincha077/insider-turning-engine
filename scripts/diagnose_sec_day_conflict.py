@@ -70,6 +70,14 @@ def diagnose(store: ReleaseCheckpointStore, *, cutoff: date, lookback_days: int 
                 "same_complete_submission_sha256":
                     old_id[0] == new_id[0],
                 "parser_versions": [previous_filing["parserVersion"], filing["parserVersion"]],
+                "same_filer_cik": (
+                    previous_filing["provenance"]["filer_cik"]
+                    == filing["provenance"]["filer_cik"]
+                ),
+                "same_primary_source_urls": (
+                    sorted(row["source"]["sourceUrl"] for row in previous_filing["records"])
+                    == sorted(row["source"]["sourceUrl"] for row in filing["records"])
+                ),
                 "record_counts": [len(previous_filing["records"]), len(filing["records"])],
                 "quarantine_counts": [len(previous_filing["quarantines"]),
                                       len(filing["quarantines"])],
