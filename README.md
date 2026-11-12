@@ -7,8 +7,14 @@ It is not investment advice, a trading system, or a claim of live validated
 performance. The checked-in dashboard bundle is a real-data
 `LIVE_EXPERIMENTAL` snapshot: official SEC ownership filings are combined with
 Yahoo adjusted chart data as a temporary Stooq fallback. Its methodology and
-backtest are not validated, Telegram remains off, and every limitation is
-listed in the content-addressed manifest.
+backtest are not validated. Predictive alerts remain off; the independently gated
+informational Telegram digest is separate. Publication limitations are listed in
+the content-addressed manifest.
+
+The active [predictive-validation goal](docs/predictive-validation-goal.md) compares
+insider, valuation and technical evidence without changing daily factual delivery.
+The [reproducible development baseline](research/results/predictive-baseline-cost-audit.v1.json)
+includes costs and missing outcomes; it is not validation of the combined engine.
 
 ## Repository map
 

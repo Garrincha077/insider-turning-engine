@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "1.0.0",
+  "inspectedAt": "2026-10-26",
+  "status": "DEVELOPMENT_EVIDENCE_AVAILABLE_WITH_GAPS",
+  "sources": [
+    {
+      "release": "research-phase1-baselines-v1",
+      "asset": "b1-summary.json",
+      "sha256": "c2878259f2cb0207806650964b90e6e595b6b997219cccecaaafa50707d6c716",
+      "size": 7112,
+      "contentHashIndependentlyVerified": true,
+      "releaseImmutable": false,
+      "reportedSelection": {"retainedAfterDedup": 6775, "exactEntryMatched": 6094, "missingExactEntry": 681},
+      "selectionReconstructedByThisInspection": false
+    },
+    {
+      "release": "research-phase1-baselines-v1",
+      "asset": "p0-summary.json",
+      "sha256": "1096b67999f8c20af9d353dde9a687f9bb91c967b9fc3a754daccf4c2088d516",
+      "size": 9964,
+      "contentHashIndependentlyVerified": true,
+      "releaseImmutable": false,
+      "reportedTier": "C_EXPLORATORY",
+      "reportedEntryCoverage": 0.8863245178717256,
+      "reportedWorstYearEntryCoverage": 0.8489336492890995,
+      "coverageRecomputedByThisInspection": false
+    },
+    {
+      "release": "research-market-alpaca-v1",
+      "asset": "alpaca-market-2016-2022-index.json",
+      "sha256": "f3a3a689a42d02d6f722c4c95a6c1438e6bd182e8bc92b4fea31e732dafc2bbd",
+      "size": 17311,
+      "contentHashIndependentlyVerified": true,
+      "releaseImmutable": false,
+      "period": "2016-2022",
+      "reportedAdjustment": "all",
+      "barArchivesRevalidatedByThisInspection": false,
+      "pre2016TechnicalWarmupRepresentedInIndex": false
+    }
+  ],
+  "remainingRequirements": [
+    "Reconstruct full pre-entry cohort, including 681 B1 missing-entry signals",
+    "Verify PIT identity, acceptance clocks and action continuity across every compared cohort",
+    "Use a technical/valuation universe independent of selecting known insider buyers",
+    "Resolve technical warmup and quantify remaining feature-level missingness",
+    "Assemble accession-linked historical financial facts and restatement/share-basis evidence",
+    "Recompute liquidity, capacity and adverse-excursion paths",
+    "Build complete comparable monthly P/S population before market-ratio inference",
+    "Audit period exposure and freeze variants before later formation/final evaluation"
+  ],
+  "newOosOutcomesAccessed": false,
+  "formalAlphaClaim": false
+}

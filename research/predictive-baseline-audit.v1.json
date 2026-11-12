@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "1.0.0",
+  "studyId": "predictive-baseline-audit.v1",
+  "sourceRunId": "35277369958",
+  "sourceArtifactId": 10521411328,
+  "sourceArtifactName": "phase1-b1-continuity-corrected-performance-35277369958",
+  "sourceArtifactDigest": "sha256:d750c85b6019740ad381b2f53a9d6ceb379a5665cf8b43f0c70e799484bfa775",
+  "sourceArtifactBytes": 1006001,
+  "sourceCsvSha256": "0794f6dba07fb03753097c8a27ce895f15d0b6575a8e45f52248c3b81d6639ed",
+  "sourceSummarySha256": "7cd32a9b256405c5b75b8e340f37b5ffe0bae82535cc11e326428fc1f9cd75b5",
+  "formationStart": "2016-01-01",
+  "formationEnd": "2020-12-31",
+  "outcomeEnd": "2022-12-31",
+  "expectedEvents": 6094,
+  "horizons": [21, 63, 126, 252],
+  "primaryHorizon": 126,
+  "costBpsPerLeg": [0, 10, 25, 50],
+  "scope": "Previously viewed B1 development baseline only; not a new model or formal significance test"
+}

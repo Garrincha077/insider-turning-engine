@@ -1,0 +1,1328 @@
+{
+  "economicEvents": 6094,
+  "formation": [
+    "2016-01-01",
+    "2020-12-31"
+  ],
+  "fullEngineValidated": false,
+  "horizons": {
+    "126": {
+      "continuityStates": {
+        "DISCONTINUOUS_NO_COMPLETE_VALUATION": 1,
+        "PRICE_CONTINUOUS_ADJUSTED": 6062,
+        "SYMBOL_CHANGED_SAME_SECURITY": 16,
+        "TRANSFORMED_HOLDER_CONSIDERATION": 15
+      },
+      "costScenarios": [
+        {
+          "byFormationYear": {
+            "2016": {
+              "lowerDecile": -0.2770945188901298,
+              "mean": 0.06334281408578615,
+              "median": 0.016984177357371122,
+              "observed": 999,
+              "winRate": 0.5395395395395396
+            },
+            "2017": {
+              "lowerDecile": -0.3464273588786354,
+              "mean": -0.02228077401252752,
+              "median": -0.048499889012208586,
+              "observed": 989,
+              "winRate": 0.39737108190091003
+            },
+            "2018": {
+              "lowerDecile": -0.35874730546906874,
+              "mean": -0.020696188629784788,
+              "median": -0.03071511341042754,
+              "observed": 1221,
+              "winRate": 0.4357084357084357
+            },
+            "2019": {
+              "lowerDecile": -0.4864165955461969,
+              "mean": -0.06838992794098829,
+              "median": -0.08896347889331208,
+              "observed": 1190,
+              "winRate": 0.3134453781512605
+            },
+            "2020": {
+              "lowerDecile": -0.4290777505113529,
+              "mean": 0.1592451784304677,
+              "median": 0.006896128506406862,
+              "observed": 1566,
+              "winRate": 0.5063856960408685
+            }
+          },
+          "costBpsPerLeg": 0,
+          "missingStockZeroRecoveryStress": {
+            "lowerDecile": -0.4449693354428612,
+            "mean": 0.007448137558027982,
+            "median": -0.03938725870255566,
+            "observed": 6093,
+            "winRate": 0.4316428688659117
+          },
+          "netExcessVsEquallyCostedSpy": {
+            "lowerDecile": -0.40065400119206784,
+            "mean": 0.030841186023248916,
+            "median": -0.032966923809045756,
+            "observed": 5965,
+            "winRate": 0.44090528080469404
+          },
+          "netExcessVsGrossSpy": {
+            "lowerDecile": -0.40065400119206784,
+            "mean": 0.030841186023248916,
+            "median": -0.032966923809045756,
+            "observed": 5965,
+            "winRate": 0.44090528080469404
+          },
+          "netStock": {
+            "lowerDecile": -0.3236655353286022,
+            "mean": 0.13764340052426308,
+            "median": 0.06408163265306133,
+            "observed": 5965,
+            "winRate": 0.6065381391450125
+          },
+          "stressUnknownSpy": 1,
+          "topOnePercentRemoved": {
+            "lowerDecile": -0.40209156390059553,
+            "mean": -0.008815546439255847,
+            "median": -0.036438444725820474,
+            "observed": 5906,
+            "winRate": 0.4353200135455469
+          }
+        },
+        {
+          "byFormationYear": {
+            "2016": {
+              "lowerDecile": -0.2786517260131022,
+              "mean": 0.061020958751863016,
+              "median": 0.014771909143609152,
+              "observed": 999,
+              "winRate": 0.5345345345345346
+            },
+            "2017": {
+              "lowerDecile": -0.34790768998034727,
+              "mean": -0.024397678764903664,
+              "median": -0.050645123126230374,
+              "observed": 989,
+              "winRate": 0.3943377148634985
+            },
+            "2018": {
+              "lowerDecile": -0.3601253823188437,
+              "mean": -0.022737078018588732,
+              "median": -0.03260173154596513,
+              "observed": 1221,
+              "winRate": 0.4275184275184275
+            },
+            "2019": {
+              "lowerDecile": -0.4875744005371473,
+              "mean": -0.07036759112101383,
+              "median": -0.0909630401395497,
+              "observed": 1190,
+              "winRate": 0.31176470588235294
+            },
+            "2020": {
+              "lowerDecile": -0.43058155693410827,
+              "mean": 0.1564993100815766,
+              "median": 0.004347520118470061,
+              "observed": 1566,
+              "winRate": 0.5038314176245211
+            }
+          },
+          "costBpsPerLeg": 10,
+          "missingStockZeroRecoveryStress": {
+            "lowerDecile": -0.4462933296947197,
+            "mean": 0.005222874593804662,
+            "median": -0.04157517443120451,
+            "observed": 6093,
+            "winRate": 0.4277039225340555
+          },
+          "netExcessVsEquallyCostedSpy": {
+            "lowerDecile": -0.3998534936971787,
+            "mean": 0.03077956527195372,
+            "median": -0.03290105582940739,
+            "observed": 5965,
+            "winRate": 0.44090528080469404
+          },
+          "netExcessVsGrossSpy": {
+            "lowerDecile": -0.40208258298356436,
+            "mean": 0.028568172235987774,
+            "median": -0.035249228711807135,
+            "observed": 5965,
+            "winRate": 0.4368818105616094
+          },
+          "netStock": {
+            "lowerDecile": -0.3250168529403332,
+            "mean": 0.13537038673700194,
+            "median": 0.06195559542498352,
+            "observed": 5965,
+            "winRate": 0.603688181056161
+          },
+          "stressUnknownSpy": 1,
+          "topOnePercentRemoved": {
+            "lowerDecile": -0.4034296072814887,
+            "mean": -0.01100808916981598,
+            "median": -0.0384468900096363,
+            "observed": 5906,
+            "winRate": 0.43125634947511005
+          }
+        },
+        {
+          "byFormationYear": {
+            "2016": {
+              "lowerDecile": -0.28098171173326036,
+              "mean": 0.05754686099536935,
+              "median": 0.01141986632676839,
+              "observed": 999,
+              "winRate": 0.5265265265265265
+            },
+            "2017": {
+              "lowerDecile": -0.3501226492347791,
+              "mean": -0.027565117297137478,
+              "median": -0.05378910769690637,
+              "observed": 989,
+              "winRate": 0.3832153690596562
+            },
+            "2018": {
+              "lowerDecile": -0.3621873426925718,
+              "mean": -0.02579077785221078,
+              "median": -0.03542460157420124,
+              "observed": 1221,
+              "winRate": 0.42096642096642095
+            },
+            "2019": {
+              "lowerDecile": -0.48930677708221015,
+              "mean": -0.07332668814848364,
+              "median": -0.09382346923106827,
+              "observed": 1190,
+              "winRate": 0.30756302521008405
+            },
+            "2020": {
+              "lowerDecile": -0.432831641357184,
+              "mean": 0.1523907788862281,
+              "median": 0.0004914197081787863,
+              "observed": 1566,
+              "winRate": 0.5012771392081737
+            }
+          },
+          "costBpsPerLeg": 25,
+          "missingStockZeroRecoveryStress": {
+            "lowerDecile": -0.44827436847555524,
+            "mean": 0.001893304073769579,
+            "median": -0.04469667312392045,
+            "observed": 6093,
+            "winRate": 0.4217955030362711
+          },
+          "netExcessVsEquallyCostedSpy": {
+            "lowerDecile": -0.398655726871908,
+            "mean": 0.030687364646574365,
+            "median": -0.032802500248900746,
+            "observed": 5965,
+            "winRate": 0.44090528080469404
+          },
+          "netExcessVsGrossSpy": {
+            "lowerDecile": -0.40422011184864637,
+            "mean": 0.025167154100434755,
+            "median": -0.03866414876581392,
+            "observed": 5965,
+            "winRate": 0.4308466051969824
+          },
+          "netStock": {
+            "lowerDecile": -0.32703877455389585,
+            "mean": 0.13196936860144892,
+            "median": 0.0587744923405773,
+            "observed": 5965,
+            "winRate": 0.5983235540653814
+          },
+          "stressUnknownSpy": 1,
+          "topOnePercentRemoved": {
+            "lowerDecile": -0.40528045950752023,
+            "mean": -0.01428870173424529,
+            "median": -0.04154563228067598,
+            "observed": 5906,
+            "winRate": 0.4251608533694548
+          }
+        },
+        {
+          "byFormationYear": {
+            "2016": {
+              "lowerDecile": -0.2848495653085148,
+              "mean": 0.05177974349246691,
+              "median": 0.005855364071946312,
+              "observed": 999,
+              "winRate": 0.5165165165165165
+            },
+            "2017": {
+              "lowerDecile": -0.35379955506178795,
+              "mean": -0.03282317031664999,
+              "median": -0.05905201186078468,
+              "observed": 989,
+              "winRate": 0.37209302325581395
+            },
+            "2018": {
+              "lowerDecile": -0.36561026530302265,
+              "mean": -0.030860020859599938,
+              "median": -0.0401542742830876,
+              "observed": 1221,
+              "winRate": 0.4095004095004095
+            },
+            "2019": {
+              "lowerDecile": -0.49218257960560663,
+              "mean": -0.0782388873599219,
+              "median": -0.09859799373994932,
+              "observed": 1190,
+              "winRate": 0.3042016806722689
+            },
+            "2020": {
+              "lowerDecile": -0.43655806113076756,
+              "mean": 0.14557048083225818,
+              "median": -0.00573438372612034,
+              "observed": 1566,
+              "winRate": 0.4942528735632184
+            }
+          },
+          "costBpsPerLeg": 50,
+          "missingStockZeroRecoveryStress": {
+            "lowerDecile": -0.4515629585578379,
+            "mean": -0.003633893423005077,
+            "median": -0.04984471022463355,
+            "observed": 6093,
+            "winRate": 0.413589364844904
+          },
+          "netExcessVsEquallyCostedSpy": {
+            "lowerDecile": -0.3966673942150324,
+            "mean": 0.030534308550380772,
+            "median": -0.032638894716418454,
+            "observed": 5965,
+            "winRate": 0.44090528080469404
+          },
+          "netExcessVsGrossSpy": {
+            "lowerDecile": -0.40762973935089286,
+            "mean": 0.019521351192161834,
+            "median": -0.04398940131114215,
+            "observed": 5965,
+            "winRate": 0.4224643755238894
+          },
+          "netStock": {
+            "lowerDecile": -0.3303952314944867,
+            "mean": 0.126323565693176,
+            "median": 0.05349375571123982,
+            "observed": 5965,
+            "winRate": 0.5921207041072926
+          },
+          "stressUnknownSpy": 1,
+          "topOnePercentRemoved": {
+            "lowerDecile": -0.4087747153077389,
+            "mean": -0.019734627400901577,
+            "median": -0.04678746512486792,
+            "observed": 5906,
+            "winRate": 0.4166948865560447
+          }
+        }
+      ],
+      "coverage": 0.978831637676403,
+      "events": 6094,
+      "mae": null,
+      "missing": 129,
+      "missingReasons": {
+        "MISSING_DISCONTINUOUS_NO_COMPLETE_VALUATION": 1,
+        "MISSING_EXACT_TERMINAL_HOLDER_BAR": 128
+      },
+      "observed": 5965
+    },
+    "21": {
+      "continuityStates": {
+        "PRICE_CONTINUOUS_ADJUSTED": 6088,
+        "SYMBOL_CHANGED_SAME_SECURITY": 4,
+        "TRANSFORMED_HOLDER_CONSIDERATION": 2
+      },
+      "costScenarios": [
+        {
+          "byFormationYear": {
+            "2016": {
+              "lowerDecile": -0.10121580121517693,
+              "mean": 0.016812095438866217,
+              "median": 0.004982668007264268,
+              "observed": 1012,
+              "winRate": 0.5286561264822134
+            },
+            "2017": {
+              "lowerDecile": -0.12188763005891123,
+              "mean": 0.0008651814128231912,
+              "median": -0.007506260092204675,
+              "observed": 1003,
+              "winRate": 0.4556331006979063
+            },
+            "2018": {
+              "lowerDecile": -0.11803223267253993,
+              "mean": 0.00507070121001026,
+              "median": 0.0023813899718516662,
+              "observed": 1241,
+              "winRate": 0.5173247381144238
+            },
+            "2019": {
+              "lowerDecile": -0.1365320850176288,
+              "mean": -0.0010559662505663474,
+              "median": -0.01280111826076935,
+              "observed": 1208,
+              "winRate": 0.43625827814569534
+            },
+            "2020": {
+              "lowerDecile": -0.2414122013033877,
+              "mean": -0.016559644303303398,
+              "median": -0.027663190386012337,
+              "observed": 1576,
+              "winRate": 0.40926395939086296
+            }
+          },
+          "costBpsPerLeg": 0,
+          "missingStockZeroRecoveryStress": {
+            "lowerDecile": -0.1630169522883239,
+            "mean": -0.009508166922026148,
+            "median": -0.008021806017296296,
+            "observed": 6094,
+            "winRate": 0.4604529044962258
+          },
+          "netExcessVsEquallyCostedSpy": {
+            "lowerDecile": -0.15426535155763976,
+            "mean": -0.0005296769718333274,
+            "median": -0.006976067643880202,
+            "observed": 6040,
+            "winRate": 0.4645695364238411
+          },
+          "netExcessVsGrossSpy": {
+            "lowerDecile": -0.15426535155763976,
+            "mean": -0.0005296769718333274,
+            "median": -0.006976067643880202,
+            "observed": 6040,
+            "winRate": 0.4645695364238411
+          },
+          "netStock": {
+            "lowerDecile": -0.15121951219512186,
+            "mean": 0.01842976152595153,
+            "median": 0.012260032599966664,
+            "observed": 6040,
+            "winRate": 0.5539735099337748
+          },
+          "stressUnknownSpy": 0,
+          "topOnePercentRemoved": {
+            "lowerDecile": -0.15601133327806616,
+            "mean": -0.009310986917466653,
+            "median": -0.008080561840163425,
+            "observed": 5980,
+            "winRate": 0.4591973244147157
+          }
+        },
+        {
+          "byFormationYear": {
+            "2016": {
+              "lowerDecile": -0.10304620765084649,
+              "mean": 0.014737521101176133,
+              "median": 0.0029535009431603254,
+              "observed": 1012,
+              "winRate": 0.5177865612648221
+            },
+            "2017": {
+              "lowerDecile": -0.12369305355108162,
+              "mean": -0.0011716802549669762,
+              "median": -0.00953231001255661,
+              "observed": 1003,
+              "winRate": 0.44466600199401796
+            },
+            "2018": {
+              "lowerDecile": -0.11971837042044475,
+              "mean": 0.003069647539600976,
+              "median": 0.0003832479331675742,
+              "observed": 1241,
+              "winRate": 0.500402900886382
+            },
+            "2019": {
+              "lowerDecile": -0.13831651437448556,
+              "mean": -0.003103797327026629,
+              "median": -0.014856664971342748,
+              "observed": 1208,
+              "winRate": 0.42632450331125826
+            },
+            "2020": {
+              "lowerDecile": -0.24292125644698825,
+              "mean": -0.018584271302146623,
+              "median": -0.029690979204309187,
+              "observed": 1576,
+              "winRate": 0.40482233502538073
+            }
+          },
+          "costBpsPerLeg": 10,
+          "missingStockZeroRecoveryStress": {
+            "lowerDecile": -0.16452425698512207,
+            "mean": -0.011524960682783412,
+            "median": -0.01002949516186813,
+            "observed": 6094,
+            "winRate": 0.450278962914342
+          },
+          "netExcessVsEquallyCostedSpy": {
+            "lowerDecile": -0.1539571290770051,
+            "mean": -0.0005286186761853081,
+            "median": -0.006962129446789533,
+            "observed": 6040,
+            "winRate": 0.4645695364238411
+          },
+          "netExcessVsGrossSpy": {
+            "lowerDecile": -0.15602234942358695,
+            "mean": -0.0025645016701867657,
+            "median": -0.008968691319794886,
+            "observed": 6040,
+            "winRate": 0.4543046357615894
+          },
+          "netStock": {
+            "lowerDecile": -0.1529153773056211,
+            "mean": 0.01639493682759809,
+            "median": 0.010237535032334488,
+            "observed": 6040,
+            "winRate": 0.5485099337748345
+          },
+          "stressUnknownSpy": 0,
+          "topOnePercentRemoved": {
+            "lowerDecile": -0.15790056355729865,
+            "mean": -0.011327601552107311,
+            "median": -0.01014522807131657,
+            "observed": 5980,
+            "winRate": 0.4488294314381271
+          }
+        },
+        {
+          "byFormationYear": {
+            "2016": {
+              "lowerDecile": -0.10578497039748425,
+              "mean": 0.011633419847774341,
+              "median": -8.265925250638961e-05,
+              "observed": 1012,
+              "winRate": 0.5
+            },
+            "2017": {
+              "lowerDecile": -0.12639443533487782,
+              "mean": -0.004219353573356436,
+              "median": -0.012563806152734669,
+              "observed": 1003,
+              "winRate": 0.42572283150548357
+            },
+            "2018": {
+              "lowerDecile": -0.12214776005597627,
+              "mean": 7.555227215549211e-05,
+              "median": -0.0026609201553089434,
+              "observed": 1241,
+              "winRate": 0.4802578565672844
+            },
+            "2019": {
+              "lowerDecile": -0.14098648348698983,
+              "mean": -0.00616788372572048,
+              "median": -0.017932295959731892,
+              "observed": 1208,
+              "winRate": 0.40397350993377484
+            },
+            "2020": {
+              "lowerDecile": -0.24432670293919068,
+              "mean": -0.02161363838271022,
+              "median": -0.03266339991718825,
+              "observed": 1576,
+              "winRate": 0.39784263959390864
+            }
+          },
+          "costBpsPerLeg": 25,
+          "missingStockZeroRecoveryStress": {
+            "lowerDecile": -0.1670716262151225,
+            "mean": -0.014542607207607418,
+            "median": -0.013056277161655083,
+            "observed": 6094,
+            "winRate": 0.4338693797177552
+          },
+          "netExcessVsEquallyCostedSpy": {
+            "lowerDecile": -0.15349594830797586,
+            "mean": -0.0005270351914251828,
+            "median": -0.006941274289047894,
+            "observed": 6040,
+            "winRate": 0.4645695364238411
+          },
+          "netExcessVsGrossSpy": {
+            "lowerDecile": -0.15865127391128864,
+            "mean": -0.005609127154007542,
+            "median": -0.011945367825442421,
+            "observed": 6040,
+            "winRate": 0.4377483443708609
+          },
+          "netStock": {
+            "lowerDecile": -0.15545283133629328,
+            "mean": 0.013350311343777316,
+            "median": 0.007211354133134118,
+            "observed": 6040,
+            "winRate": 0.5346026490066225
+          },
+          "stressUnknownSpy": 0,
+          "topOnePercentRemoved": {
+            "lowerDecile": -0.16033874321599761,
+            "mean": -0.014344996329918612,
+            "median": -0.013155543632531574,
+            "observed": 5980,
+            "winRate": 0.43210702341137125
+          }
+        },
+        {
+          "byFormationYear": {
+            "2016": {
+              "lowerDecile": -0.11033140739480507,
+              "mean": 0.006480508811861909,
+              "median": -0.005394346019797935,
+              "observed": 1012,
+              "winRate": 0.4723320158102767
+            },
+            "2017": {
+              "lowerDecile": -0.1308818818932681,
+              "mean": -0.009278592365575074,
+              "median": -0.017599089854380523,
+              "observed": 1003,
+              "winRate": 0.4017946161515454
+            },
+            "2018": {
+              "lowerDecile": -0.1265443244269565,
+              "mean": -0.004894745178446377,
+              "median": -0.007714340149612031,
+              "observed": 1241,
+              "winRate": 0.4528605962933118
+            },
+            "2019": {
+              "lowerDecile": -0.14541872076993612,
+              "mean": -0.011254368775625202,
+              "median": -0.02299741218012008,
+              "observed": 1208,
+              "winRate": 0.37003311258278143
+            },
+            "2020": {
+              "lowerDecile": -0.2478549670934519,
+              "mean": -0.026642488212965876,
+              "median": -0.03790259821694997,
+              "observed": 1576,
+              "winRate": 0.38578680203045684
+            }
+          },
+          "costBpsPerLeg": 50,
+          "missingStockZeroRecoveryStress": {
+            "lowerDecile": -0.1712398478618753,
+            "mean": -0.019552000526593866,
+            "median": -0.01803875258913268,
+            "observed": 6094,
+            "winRate": 0.4099113882507384
+          },
+          "netExcessVsEquallyCostedSpy": {
+            "lowerDecile": -0.15273037293517577,
+            "mean": -0.0005244065542031427,
+            "median": -0.006906654035483295,
+            "observed": 6040,
+            "winRate": 0.4645695364238411
+          },
+          "netExcessVsGrossSpy": {
+            "lowerDecile": -0.1629266632962555,
+            "mean": -0.010663306439753141,
+            "median": -0.01708781947817284,
+            "observed": 6040,
+            "winRate": 0.41357615894039734
+          },
+          "netStock": {
+            "lowerDecile": -0.1596650891882051,
+            "mean": 0.008296132058031716,
+            "median": 0.0021877934696188372,
+            "observed": 6040,
+            "winRate": 0.508112582781457
+          },
+          "stressUnknownSpy": 0,
+          "topOnePercentRemoved": {
+            "lowerDecile": -0.16454264026742949,
+            "mean": -0.019354046859862067,
+            "median": -0.0181209566160746,
+            "observed": 5980,
+            "winRate": 0.4076923076923077
+          }
+        }
+      ],
+      "coverage": 0.9911388250738431,
+      "events": 6094,
+      "mae": null,
+      "missing": 54,
+      "missingReasons": {
+        "MISSING_EXACT_TERMINAL_HOLDER_BAR": 54
+      },
+      "observed": 6040
+    },
+    "252": {
+      "continuityStates": {
+        "DISCONTINUOUS_NO_COMPLETE_VALUATION": 1,
+        "PRICE_CONTINUOUS_ADJUSTED": 6004,
+        "SYMBOL_CHANGED_SAME_SECURITY": 36,
+        "TRANSFORMED_HOLDER_CONSIDERATION": 53
+      },
+      "costScenarios": [
+        {
+          "byFormationYear": {
+            "2016": {
+              "lowerDecile": -0.488284425544361,
+              "mean": 0.05842026495102587,
+              "median": -0.01361257000184346,
+              "observed": 980,
+              "winRate": 0.4887755102040816
+            },
+            "2017": {
+              "lowerDecile": -0.5709587039517253,
+              "mean": -0.029594672370112245,
+              "median": -0.08672522159530538,
+              "observed": 963,
+              "winRate": 0.3707165109034268
+            },
+            "2018": {
+              "lowerDecile": -0.6355149972171247,
+              "mean": -0.0885056284709108,
+              "median": -0.11139388598844135,
+              "observed": 1179,
+              "winRate": 0.33927056827820185
+            },
+            "2019": {
+              "lowerDecile": -0.707019640469488,
+              "mean": -0.07435856053338424,
+              "median": -0.2643385152786555,
+              "observed": 1153,
+              "winRate": 0.25585429314830876
+            },
+            "2020": {
+              "lowerDecile": -0.4848197719906113,
+              "mean": 0.48597186347371074,
+              "median": 0.09721146493012733,
+              "observed": 1560,
+              "winRate": 0.5801282051282052
+            }
+          },
+          "costBpsPerLeg": 0,
+          "missingStockZeroRecoveryStress": {
+            "lowerDecile": -0.7260359978745017,
+            "mean": 0.049765497832736864,
+            "median": -0.09183409812026744,
+            "observed": 6093,
+            "winRate": 0.3998030526834072
+          },
+          "netExcessVsEquallyCostedSpy": {
+            "lowerDecile": -0.5908591369067361,
+            "mean": 0.10227673366176179,
+            "median": -0.07238452840939447,
+            "observed": 5835,
+            "winRate": 0.4174807197943445
+          },
+          "netExcessVsGrossSpy": {
+            "lowerDecile": -0.5908591369067361,
+            "mean": 0.10227673366176179,
+            "median": -0.07238452840939447,
+            "observed": 5835,
+            "winRate": 0.4174807197943445
+          },
+          "netStock": {
+            "lowerDecile": -0.45217648800710686,
+            "mean": 0.3127197762392763,
+            "median": 0.11104199066874032,
+            "observed": 5835,
+            "winRate": 0.6101113967437874
+          },
+          "stressUnknownSpy": 1,
+          "topOnePercentRemoved": {
+            "lowerDecile": -0.5932814023526767,
+            "mean": 0.012435270382282034,
+            "median": -0.0763555210748652,
+            "observed": 5777,
+            "winRate": 0.4116323351220357
+          }
+        },
+        {
+          "byFormationYear": {
+            "2016": {
+              "lowerDecile": -0.4896086047208891,
+              "mean": 0.05591063738303833,
+              "median": -0.016019355562702176,
+              "observed": 980,
+              "winRate": 0.4887755102040816
+            },
+            "2017": {
+              "lowerDecile": -0.5721528277873584,
+              "mean": -0.03180929346740881,
+              "median": -0.0888385381962542,
+              "observed": 963,
+              "winRate": 0.36656282450674976
+            },
+            "2018": {
+              "lowerDecile": -0.6363574595980486,
+              "mean": -0.09053158762583666,
+              "median": -0.11328857551563964,
+              "observed": 1179,
+              "winRate": 0.33587786259541985
+            },
+            "2019": {
+              "lowerDecile": -0.7078848789704321,
+              "mean": -0.07645770702450962,
+              "median": -0.2658151601671085,
+              "observed": 1153,
+              "winRate": 0.25585429314830876
+            },
+            "2020": {
+              "lowerDecile": -0.4865154675993504,
+              "mean": 0.4821878257994742,
+              "median": 0.09420773048899644,
+              "observed": 1560,
+              "winRate": 0.5788461538461539
+            }
+          },
+          "costBpsPerLeg": 10,
+          "missingStockZeroRecoveryStress": {
+            "lowerDecile": -0.7269525287986294,
+            "mean": 0.04725374079136833,
+            "median": -0.09374885328894078,
+            "observed": 6093,
+            "winRate": 0.39816182504513375
+          },
+          "netExcessVsEquallyCostedSpy": {
+            "lowerDecile": -0.589678599170659,
+            "mean": 0.1020723845435565,
+            "median": -0.07223990397700808,
+            "observed": 5835,
+            "winRate": 0.4174807197943445
+          },
+          "netExcessVsGrossSpy": {
+            "lowerDecile": -0.5921543582529345,
+            "mean": 0.09965391692601913,
+            "median": -0.07484363393547211,
+            "observed": 5835,
+            "winRate": 0.41576692373607543
+          },
+          "netStock": {
+            "lowerDecile": -0.4532710404786211,
+            "mean": 0.31009695950353366,
+            "median": 0.10882212655152013,
+            "observed": 5835,
+            "winRate": 0.6085689802913453
+          },
+          "stressUnknownSpy": 1,
+          "topOnePercentRemoved": {
+            "lowerDecile": -0.5944950035662778,
+            "mean": 0.009995892724839882,
+            "median": -0.07874465847283063,
+            "observed": 5777,
+            "winRate": 0.40990133287173275
+          }
+        },
+        {
+          "byFormationYear": {
+            "2016": {
+              "lowerDecile": -0.4915899201969911,
+              "mean": 0.05215558366535103,
+              "median": -0.01962053096548355,
+              "observed": 980,
+              "winRate": 0.4846938775510204
+            },
+            "2017": {
+              "lowerDecile": -0.5739395467434183,
+              "mean": -0.03512294099453602,
+              "median": -0.09200060792336018,
+              "observed": 963,
+              "winRate": 0.3603322949117342
+            },
+            "2018": {
+              "lowerDecile": -0.6376180018138948,
+              "mean": -0.0935629479573967,
+              "median": -0.11612352243912849,
+              "observed": 1179,
+              "winRate": 0.33163698049194235
+            },
+            "2019": {
+              "lowerDecile": -0.7091795001688523,
+              "mean": -0.07959857459227845,
+              "median": -0.2680246038904798,
+              "observed": 1153,
+              "winRate": 0.2541196877710321
+            },
+            "2020": {
+              "lowerDecile": -0.48905266801142877,
+              "mean": 0.47652592404251154,
+              "median": 0.08969610046688414,
+              "observed": 1560,
+              "winRate": 0.573076923076923
+            }
+          },
+          "costBpsPerLeg": 25,
+          "missingStockZeroRecoveryStress": {
+            "lowerDecile": -0.7277152880829408,
+            "mean": 0.04349550082922069,
+            "median": -0.09704692597733322,
+            "observed": 6093,
+            "winRate": 0.39389463318562284
+          },
+          "netExcessVsEquallyCostedSpy": {
+            "lowerDecile": -0.5879122085431115,
+            "mean": 0.1017666252644463,
+            "median": -0.07202350831757687,
+            "observed": 5835,
+            "winRate": 0.4174807197943445
+          },
+          "netExcessVsGrossSpy": {
+            "lowerDecile": -0.5934113660935666,
+            "mean": 0.09572950285757602,
+            "median": -0.07825516369241403,
+            "observed": 5835,
+            "winRate": 0.41131105398457585
+          },
+          "netStock": {
+            "lowerDecile": -0.45490877484996417,
+            "mean": 0.3061725454350906,
+            "median": 0.10550063410680144,
+            "observed": 5835,
+            "winRate": 0.6051413881748072
+          },
+          "stressUnknownSpy": 1,
+          "topOnePercentRemoved": {
+            "lowerDecile": -0.5963108657312671,
+            "mean": 0.006345951092756659,
+            "median": -0.08215606673266418,
+            "observed": 5777,
+            "winRate": 0.40540072702094515
+          }
+        },
+        {
+          "byFormationYear": {
+            "2016": {
+              "lowerDecile": -0.49487896960259325,
+              "mean": 0.04592206994826149,
+              "median": -0.02559860157607108,
+              "observed": 980,
+              "winRate": 0.4714285714285714
+            },
+            "2017": {
+              "lowerDecile": -0.576905559471471,
+              "mean": -0.04062370579495781,
+              "median": -0.09751276468697467,
+              "observed": 963,
+              "winRate": 0.3541017653167186
+            },
+            "2018": {
+              "lowerDecile": -0.6397105437012283,
+              "mean": -0.09859510665041762,
+              "median": -0.1210891481625116,
+              "observed": 1179,
+              "winRate": 0.32230703986429177
+            },
+            "2019": {
+              "lowerDecile": -0.711328614297573,
+              "mean": -0.08481251892948675,
+              "median": -0.2716923537529915,
+              "observed": 1153,
+              "winRate": 0.25065047701647875
+            },
+            "2020": {
+              "lowerDecile": -0.49326450484806317,
+              "mean": 0.4671269793348505,
+              "median": 0.08244024841098319,
+              "observed": 1560,
+              "winRate": 0.5647435897435897
+            }
+          },
+          "costBpsPerLeg": 50,
+          "missingStockZeroRecoveryStress": {
+            "lowerDecile": -0.7291724226773588,
+            "mean": 0.037256697840647245,
+            "median": -0.10255097940304281,
+            "observed": 6093,
+            "winRate": 0.38618086328573775
+          },
+          "netExcessVsEquallyCostedSpy": {
+            "lowerDecile": -0.5849799415146293,
+            "mean": 0.10125905471985373,
+            "median": -0.07166428434561967,
+            "observed": 5835,
+            "winRate": 0.4174807197943445
+          },
+          "netExcessVsGrossSpy": {
+            "lowerDecile": -0.5958070803742538,
+            "mean": 0.0892148453409731,
+            "median": -0.08377370543680374,
+            "observed": 5835,
+            "winRate": 0.4032562125107112
+          },
+          "netStock": {
+            "lowerDecile": -0.4576274682259416,
+            "mean": 0.29965788791848763,
+            "median": 0.09998684648298184,
+            "observed": 5835,
+            "winRate": 0.5993144815766924
+          },
+          "stressUnknownSpy": 1,
+          "topOnePercentRemoved": {
+            "lowerDecile": -0.5993252571527503,
+            "mean": 0.00028692692407455224,
+            "median": -0.0876194811165194,
+            "observed": 5777,
+            "winRate": 0.3972650164445214
+          }
+        }
+      ],
+      "coverage": 0.9574991795208402,
+      "events": 6094,
+      "mae": null,
+      "missing": 259,
+      "missingReasons": {
+        "MISSING_DISCONTINUOUS_NO_COMPLETE_VALUATION": 1,
+        "MISSING_EXACT_TERMINAL_HOLDER_BAR": 258
+      },
+      "observed": 5835
+    },
+    "63": {
+      "continuityStates": {
+        "DISCONTINUOUS_NO_COMPLETE_VALUATION": 1,
+        "PRICE_CONTINUOUS_ADJUSTED": 6078,
+        "SYMBOL_CHANGED_SAME_SECURITY": 10,
+        "TRANSFORMED_HOLDER_CONSIDERATION": 5
+      },
+      "costScenarios": [
+        {
+          "byFormationYear": {
+            "2016": {
+              "lowerDecile": -0.2029811669120526,
+              "mean": 0.028108773349732448,
+              "median": 0.012942742455214318,
+              "observed": 1006,
+              "winRate": 0.5377733598409543
+            },
+            "2017": {
+              "lowerDecile": -0.23971154753008928,
+              "mean": -0.0207993213532661,
+              "median": -0.030425724663574294,
+              "observed": 992,
+              "winRate": 0.3961693548387097
+            },
+            "2018": {
+              "lowerDecile": -0.2134103775707663,
+              "mean": 0.007156990690686016,
+              "median": -1.0361249508483716e-05,
+              "observed": 1240,
+              "winRate": 0.5
+            },
+            "2019": {
+              "lowerDecile": -0.32040433879881536,
+              "mean": -0.020034010511874905,
+              "median": -0.0441654544581338,
+              "observed": 1201,
+              "winRate": 0.3613655287260616
+            },
+            "2020": {
+              "lowerDecile": -0.29856360900090795,
+              "mean": 0.07387532941971238,
+              "median": -0.015452879371773642,
+              "observed": 1571,
+              "winRate": 0.4710375556970083
+            }
+          },
+          "costBpsPerLeg": 0,
+          "missingStockZeroRecoveryStress": {
+            "lowerDecile": -0.2854865544862306,
+            "mean": 0.0034726765820854632,
+            "median": -0.01909356243166105,
+            "observed": 6093,
+            "winRate": 0.4477268997209913
+          },
+          "netExcessVsEquallyCostedSpy": {
+            "lowerDecile": -0.2670674743637471,
+            "mean": 0.018055983952986344,
+            "median": -0.0165620194197742,
+            "observed": 6010,
+            "winRate": 0.453910149750416
+          },
+          "netExcessVsGrossSpy": {
+            "lowerDecile": -0.2670674743637471,
+            "mean": 0.018055983952986344,
+            "median": -0.0165620194197742,
+            "observed": 6010,
+            "winRate": 0.453910149750416
+          },
+          "netStock": {
+            "lowerDecile": -0.23305084745762705,
+            "mean": 0.07513567309565265,
+            "median": 0.034975197919183576,
+            "observed": 6010,
+            "winRate": 0.5923460898502496
+          },
+          "stressUnknownSpy": 1,
+          "topOnePercentRemoved": {
+            "lowerDecile": -0.26829494857644554,
+            "mean": -0.004709340738400702,
+            "median": -0.01863142344059443,
+            "observed": 5950,
+            "winRate": 0.4484033613445378
+          }
+        },
+        {
+          "byFormationYear": {
+            "2016": {
+              "lowerDecile": -0.20466096859185412,
+              "mean": 0.025946474581483647,
+              "median": 0.010763340892208761,
+              "observed": 1006,
+              "winRate": 0.5298210735586482
+            },
+            "2017": {
+              "lowerDecile": -0.24129457988235226,
+              "mean": -0.022842354597117365,
+              "median": -0.032448164988012285,
+              "observed": 992,
+              "winRate": 0.3860887096774194
+            },
+            "2018": {
+              "lowerDecile": -0.215237883398272,
+              "mean": 0.0051084599081762504,
+              "median": -0.001797326167000235,
+              "observed": 1240,
+              "winRate": 0.49435483870967745
+            },
+            "2019": {
+              "lowerDecile": -0.32182421521869164,
+              "mean": -0.022068074677276468,
+              "median": -0.04622834420708566,
+              "observed": 1201,
+              "winRate": 0.3572023313905079
+            },
+            "2020": {
+              "lowerDecile": -0.3003276216872506,
+              "mean": 0.07150412012733755,
+              "median": -0.017816010358433942,
+              "observed": 1571,
+              "winRate": 0.4697644812221515
+            }
+          },
+          "costBpsPerLeg": 10,
+          "missingStockZeroRecoveryStress": {
+            "lowerDecile": -0.28699107406303925,
+            "mean": 0.0013538155005100485,
+            "median": -0.02112272485457778,
+            "observed": 6093,
+            "winRate": 0.4424749712785163
+          },
+          "netExcessVsEquallyCostedSpy": {
+            "lowerDecile": -0.2665338730163672,
+            "mean": 0.018019908060972385,
+            "median": -0.016528928471882476,
+            "observed": 6010,
+            "winRate": 0.453910149750416
+          },
+          "netExcessVsGrossSpy": {
+            "lowerDecile": -0.26861586112614166,
+            "mean": 0.015907860730018125,
+            "median": -0.01870945011323555,
+            "observed": 6010,
+            "winRate": 0.448585690515807
+          },
+          "netStock": {
+            "lowerDecile": -0.23458321339677257,
+            "mean": 0.07298754987268444,
+            "median": 0.03290731540585867,
+            "observed": 6010,
+            "winRate": 0.5880199667221297
+          },
+          "stressUnknownSpy": 1,
+          "topOnePercentRemoved": {
+            "lowerDecile": -0.26986900477235043,
+            "mean": -0.006810423513630225,
+            "median": -0.020680231234276092,
+            "observed": 5950,
+            "winRate": 0.4430252100840336
+          }
+        },
+        {
+          "byFormationYear": {
+            "2016": {
+              "lowerDecile": -0.2071743875641261,
+              "mean": 0.02271111482849273,
+              "median": 0.00750239092262428,
+              "observed": 1006,
+              "winRate": 0.5188866799204771
+            },
+            "2017": {
+              "lowerDecile": -0.24366320684334453,
+              "mean": -0.025899262193902484,
+              "median": -0.03536533313267798,
+              "observed": 992,
+              "winRate": 0.3810483870967742
+            },
+            "2018": {
+              "lowerDecile": -0.21797230608281948,
+              "mean": 0.002043326567762463,
+              "median": -0.004860238156900176,
+              "observed": 1240,
+              "winRate": 0.4854838709677419
+            },
+            "2019": {
+              "lowerDecile": -0.3239487185900778,
+              "mean": -0.02511156220655577,
+              "median": -0.04905990735366461,
+              "observed": 1201,
+              "winRate": 0.3522064945878435
+            },
+            "2020": {
+              "lowerDecile": -0.302967042165569,
+              "mean": 0.06795617604897101,
+              "median": -0.021351867196329755,
+              "observed": 1571,
+              "winRate": 0.4678548695098663
+            }
+          },
+          "costBpsPerLeg": 25,
+          "missingStockZeroRecoveryStress": {
+            "lowerDecile": -0.28924222554953616,
+            "mean": -0.0018165502075830177,
+            "median": -0.024154103127114634,
+            "observed": 6093,
+            "winRate": 0.436566551780732
+          },
+          "netExcessVsEquallyCostedSpy": {
+            "lowerDecile": -0.26573546701031203,
+            "mean": 0.017965929170178436,
+            "median": -0.016479415831645472,
+            "observed": 6010,
+            "winRate": 0.453910149750416
+          },
+          "netExcessVsGrossSpy": {
+            "lowerDecile": -0.2709326492993005,
+            "mean": 0.012693711269217619,
+            "median": -0.021675144882429165,
+            "observed": 6010,
+            "winRate": 0.4425956738768719
+          },
+          "netStock": {
+            "lowerDecile": -0.2368760302633246,
+            "mean": 0.06977340041188394,
+            "median": 0.029813226857242636,
+            "observed": 6010,
+            "winRate": 0.5803660565723794
+          },
+          "stressUnknownSpy": 1,
+          "topOnePercentRemoved": {
+            "lowerDecile": -0.27228067084831997,
+            "mean": -0.009954188264597267,
+            "median": -0.023740400827847064,
+            "observed": 5950,
+            "winRate": 0.4369747899159664
+          }
+        },
+        {
+          "byFormationYear": {
+            "2016": {
+              "lowerDecile": -0.21134674642191065,
+              "mean": 0.01734031032974663,
+              "median": 0.0020891058155693143,
+              "observed": 1006,
+              "winRate": 0.5069582504970179
+            },
+            "2017": {
+              "lowerDecile": -0.2475952061600165,
+              "mean": -0.030973830194535812,
+              "median": -0.04020684490783322,
+              "observed": 992,
+              "winRate": 0.36189516129032256
+            },
+            "2018": {
+              "lowerDecile": -0.22183459807254324,
+              "mean": -0.0030448964401217885,
+              "median": -0.009900741412868397,
+              "observed": 1240,
+              "winRate": 0.4669354838709677
+            },
+            "2019": {
+              "lowerDecile": -0.3274754646510356,
+              "mean": -0.03016385245001943,
+              "median": -0.05418951278577633,
+              "observed": 1201,
+              "winRate": 0.33721898417985013
+            },
+            "2020": {
+              "lowerDecile": -0.307039650991479,
+              "mean": 0.06206647120246208,
+              "median": -0.02668753237006649,
+              "observed": 1571,
+              "winRate": 0.4576702737110121
+            }
+          },
+          "costBpsPerLeg": 50,
+          "missingStockZeroRecoveryStress": {
+            "lowerDecile": -0.29297921168217855,
+            "mean": -0.0070794624361089865,
+            "median": -0.029350321548128,
+            "observed": 6093,
+            "winRate": 0.4221237485639258
+          },
+          "netExcessVsEquallyCostedSpy": {
+            "lowerDecile": -0.26441008655913256,
+            "mean": 0.01787632242111583,
+            "median": -0.016397223206642053,
+            "observed": 6010,
+            "winRate": 0.453910149750416
+          },
+          "netExcessVsGrossSpy": {
+            "lowerDecile": -0.27495718475799646,
+            "mean": 0.007358116558999858,
+            "median": -0.02706354170664471,
+            "observed": 6010,
+            "winRate": 0.42795341098169715
+          },
+          "netStock": {
+            "lowerDecile": -0.2406821823087949,
+            "mean": 0.06443780570166617,
+            "median": 0.024676937243370944,
+            "observed": 6010,
+            "winRate": 0.5672212978369384
+          },
+          "stressUnknownSpy": 1,
+          "topOnePercentRemoved": {
+            "lowerDecile": -0.27613390505455904,
+            "mean": -0.0151729420220069,
+            "median": -0.02889134667162796,
+            "observed": 5950,
+            "winRate": 0.4221848739495798
+          }
+        }
+      ],
+      "coverage": 0.9862159501148671,
+      "events": 6094,
+      "mae": null,
+      "missing": 84,
+      "missingReasons": {
+        "MISSING_DISCONTINUOUS_NO_COMPLETE_VALUATION": 1,
+        "MISSING_EXACT_TERMINAL_HOLDER_BAR": 83
+      },
+      "observed": 6010
+    }
+  },
+  "limitations": [
+    "B1_ONLY_NOT_COMPONENT_ABLATIONS_OR_FULL_ENGINE",
+    "ACCEPTANCE_FEATURE_AND_ENTRY_CLOCKS_NOT_RECONSTRUCTED_BY_THIS_AUDIT",
+    "SOURCE_ENTRY_COHORT_DOES_NOT_COUNT_ALL_ORIGINALLY_UNPRICEABLE_SIGNALS",
+    "LIQUIDITY_AND_CAPACITY_NOT_VERIFIED",
+    "COST_GRID_IS_A_SENSITIVITY_ASSUMPTION_NOT_REALIZED_EXECUTION",
+    "RETURN_ADJUSTMENT_AND_DIVIDEND_TREATMENT_INHERITED_NOT_REAUDITED",
+    "CORRECTED_MAE_PATHS_NOT_AVAILABLE",
+    "MISSING_OUTCOMES_ARE_NOT_AUTOMATICALLY_DELISTINGS",
+    "NO_INDEPENDENCE_ASSUMPTION_OR_SIGNIFICANCE_CLAIM",
+    "ALL_RESULTS_PREVIOUSLY_VIEWED_DEVELOPMENT_ONLY"
+  ],
+  "lineage": {
+    "contractSha256": "fbc33d33826a910a556643c624c2553297edf25d7be946fdc29de23c8ffe2a21",
+    "csvSha256": "0794f6dba07fb03753097c8a27ce895f15d0b6575a8e45f52248c3b81d6639ed",
+    "implementationSha256": "561517205c9ed0a58262d986c517c6a3987244482871577ebb144d5dd286b672",
+    "summarySha256": "7cd32a9b256405c5b75b8e340f37b5ffe0bae82535cc11e326428fc1f9cd75b5",
+    "trackedTextHashNormalization": "CRLF_TO_LF_ONLY"
+  },
+  "oosOpened": false,
+  "outcomeEnd": "2022-12-31",
+  "primaryHorizon": 126,
+  "priorGate": "BLOCK_HAC_AND_OOS",
+  "productionScoringChanged": false,
+  "schemaVersion": "1.0.0",
+  "sourceRunId": "35277369958",
+  "status": "DEVELOPMENT_BASELINE_REPRODUCED_NOT_VALIDATED",
+  "studyId": "predictive-baseline-audit.v1"
+}

@@ -28,6 +28,8 @@ export function SystemHealthView({ manifest, research, settings }: { manifest: P
   const market = quality.marketCoverage;
   const dailyCoverage = market.denominator > 0 ? market.numerator / market.denominator : null;
   const dailyCoveragePass = dailyCoverage != null && dailyCoverage >= 0.8;
+  const lastDigest = settings.deliveryHistory?.filter(row => row.kind === 'DIGEST' && row.channel === 'telegram')
+    .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0];
   const checks = [
     { label: 'Canonical data', pass: quality.canonicalValid, detail: quality.canonicalValid ? 'Schema and hashes valid' : 'Canonical validation blocked' },
     { label: 'Benchmark', pass: quality.benchmarkFresh, detail: quality.benchmarkFresh ? 'Fresh at snapshot calculation' : 'Stale or unavailable at snapshot calculation' },
@@ -45,13 +47,23 @@ export function SystemHealthView({ manifest, research, settings }: { manifest: P
     <Panel title="Daily-use data checks" subtitle="The accepted market coverage target is 80% of the selected active universe, not 80% of the entire market.">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{checks.map((check) => <div key={check.label} className="rounded-lg border border-border bg-background/35 p-4"><div className="flex items-center gap-2">{check.pass ? <CheckCircle2 className="size-4 text-emerald-300" /> : <AlertTriangle className="size-4 text-amber-300" />}<span className="text-sm font-semibold">{check.label}</span></div><p className="mt-2 text-xs text-muted-foreground">{check.detail}</p></div>)}</div>
     </Panel>
+    <Panel title="Recorded Telegram delivery" subtitle="Delivery evidence is separate from whether this snapshot may be sent again.">
+      <p className="text-sm" data-testid="health-last-digest">{lastDigest ? `${lastDigest.status} · ${formatInstant(lastDigest.at)} UTC` : 'No Telegram digest result is recorded in this publication.'}</p>
+      <p className="mt-2 text-xs leading-5 text-muted-foreground">SENT means provider acceptance. CLAIMED or UNCERTAIN needs inspection and is not automatically retried. This public history can lag behind the latest run and does not identify the SEC day of each message.</p>
+      <a href="#view=alert-center" className="mt-3 inline-block text-xs text-emerald-200 underline">Inspect digest preview and delivery history</a>
+    </Panel>
     <Panel title="Workflow evidence" subtitle="The published data is not proof that the latest scheduled refresh succeeded.">
       <p className="mb-2 text-sm font-semibold"><SnapshotAge asOf={manifest.asOf} /></p>
       <p className="text-sm leading-6 text-muted-foreground">Published snapshot: {formatInstant(manifest.asOf)}. Last attempt and run duration are available in Actions diagnostics, not independently refreshed by this public snapshot. If dates stop advancing, inspect the latest run; do not assume a newly deployed UI refreshed the data.</p>
       <a href="https://github.com/Garrincha077/insider-turning-engine/actions" target="_blank" rel="noreferrer" className="mt-4 inline-block text-sm text-emerald-200 underline">Inspect workflow runs and failures</a>
     </Panel>
     <details className="rounded-xl border border-border bg-card p-5 text-xs text-muted-foreground"><summary className="cursor-pointer font-semibold text-foreground">Separate predictive validation gates</summary><p className="mt-3">Methodology: {quality.methodologyComplete ? 'Frozen' : 'Candidate'}. Predictive market-coverage gate: {(market.threshold * 100).toFixed(0)}% ({market.result}). Core branch coverage: {rateLabel(quality.coreBranchCoverage)}. These do not certify daily-use features or stop verified SEC facts from being displayed.</p></details>
-    <Panel title="Predictive limitations" subtitle="Research-model validation is a separate future goal, not the daily-use acceptance criterion.">
+    <Panel title="Predictive research readiness" subtitle="Operational success does not demonstrate that a signal predicts returns.">
+      <div className="mb-4 grid gap-3 md:grid-cols-2" data-testid="health-research-readiness">
+        <div className="rounded-lg border border-border p-3"><h3 className="text-xs font-semibold">Financial evidence in this publication</h3><p className="mt-2 text-xs leading-5 text-muted-foreground">{manifest.watermarks.fundamentalsAvailableThrough ? `Published watermark: ${formatInstant(manifest.watermarks.fundamentalsAvailableThrough)}. Historical filing-time availability still requires independent verification.` : 'No financial-data watermark is published. Valuation predictive power is not established by this snapshot.'}</p></div>
+        <div className="rounded-lg border border-border p-3"><h3 className="text-xs font-semibold">Full-engine historical validation</h3><p className="mt-2 text-xs leading-5 text-muted-foreground">{quality.issues.includes('BACKTEST_NOT_RUN') ? 'No full-engine backtest is attached to this publication.' : 'Inspect the methodology and source report; workflow success alone is not a backtest result.'} {quality.methodologyComplete ? 'A methodology freeze is recorded; that alone does not establish predictive power.' : 'Methodology remains a candidate. The final evaluation must follow a verified freeze and an audit of previously viewed periods.'}</p></div>
+      </div>
+      <a href="https://github.com/Garrincha077/insider-turning-engine/blob/main/docs/predictive-validation-goal.md" target="_blank" rel="noreferrer" className="mb-4 inline-block text-xs text-emerald-200 underline">Research protocol, existing evidence and next comparisons</a>
       {quality.issues.length === 0 ? <SuccessMessage text="No publication-quality blockers are recorded." /> : <ReasonList reasons={quality.issues} />}
     </Panel>
   </div>;
