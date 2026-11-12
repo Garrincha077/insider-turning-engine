@@ -137,7 +137,7 @@ def research_history(
                         # Explicit source-transport-only reconciliation. The
                         # earlier SEC day keeps PIT attribution; one economics
                         # inventory survives. Keep a sanitized audit count.
-                        transport_republication_days.append((previous[0], day))
+                        transport_republication_days.append(tuple(sorted((previous[0], day))))
                     else:
                         components = ("submission_hash", "parsed_records", "quarantines")
                         differing = [name for name, old, new in zip(
