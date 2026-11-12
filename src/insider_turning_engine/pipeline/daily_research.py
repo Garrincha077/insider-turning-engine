@@ -312,6 +312,13 @@ def main() -> None:
     history = research_history(checkpoints, expected_days=days)
     print(f"SEC_INPUTS: {len(checkpoints)}/{len(days)} days, {len(history.records)} owner rows",
           flush=True)
+    if history.transport_republication_days:
+        # Aggregated, non-sensitive audit: original SEC wrappers changed but
+        # verified primary XML, canonical records and source URLs are unchanged.
+        unique_pairs = sorted(set(history.transport_republication_days))
+        print(f"SEC_TRANSPORT_REPUBLICATION: {len(history.transport_republication_days)} "
+              f"duplicates across days={[(a.isoformat(), b.isoformat()) for a, b in unique_pairs]}; "
+              "PIT attribution and canonical economics preserved", flush=True)
     if not history.records:
         raise RuntimeError("no verified canonical SEC facts; previous snapshot preserved")
     point = datetime.now(UTC)
@@ -352,6 +359,7 @@ def main() -> None:
         history, identity_rows=identities, market=market, as_of=datetime.now(UTC),
         run_id=run_id, output=args.output, prior_state=prior,
     )
+    report["secTransportRepublicationCount"] = len(history.transport_republication_days)
     report["marketFailures"] = failures
     report["durationSeconds"] = round((datetime.now(UTC) - started).total_seconds(), 1)
     _write_json(args.work / "daily-report.json", report)
