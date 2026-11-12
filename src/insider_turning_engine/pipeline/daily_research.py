@@ -316,8 +316,9 @@ def main() -> None:
         # Aggregated, non-sensitive audit: original SEC wrappers changed but
         # verified primary XML, canonical records and source URLs are unchanged.
         unique_pairs = sorted(set(history.transport_republication_days))
+        pairs = [(a.isoformat(), b.isoformat()) for a, b in unique_pairs]
         print(f"SEC_TRANSPORT_REPUBLICATION: {len(history.transport_republication_days)} "
-              f"duplicates across days={[(a.isoformat(), b.isoformat()) for a, b in unique_pairs]}; "
+              f"duplicates across days={pairs}; "
               "PIT attribution and canonical economics preserved", flush=True)
     if not history.records:
         raise RuntimeError("no verified canonical SEC facts; previous snapshot preserved")
