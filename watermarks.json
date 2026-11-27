@@ -1,14 +1,14 @@
 {
-  "asOf": "2026-11-26T18:25:41.830045+00:00",
+  "asOf": "2026-11-27T17:38:32.658211+00:00",
   "canonicalCursorAdvanced": false,
   "lastObservedSecDay": "2026-11-25",
   "researchSnapshot": {
-    "runId": "run_research_20261126T174125Z",
-    "sha256": "a48c531df958038bdf3890a784ad32a389b6233fb7ec67b9b330d31014be27c7",
+    "runId": "run_research_20261127T172611Z",
+    "sha256": "59ddc5f17f792fd5fa5fdf8cdec514d84b7a8f4c62bfced6d95b4cd05df1136d",
     "storageStatus": "VERIFIED",
-    "tag": "research-day-v2-2026-11-26-a48c531df958038bdf3890a784ad32a389b6233fb7ec67b9b330d31014be27c7",
-    "url": "https://github.com/Garrincha077/insider-turning-engine/releases/tag/research-day-v2-2026-11-26-a48c531df958038bdf3890a784ad32a389b6233fb7ec67b9b330d31014be27c7"
+    "tag": "research-day-v2-2026-11-27-59ddc5f17f792fd5fa5fdf8cdec514d84b7a8f4c62bfced6d95b4cd05df1136d",
+    "url": "https://github.com/Garrincha077/insider-turning-engine/releases/tag/research-day-v2-2026-11-27-59ddc5f17f792fd5fa5fdf8cdec514d84b7a8f4c62bfced6d95b4cd05df1136d"
   },
-  "runId": "run_research_20261126T174125Z",
+  "runId": "run_research_20261127T172611Z",
   "schemaVersion": "2.0.0"
 }
